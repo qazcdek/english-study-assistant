@@ -275,6 +275,36 @@ Schmidt 의 noticing 관점에서 형태와 기능을 함께 짚어야 하므로
 모범 답안을 유일한 정답으로 취급하지 않기, 지적을 최대 2개로 제한하기, 잘한 점 먼저 짚기.
 근거와 실측은 [06-practice.md](06-practice.md) 참고.
 
+### 2.8 프롬프트로 부탁하지 않고 코드로 잡는 것
+
+프롬프트로 지시해도 가끔 새는 것들이 있다. 그중 **규칙만으로 확실히 판별되는 것**은
+LLM 을 한 번 더 부르지 않고 `app/services/refine.py` 에서 처리한다.
+판단이 필요한 일(무엇이 더 좋은 표현인가)은 여기서 하지 않는다.
+
+| 잡는 것 | 관찰된 사례 |
+|---|---|
+| 다어절 표현을 쪼갠 조각 | `a blend of` 와 `blend` 가 함께 나옴 |
+| 같은 표현의 중복 | `sum up` / `Sum Up` |
+| 감싼 따옴표 | 예문이 `"He summed it up."` 로 와서 UI 따옴표와 겹침 |
+| 짝 안 맞는 예문 | `example` 만 있고 `example_ko` 가 없어 작문 연습 불가 |
+| 겹치는 구문 인용 범위 | `Once the migration has been applied` 와 `has been applied` |
+| 표에 없는 `key_expressions` | ★ 표시가 어긋남 |
+
+**쪼갠 조각은 한 낱말짜리일 때만 지운다.** 두 낱말 이상이면 서로 다른 표현일 수 있어
+섣불리 지우면 멀쩡한 항목을 잃는다
+(`set foot in` 과 `never have set foot in the house` 는 둘 다 남긴다).
+
+### 2.8.1 왜 2단계 선별 호출을 넣지 않았나
+
+"개수가 넘치면 정제 프롬프트로 다듬자"는 안이 있었다. 확인해 보니
+**`maxItems` 는 토큰 단계 문법 제약이라 초과 자체가 일어나지 않는다.**
+"가능한 한 많이 뽑아라"고 지시하고 `maxItems: 2` 를 준 실험에서
+Gemini 3.5 Flash-Lite 와 llama-server 둘 다 정확히 2개에서 멈췄다.
+
+선별 품질을 위해 "후보를 넉넉히 뽑고 → 2차 호출로 추린다"는 방식은 유효하지만,
+LLM 호출이 분석당 4회에서 5회로 25% 늘어난다. 회원 각자의 Gemini 한도를 쓰는 구조라
+근거 없이 올릴 수 없다. 선정 품질에 반복되는 불만 사례가 쌓이면 그때 도입한다.
+
 ## 3. JSON 스키마 (llama-server `response_format` 으로 전달)
 
 `backend/app/prompts/analysis.py` 의 `PART_SPECS[i].schema` 가 단일 원본(single source of truth)이며,
