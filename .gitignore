@@ -14,3 +14,10 @@
 backend/static/
 backend/.env.local.bak
 *.bak
+
+# 배포용 비밀값 메모 (.env.example 만 커밋한다)
+.env.*
+!.env.example
+
+# 로컬 테스트 DB
+*.db
