@@ -38,15 +38,15 @@ STYLES = ["문어체", "구어체", "혼합"]
 LEVEL_GUIDE = {
     "beginner": (
         "학습자는 초급이다. 문법 용어를 최소한으로 쓰고 풀어서 설명한다. "
-        "표현은 가장 중요한 5개 이하, 구문 해설은 2개 이하로 줄인다."
+        "표현은 3~5개, 구문 해설은 2개 이하로 줄인다."
     ),
     "intermediate": (
         "학습자는 중급이다. 일반적인 문법 용어를 써도 좋다. "
-        "표현은 3~8개, 구문 해설은 2~4개가 적당하다."
+        "표현은 6~8개, 구문 해설은 2~4개가 적당하다."
     ),
     "advanced": (
         "학습자는 상급이다. 뉘앙스 차이, 어원, 비슷한 표현과의 비교까지 짚어 준다. "
-        "표현은 5~10개, 구문 해설은 3~5개까지 다룰 수 있다."
+        "표현은 7~10개, 구문 해설은 3~5개까지 다룰 수 있다."
     ),
 }
 
@@ -84,10 +84,18 @@ _EXPRESSION_ITEM = {
     "additionalProperties": False,
 }
 
+# 해설을 한 필드로 두면 구조 이름만 대고 끝내거나 문법 일반론으로 흐른다.
+# 조각을 나눠 required 로 묶으면 각각을 반드시 채워야 한다.
 _STRUCTURE_ITEM = {
     "type": "object",
-    "properties": {"fragment": {"type": "string"}, "explanation": {"type": "string"}},
-    "required": ["fragment", "explanation"],
+    "properties": {
+        "fragment": {"type": "string"},
+        "name": {"type": "string"},
+        "role": {"type": "string"},
+        "rewrite": {"type": "string"},
+        "pitfall": {"type": "string"},
+    },
+    "required": ["fragment", "name", "role", "rewrite", "pitfall"],
     "additionalProperties": False,
 }
 
@@ -98,7 +106,13 @@ _OVERVIEW_OBJECT = {
         "tone": {"type": "string"},
         "formality": {"type": "string", "enum": FORMALITIES},
         "style": {"type": "string", "enum": STYLES},
-        "key_expressions": {"type": "array", "items": {"type": "string"}},
+        # 1~3개로 좁혀야 "특히 챙길 것"이라는 선별의 뜻이 산다.
+        "key_expressions": {
+            "type": "array",
+            "items": {"type": "string"},
+            "minItems": 1,
+            "maxItems": 3,
+        },
         "comment": {"type": "string"},
     },
     "required": ["domain", "tone", "formality", "style", "key_expressions", "comment"],
@@ -119,6 +133,15 @@ def _wrap(field: str, value_schema: dict) -> dict:
 # --------------------------------------------------------------------- 파트 정의
 
 
+# 난이도별 표현 개수. 스키마에 실어 보내면 토큰 단계에서 강제된다.
+# 프롬프트 문구만으로는 작은 모델이 하한을 목표로 삼아 적게 뽑는다.
+EXPRESSION_COUNTS: dict[str, tuple[int, int]] = {
+    "beginner": (3, 5),
+    "intermediate": (6, 8),
+    "advanced": (7, 10),
+}
+
+
 @dataclass(frozen=True)
 class PartSpec:
     field: str
@@ -127,6 +150,19 @@ class PartSpec:
     schema: dict
     model: type
     build_user: Callable[[str, dict[str, Any]], str]
+    # 난이도에 따라 배열 길이를 바꿔야 하는 파트만 채운다.
+    counts_by_level: dict[str, tuple[int, int]] | None = None
+
+    def schema_for(self, level: str) -> dict:
+        """난이도별 개수 제한을 얹은 스키마."""
+        if self.counts_by_level is None:
+            return self.schema
+        low, high = self.counts_by_level.get(level, self.counts_by_level["intermediate"])
+        array = dict(self.schema["properties"][self.field], minItems=low, maxItems=high)
+        return {
+            **self.schema,
+            "properties": {**self.schema["properties"], self.field: array},
+        }
 
 
 def _plain_user(instruction: str) -> Callable[[str, dict[str, Any]], str]:
@@ -193,8 +229,25 @@ PART_SPECS: tuple[PartSpec, ...] = (
             '  원문이 "sums up" 이면 "sum up", "has been thrown at" 이면 "throw at" 으로 적는다.\n'
             "- 표현의 경계를 정확히 잡는다. 앞뒤 단어를 덧붙이거나 잘라내지 않는다.\n"
             '  "find its way across the pond" 가 아니라 "across the pond" 가 하나의 표현이다.\n'
-            "- the, is, good 같이 학습 가치가 낮은 기초 어휘는 제외한다.\n"
             "- 같은 표현을 두 번 넣지 않는다.\n"
+            "\n"
+            "  무엇을 고를지는 **낱말 뜻을 합쳐서 의미를 짐작할 수 있는가**로 판단한다.\n"
+            "  짐작할 수 없는 것일수록 학습 가치가 높다.\n"
+            "  · 우선해서 고를 것\n"
+            "    - 낱말 합과 뜻이 다른 표현: phrasal verb, 관용구, 비유적 확장 용법\n"
+            '      예: "grow wealth"(자산을 늘리다 — grow 의 타동사 용법), "a blend of A and B"\n'
+            "    - 그 글에서 새로 만들어 쓴 조어\n"
+            '      예: "yenmageddon"(yen + Armageddon), "financial therapist"\n'
+            "    - 불규칙 변화형이나 형태가 헷갈리는 낱말\n"
+            '      예: "indices"(index 의 복수), "criteria", "phenomena"\n'
+            "    - 함께 쓰는 전치사나 문형이 정해진 표현\n"
+            "  · 뒤로 미룰 것\n"
+            "    - 낱말 뜻을 합치면 의미가 그대로 나오는 투명한 복합어\n"
+            '      예: "financial advisor", "emotional support", "market volatility" 처럼\n'
+            "      형용사+명사 / 명사+명사 로 뜻이 곧바로 드러나는 것\n"
+            "    - the, is, good 같은 기초 어휘\n"
+            "  투명한 복합어만 나열하지 않는다. 그 글의 분야 용어를 늘어놓는 것이 목적이 아니라,\n"
+            "  읽다가 막힐 만한 지점을 짚어 주는 것이 목적이다.\n"
             "\n"
             "[type] — 유형\n"
             "- 아래 기준을 위에서부터 차례로 확인해, 처음 맞는 것 하나를 고른다.\n"
@@ -238,6 +291,7 @@ PART_SPECS: tuple[PartSpec, ...] = (
         schema=_wrap("expressions", {"type": "array", "items": _EXPRESSION_ITEM}),
         model=ExpressionsPart,
         build_user=_plain_user("다음 텍스트에서 학습 가치가 있는 표현을 뽑아라."),
+        counts_by_level=EXPRESSION_COUNTS,
     ),
     PartSpec(
         field="structures",
@@ -266,18 +320,31 @@ PART_SPECS: tuple[PartSpec, ...] = (
             "  분사구문을 설명하면서 문장 전체를 인용하면 안 되고, 분사구만 잘라 인용한다.\n"
             "- 항목끼리 인용 범위가 겹치지 않게 한다.\n"
             "\n"
-            "[explanation] — 해설\n"
-            "- 아래 세 가지를 순서대로 쓴다.\n"
-            "  1. 이 구조의 이름. 표준 문법 용어를 정확히 쓴다.\n"
-            "     (예: if 를 생략한 도치 가정법, 형식주어 it, 명사를 뒤에서 꾸미는 관계절)\n"
-            "  2. 그 구조가 이 문장에서 하는 일. 문법 일반론이 아니라 이 문장에 대해 쓴다.\n"
-            "     수동태라면 '수동태는 대상에 초점을 둔다' 가 아니라, "
+            "[name] — 구조 이름\n"
+            "- 표준 문법 용어로 짧게 적는다. 설명을 붙이지 않는다.\n"
+            "  예: if 를 생략한 도치 가정법 / 형식주어 it / 명사를 뒤에서 꾸미는 관계절 /\n"
+            "      주어가 드러나지 않는 분사구문 / 행위자를 밝히지 않은 수동태\n"
+            "\n"
+            "[role] — 이 문장에서 하는 일\n"
+            "- **이 문장에 대해** 한두 문장으로 쓴다. 문법 일반론을 늘어놓지 않는다.\n"
+            '  수동태라면 "수동태는 대상에 초점을 둔다" 가 아니라, '
             "이 문장에서 행위자를 왜 밝히지 않았는지를 쓴다.\n"
-            "  3. 쉬운 말로 바꿔 쓴 등가 표현, 또는 한국어 화자가 틀리기 쉬운 오독 지점.\n"
-            '     (예: "Had she known" 은 "If she had known" 과 같다)\n'
-            "- \"고급스러운 표현이다\", \"문장을 자연스럽게 만든다\" 같은 평가는 쓰지 않는다.\n"
-            "- 위 세 가지를 각각 한 문장으로, 전체 세 문장 안에서 끝낸다. "
-            "문법 규칙을 일반론으로 늘어놓지 않는다."
+            '- "고급스러운 표현이다", "문장을 자연스럽게 만든다" 같은 평가는 쓰지 않는다.\n'
+            "\n"
+            "[rewrite] — 쉬운 말로 바꿔 쓰기\n"
+            "- 같은 뜻을 유지하면서 구조를 풀어낸 **영어 문장**을 쓴다. 한국어 번역이 아니다.\n"
+            '  예: "Had she known" → "If she had known"\n'
+            '      "will be rejected" → "the server will reject it"\n'
+            '      "It is unlikely to find its way" → "The chance that it will spread is low"\n'
+            "- 원문 조각 하나에 대응하는 짧은 영어만 쓴다. 문장 전체를 다시 쓰지 않는다.\n"
+            "- 바꿔 쓰는 것이 오히려 어색해지는 구조라면 빈 문자열로 둔다.\n"
+            "\n"
+            "[pitfall] — 한국어 화자가 놓치기 쉬운 지점\n"
+            "- 이 구조에서 한국어 화자가 자주 오독하거나 틀리는 점을 한 문장으로 쓴다.\n"
+            "  예: 한국어는 수식어가 명사 앞에 오므로 뒤에서 꾸미는 관계절의 범위를 놓치기 쉽다 /\n"
+            "      한국어에는 형식주어가 없어 it 을 대명사로 잘못 읽기 쉽다 /\n"
+            "      분사구문의 숨은 주어를 가까운 명사로 착각하기 쉽다\n"
+            "- 특별히 짚을 것이 없으면 빈 문자열로 둔다. 억지로 지어내지 않는다."
         ),
         schema=_wrap("structures", {"type": "array", "items": _STRUCTURE_ITEM}),
         model=StructuresPart,
@@ -313,7 +380,9 @@ PART_SPECS: tuple[PartSpec, ...] = (
             "\n"
             "[key_expressions] — 꼭 챙길 표현\n"
             "- 위에서 받은 표현 목록에 있는 것만 고른다. 목록에 없는 말을 새로 만들지 않는다.\n"
-            "- 이 글을 이해하는 데 가장 중요한 것 1~3개.\n"
+            "- **1~3개만** 고른다. 목록 전체를 그대로 옮겨 적지 않는다.\n"
+            "- 뜻을 몰랐다면 이 글을 오해했을 표현을 고른다.\n"
+            "  낱말 뜻을 합쳐서 짐작할 수 있는 투명한 표현은 여기에 넣지 않는다.\n"
             "\n"
             "[comment] — 코멘트\n"
             "- 아래 세 가지를 담되 3~4문장을 넘기지 않는다.\n"

@@ -57,8 +57,6 @@ class Settings(BaseSettings):
     # --- HTTP ---
     cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173"
 
-    # --- 입력 제한 ---
-    max_input_chars: int = 4000
 
     @property
     def is_cloud(self) -> bool:

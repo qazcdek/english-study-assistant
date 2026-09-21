@@ -9,6 +9,7 @@ from app.db import AnalysisRecord, PracticeRecord
 from app.deps import AnalyzerDep, MaybeDb, MaybeUser, PracticeDep
 from app.errors import LLMError
 from app.schemas import (
+    MAX_INPUT_CHARS,
     AnalyzeRequest,
     AnalyzeResponse,
     AppConfigResponse,
@@ -38,6 +39,7 @@ def app_config() -> AppConfigResponse:
         daily_analysis_limit=settings.daily_analysis_limit if settings.is_cloud else 0,
         daily_practice_limit=settings.daily_practice_limit if settings.is_cloud else 0,
         api_key_issue_url=API_KEY_ISSUE_URL if settings.is_cloud else "",
+        max_input_chars=MAX_INPUT_CHARS,
     )
 
 

@@ -20,7 +20,14 @@ export interface Expression {
 
 export interface StructureNote {
   fragment: string
-  explanation: string
+  /** 구조 이름 (표준 문법 용어) */
+  name: string
+  /** 이 문장에서 그 구조가 하는 일 */
+  role: string
+  /** 쉬운 말로 바꿔 쓴 등가 영어 표현. 없을 수 있다. */
+  rewrite: string
+  /** 한국어 화자가 놓치기 쉬운 지점. 없을 수 있다. */
+  pitfall: string
 }
 
 export interface Overview {
@@ -162,6 +169,7 @@ export interface AppConfig {
   daily_analysis_limit: number
   daily_practice_limit: number
   api_key_issue_url: string
+  max_input_chars: number
 }
 
 export interface Account {
