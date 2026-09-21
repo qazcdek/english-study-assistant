@@ -35,3 +35,39 @@ class LLMTruncatedError(LLMError):
         "LLM 응답이 max_tokens 한도에서 잘렸습니다. "
         "LLM_MAX_TOKENS 를 늘리거나 LLM_ENABLE_THINKING 을 끄고 다시 시도해 주세요."
     )
+
+
+class AppError(Exception):
+    """LLM 호출 밖에서 발생하는, 사용자에게 그대로 보여줄 오류."""
+
+    code = "app_error"
+    http_status = 400
+    message = "요청을 처리할 수 없습니다."
+
+    def __init__(self, detail: str = "") -> None:
+        super().__init__(detail or self.message)
+        self.detail = detail
+
+
+class AuthRequiredError(AppError):
+    code = "auth_required"
+    http_status = 401
+    message = "로그인이 필요합니다."
+
+
+class ConsentRequiredError(AppError):
+    code = "consent_required"
+    http_status = 403
+    message = "서비스 이용 동의가 필요합니다."
+
+
+class ApiKeyRequiredError(AppError):
+    code = "api_key_required"
+    http_status = 403
+    message = "Gemini API 키를 먼저 등록해 주세요. 분석은 회원님 키로 호출됩니다."
+
+
+class UsageLimitError(AppError):
+    code = "usage_limit"
+    http_status = 429
+    message = "오늘 사용 한도를 모두 썼습니다. 내일 다시 이용해 주세요."

@@ -207,6 +207,84 @@ class PracticeResponse(BaseModel):
     meta: AnalyzeMeta
 
 
+# --------------------------------------------------------------------------- 계정 (cloud)
+
+
+class AccountResponse(BaseModel):
+    email: str
+    name: str
+    picture: str
+    has_consented: bool
+    has_api_key: bool
+    api_key_hint: str = ""
+
+
+class ConsentRequest(BaseModel):
+    agreed: bool
+
+
+class ApiKeyRequest(BaseModel):
+    api_key: str = Field(min_length=10, max_length=200)
+
+    @field_validator("api_key")
+    @classmethod
+    def strip_key(cls, v: str) -> str:
+        stripped = v.strip()
+        if not stripped:
+            raise ValueError("API 키가 비어 있습니다.")
+        return stripped
+
+
+class UsageResponse(BaseModel):
+    day: str
+    analyses: int
+    practices: int
+    analysis_limit: int
+    practice_limit: int
+
+
+# --------------------------------------------------------------------------- 저장 데이터
+
+
+class HistoryItem(BaseModel):
+    id: int
+    source_text: str
+    level: Level
+    created_at: str
+    failed_parts: list[str] = Field(default_factory=list)
+
+
+class HistoryDetail(HistoryItem):
+    result: AnalysisResult
+    markdown: MarkdownSections
+
+
+class VocabularyCreate(BaseModel):
+    expression: str = Field(min_length=1, max_length=200)
+    type: str = ""
+    meaning: str = ""
+    example: str = ""
+    example_ko: str = ""
+    source_text: str = ""
+
+
+class VocabularyItemOut(VocabularyCreate):
+    id: int
+    created_at: str
+
+
+class PracticeHistoryItem(BaseModel):
+    id: int
+    expression: str
+    prompt_ko: str
+    model_answer: str
+    learner_answer: str
+    verdict: Verdict
+    uses_target: bool
+    feedback: PracticeResult
+    created_at: str
+
+
 class ErrorBody(BaseModel):
     code: str
     message: str

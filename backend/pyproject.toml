@@ -9,6 +9,13 @@ dependencies = [
     "httpx>=0.27",
     "pydantic>=2.9",
     "pydantic-settings>=2.6",
+    # --- 웹 배포용 ---
+    "sqlalchemy>=2.0",
+    "alembic>=1.14",
+    "psycopg[binary]>=3.2",       # Postgres (배포). 로컬은 SQLite 로 돌아간다
+    "pyjwt>=2.10",                # 세션 쿠키 서명
+    "cryptography>=44.0",         # 회원 Gemini 키 암호화 저장
+    "itsdangerous>=2.2",          # OAuth state 서명
 ]
 
 [project.optional-dependencies]
