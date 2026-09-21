@@ -28,8 +28,9 @@ export function ConsentPanel({ config, onAgree }: Props) {
         <li className="flex gap-3">
           <span className="text-indigo-500">1</span>
           <span>
-            분석과 채점은 <b>회원님이 직접 등록한 Google Gemini API 키</b>로 호출됩니다. 서버가
-            대신 비용을 내지 않습니다.
+            <b>문장 분석</b>과 <b>작문 연습(직접 써보기) 채점</b> 모두{' '}
+            <b>회원님이 직접 등록한 Google Gemini API 키</b>로 호출됩니다. 서버가 대신 비용을
+            내지 않습니다.
           </span>
         </li>
         <li className="flex gap-3">
@@ -42,8 +43,20 @@ export function ConsentPanel({ config, onAgree }: Props) {
         <li className="flex gap-3">
           <span className="text-indigo-500">3</span>
           <span>
-            사용 모델은 <code className="font-mono text-xs">{config.model}</code> 입니다. 분석 한
-            번에 LLM 호출이 <b>4회</b> 일어납니다(번역·표현·구조·총평).
+            사용 모델은 <code className="font-mono text-xs">{config.model}</code> 입니다. 호출
+            횟수는 이렇게 쌓입니다.
+            <span className="mt-2 block rounded-lg bg-stone-50 px-3 py-2 dark:bg-stone-950">
+              <span className="block">
+                · 문장 분석 <b>1회</b> = LLM 호출 <b>4회</b> (번역 · 표현 · 구조 · 총평)
+              </span>
+              <span className="mt-1 block">
+                · 작문 연습 채점 <b>1회</b> = LLM 호출 <b>1회</b>
+              </span>
+              <span className="mt-1 block">
+                · 표현 하나마다 따로 연습할 수 있어, 한 문장을 분석한 뒤 표현 6개를 모두
+                연습하면 그 문장에만 <b>총 10회</b>가 듭니다.
+              </span>
+            </span>
           </span>
         </li>
         <li className="flex gap-3">
@@ -55,6 +68,15 @@ export function ConsentPanel({ config, onAgree }: Props) {
         </li>
         <li className="flex gap-3">
           <span className="text-indigo-500">5</span>
+          <span>
+            실수로 한도가 한꺼번에 소진되지 않도록, 이 서비스는 하루{' '}
+            <b>분석 {config.daily_analysis_limit}회 · 작문 연습 {config.daily_practice_limit}회</b>
+            로 제한합니다. 이것은 안전장치일 뿐이며, 실제 차감은 회원님 Gemini 한도에서
+            이루어집니다.
+          </span>
+        </li>
+        <li className="flex gap-3">
+          <span className="text-indigo-500">6</span>
           <span>
             등록한 키는 암호화해 보관하며 화면에는 끝 네 자리만 보입니다. 언제든 삭제할 수
             있습니다.
