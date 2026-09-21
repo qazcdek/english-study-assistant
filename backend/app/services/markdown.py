@@ -16,6 +16,10 @@ SECTION_SEPARATOR = "\n\n---\n\n"
 FAILED_NOTE = "_이 항목을 가져오지 못했습니다._"
 
 
+def _one_line(value: str) -> str:
+    return " ".join(value.split())
+
+
 def _cell(value: str) -> str:
     """표 셀 안에서 깨지는 문자를 정리한다."""
     return value.replace("|", "\\|").replace("\n", " ").strip()
@@ -55,9 +59,15 @@ def render_structures(structures: list[StructureNote]) -> str:
         lines.append("_특별히 설명할 구문이 없습니다._")
         return "\n".join(lines)
 
-    for s in structures:
-        explanation = " ".join(s.explanation.split())
-        lines.append(f"* **{s.fragment.strip()}**: {explanation}")
+    for i, s in enumerate(structures):
+        if i:
+            lines.append("")
+        lines.append(f"* **{s.fragment.strip()}** — {s.name.strip()}")
+        lines.append(f"  * {_one_line(s.role)}")
+        if s.rewrite.strip():
+            lines.append(f"  * 쉽게 쓰면: `{_one_line(s.rewrite)}`")
+        if s.pitfall.strip():
+            lines.append(f"  * 주의: {_one_line(s.pitfall)}")
 
     return "\n".join(lines)
 

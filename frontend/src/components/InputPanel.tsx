@@ -6,7 +6,8 @@ const LEVELS: { value: Level; label: string }[] = [
   { value: 'advanced', label: '상급' },
 ]
 
-const MAX_CHARS = 4000
+// backend/app/schemas.py 의 MAX_INPUT_CHARS 와 같아야 한다.
+const MAX_CHARS = 2000
 
 interface Props {
   text: string
@@ -60,6 +61,7 @@ export function InputPanel({ text, level, loading, onTextChange, onLevelChange, 
 
         <span className={`text-xs ${tooLong ? 'text-red-500' : 'text-stone-400'}`}>
           {text.length.toLocaleString()} / {MAX_CHARS.toLocaleString()}자
+          {tooLong && ' — 너무 깁니다'}
         </span>
 
         <button

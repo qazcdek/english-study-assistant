@@ -73,7 +73,7 @@ class AnalyzerService:
             completion = await self.provider.complete(
                 build_messages(spec, request.text, request.level, state, retry=retry),
                 temperature=0.0 if retry else None,
-                json_schema=spec.schema,
+                json_schema=spec.schema_for(request.level),
             )
             model = completion.model
             last_raw = completion.text
