@@ -10,6 +10,10 @@ from pydantic import BaseModel, Field, field_validator
 
 Level = Literal["beginner", "intermediate", "advanced"]
 
+# 입력 길이 상한. 프론트와 어긋나지 않도록 /api/config 로 함께 내보낸다.
+# 분석 한 번이 LLM 호출 네 번이라, 길수록 회원의 API 한도를 빠르게 쓴다.
+MAX_INPUT_CHARS = 800
+
 ExpressionType = Literal[
     "고급 어휘",
     "관용구",
@@ -27,7 +31,9 @@ Style = Literal["문어체", "구어체", "혼합"]
 
 
 class AnalyzeRequest(BaseModel):
-    text: str = Field(min_length=1, max_length=4000, description="분석할 영어 문장 또는 문단")
+    text: str = Field(
+        min_length=1, max_length=MAX_INPUT_CHARS, description="분석할 영어 문장 또는 문단"
+    )
     level: Level = "intermediate"
 
     @field_validator("text")
@@ -219,6 +225,7 @@ class AppConfigResponse(BaseModel):
     daily_analysis_limit: int = 0
     daily_practice_limit: int = 0
     api_key_issue_url: str = ""
+    max_input_chars: int = MAX_INPUT_CHARS
 
 
 # --------------------------------------------------------------------------- 계정 (cloud)

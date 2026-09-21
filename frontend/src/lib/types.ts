@@ -162,6 +162,7 @@ export interface AppConfig {
   daily_analysis_limit: number
   daily_practice_limit: number
   api_key_issue_url: string
+  max_input_chars: number
 }
 
 export interface Account {

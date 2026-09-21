@@ -80,3 +80,18 @@ def test_stream_reports_a_failed_part_and_keeps_going(make_client):
     assert events[2]["code"] == "llm_bad_output"
     assert events[-1]["meta"]["failed_parts"] == ["structures"]
     assert events[-1]["result"]["translation"]
+
+
+def test_input_length_limit(client):
+    from app.schemas import MAX_INPUT_CHARS
+
+    assert MAX_INPUT_CHARS == 800
+    assert client.post("/api/analyze", json={"text": "a" * MAX_INPUT_CHARS}).status_code == 200
+    assert client.post("/api/analyze", json={"text": "a" * (MAX_INPUT_CHARS + 1)}).status_code == 422
+
+
+def test_config_reports_input_limit(client):
+    """프론트가 같은 값을 쓰도록 서버가 알려준다. 하드코딩하면 어긋난다."""
+    from app.schemas import MAX_INPUT_CHARS
+
+    assert client.get("/api/config").json()["max_input_chars"] == MAX_INPUT_CHARS

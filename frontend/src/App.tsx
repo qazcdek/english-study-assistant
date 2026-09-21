@@ -209,6 +209,7 @@ export default function App() {
             level={level}
             loading={running}
             onTextChange={setText}
+            maxChars={session.config?.max_input_chars}
             onLevelChange={setLevel}
             onSubmit={handleSubmit}
           />

@@ -6,19 +6,29 @@ const LEVELS: { value: Level; label: string }[] = [
   { value: 'advanced', label: '상급' },
 ]
 
-const MAX_CHARS = 4000
+/** 서버가 /api/config 로 알려주기 전에 잠깐 쓰는 값. 서버 값이 단일 출처다. */
+const FALLBACK_MAX_CHARS = 800
 
 interface Props {
   text: string
   level: Level
+  maxChars?: number
   loading: boolean
   onTextChange: (text: string) => void
   onLevelChange: (level: Level) => void
   onSubmit: () => void
 }
 
-export function InputPanel({ text, level, loading, onTextChange, onLevelChange, onSubmit }: Props) {
-  const tooLong = text.length > MAX_CHARS
+export function InputPanel({
+  text,
+  level,
+  loading,
+  maxChars = FALLBACK_MAX_CHARS,
+  onTextChange,
+  onLevelChange,
+  onSubmit,
+}: Props) {
+  const tooLong = text.length > maxChars
   const canSubmit = text.trim().length > 0 && !tooLong && !loading
 
   function handleKeyDown(event: React.KeyboardEvent<HTMLTextAreaElement>) {
@@ -59,7 +69,8 @@ export function InputPanel({ text, level, loading, onTextChange, onLevelChange, 
         </div>
 
         <span className={`text-xs ${tooLong ? 'text-red-500' : 'text-stone-400'}`}>
-          {text.length.toLocaleString()} / {MAX_CHARS.toLocaleString()}자
+          {text.length.toLocaleString()} / {maxChars.toLocaleString()}자
+          {tooLong && ' — 너무 깁니다'}
         </span>
 
         <button
