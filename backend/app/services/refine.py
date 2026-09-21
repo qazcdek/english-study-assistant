@@ -75,6 +75,7 @@ def clean_expressions(items: list[Expression]) -> list[Expression]:
     for e in items:
         e.expression = _strip(e.expression)
         e.meaning = _strip(e.meaning)
+        e.nuance = _strip(e.nuance)
         e.example = _strip(e.example) if e.example else None
         e.example_ko = _strip(e.example_ko) if e.example_ko else None
         # 예문만 있고 한국어 제시문이 없으면 작문 연습을 할 수 없다. 짝을 맞춘다.

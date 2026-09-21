@@ -4,6 +4,8 @@ import { HistoryList } from './components/HistoryList'
 import { InputPanel } from './components/InputPanel'
 import { ResultView } from './components/ResultView'
 import { StatusBar } from './components/StatusBar'
+import { MIN_CHARS } from './components/InputPanel'
+import { Toast } from './components/Toast'
 import { initialState, reduce, type AnalysisState } from './lib/analysis'
 import { ApiError, analyzeStream, health as fetchHealth } from './lib/api'
 import { addEntry, loadHistory, removeEntry, type HistoryEntry } from './lib/history'
@@ -19,6 +21,8 @@ export default function App() {
   const [activeId, setActiveId] = useState<string | null>(null)
   const [llmHealth, setLlmHealth] = useState<LlmHealth | null>(null)
   const abortRef = useRef<AbortController | null>(null)
+  // 같은 문구를 연달아 띄워도 다시 나타나야 해서, 띄운 시각을 key 로 쓴다.
+  const [toast, setToast] = useState<{ message: string; at: number } | null>(null)
 
   useEffect(() => {
     fetchHealth()
@@ -84,6 +88,7 @@ export default function App() {
 
   return (
     <div className="mx-auto flex max-w-6xl flex-col gap-6 px-4 py-8 sm:px-6">
+      <Toast key={toast?.at} message={toast?.message ?? null} />
       <header className="flex flex-wrap items-center gap-3">
         <h1 className="text-xl font-semibold tracking-tight">English Study Assistant</h1>
         <p className="hidden text-sm text-stone-400 sm:block">
@@ -103,6 +108,7 @@ export default function App() {
             onTextChange={setText}
             onLevelChange={setLevel}
             onSubmit={handleSubmit}
+            onTooShort={() => setToast({ message: `${MIN_CHARS}자 이상 입력해 주세요`, at: Date.now() })}
           />
 
           {error && (

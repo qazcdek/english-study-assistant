@@ -12,7 +12,10 @@ export type ExpressionType =
 export interface Expression {
   expression: string
   type: ExpressionType
+  /** 한국어 대역어 한두 개 */
   meaning: string
+  /** 어떤 상황에서 쓰는지·뉘앙스. 초급에서는 비어 있다. */
+  nuance?: string
   example?: string | null
   /** example 의 한국어 뜻. 작문 연습의 제시문으로 쓴다. */
   example_ko?: string | null

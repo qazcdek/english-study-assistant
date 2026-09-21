@@ -74,18 +74,34 @@ RETRY_NUDGE = (
 
 # --------------------------------------------------------------------- 파트별 스키마
 
-_EXPRESSION_ITEM = {
-    "type": "object",
-    "properties": {
-        "expression": {"type": "string"},
-        "type": {"type": "string", "enum": EXPRESSION_TYPES},
-        "meaning": {"type": "string"},
-        "example": {"type": "string"},
-        "example_ko": {"type": "string"},
-    },
-    "required": ["expression", "type", "meaning"],
-    "additionalProperties": False,
+_EXPRESSION_BASE = {
+    "expression": {"type": "string"},
+    "type": {"type": "string", "enum": EXPRESSION_TYPES},
+    "meaning": {"type": "string"},
+    "example": {"type": "string"},
+    "example_ko": {"type": "string"},
 }
+_NUANCE = {"nuance": {"type": "string"}}
+
+
+def expression_item(level: str) -> dict:
+    """난이도별 표현 항목 스키마.
+
+    초급 스키마에는 `nuance` 속성이 **아예 없다**. `additionalProperties: False` 이므로
+    모델이 설명을 쓰고 싶어도 쓸 자리가 없다. 프롬프트로 "대역어만 쓰라"고 부탁하는 것보다
+    확실하다.
+    """
+    beginner = level == "beginner"
+    return {
+        "type": "object",
+        "properties": _EXPRESSION_BASE if beginner else {**_EXPRESSION_BASE, **_NUANCE},
+        "required": ["expression", "type", "meaning"]
+        + ([] if beginner else ["nuance"]),
+        "additionalProperties": False,
+    }
+
+
+_EXPRESSION_ITEM = expression_item("intermediate")
 
 # 해설을 한 필드로 두면 구조 이름만 대고 끝내거나 문법 일반론으로 흐른다.
 # 조각을 나눠 required 로 묶으면 각각을 반드시 채워야 한다.
@@ -138,36 +154,65 @@ def _wrap(field: str, value_schema: dict) -> dict:
 
 # 난이도별 표현 개수. 스키마에 실어 보내면 토큰 단계에서 강제된다.
 # 프롬프트 문구만으로는 작은 모델이 하한을 목표로 삼아 적게 뽑는다.
-# 난이도별 표현 개수.
+# 난이도별 표현 개수 상한.
 #
-# 상급이라고 개수를 늘리면 안 된다. 짧은 글에서 하한을 채우려고 모델이 좋은 다어절 표현을
-# 낱개 단어로 쪼갠다("a blend of" -> "blend", "market volatility" -> "volatility").
-# 난이도는 설명의 깊이를 바꾸는 것이지 개수나 난도를 바꾸는 것이 아니다.
-# 초급만 부담을 줄이려 적게 두고, 중급과 상급은 같다.
-EXPRESSION_COUNTS: dict[str, tuple[int, int]] = {
-    "beginner": (3, 5),
-    "intermediate": (5, 8),
-    "advanced": (5, 8),
+# 상한만 난이도를 따른다. 하한은 글 길이에서 계산한다(min_expressions 참고).
+# 난이도로 개수를 늘리면 짧은 글에서 하한을 채우려고 모델이 좋은 다어절 표현을
+# 낱개 단어로 쪼갠다("a blend of" -> "blend"). 난이도는 설명의 깊이를 바꾸는 것이지
+# 개수나 난도를 바꾸는 것이 아니다.
+EXPRESSION_MAX: dict[str, int] = {
+    "beginner": 5,
+    "intermediate": 8,
+    "advanced": 8,
 }
+
+# 200자마다 표현 하나. 짧은 글에 억지로 개수를 채우게 하지 않기 위해서다.
+CHARS_PER_EXPRESSION = 200
+
+# 하한이 아무리 올라가도 여기서 멈춘다.
+#
+# 하한은 "적어도 이만큼은"이지 "이만큼을 채워라"가 아니다. 높게 잡으면 모델이 규칙을
+# 어겨서라도 숫자를 맞춘다 — 다어절 표현을 낱개로 쪼개거나 학습 가치가 낮은 낱말을 끌어온다.
+# 고급은 다어절만 고르므로 특히 위험하다. 짧은 대화문에는 다어절이 3개도 없다.
+MAX_MIN_EXPRESSIONS = 3
+
+
+def min_expressions(text_length: int, max_items: int) -> int:
+    """글 길이에서 표현 개수의 하한을 구한다."""
+    wanted = max(1, text_length // CHARS_PER_EXPRESSION)
+    return max(1, min(wanted, MAX_MIN_EXPRESSIONS, max_items))
 
 
 @dataclass(frozen=True)
 class PartSpec:
     field: str
     title: str
-    task: str
+    # 난이도에 따라 지시가 달라지는 파트는 함수를 넣는다.
+    task: str | Callable[[str], str]
     schema: dict
     model: type
     build_user: Callable[[str, dict[str, Any]], str]
-    # 난이도에 따라 배열 길이를 바꿔야 하는 파트만 채운다.
-    counts_by_level: dict[str, tuple[int, int]] | None = None
+    # 배열 길이를 제한해야 하는 파트만 채운다.
+    max_by_level: dict[str, int] | None = None
+    # 항목 스키마가 난이도에 따라 달라지는 파트만 채운다.
+    item_by_level: Callable[[str], dict] | None = None
 
-    def schema_for(self, level: str) -> dict:
-        """난이도별 개수 제한을 얹은 스키마."""
-        if self.counts_by_level is None:
+    def task_for(self, level: str) -> str:
+        return self.task(level) if callable(self.task) else self.task
+
+    def schema_for(self, level: str, text_length: int) -> dict:
+        """난이도별 항목 스키마·상한과, 글 길이에서 구한 하한을 얹는다."""
+        if self.max_by_level is None and self.item_by_level is None:
             return self.schema
-        low, high = self.counts_by_level.get(level, self.counts_by_level["intermediate"])
-        array = dict(self.schema["properties"][self.field], minItems=low, maxItems=high)
+
+        array = dict(self.schema["properties"][self.field])
+        if self.item_by_level is not None:
+            array["items"] = self.item_by_level(level)
+        if self.max_by_level is not None:
+            high = self.max_by_level.get(level, self.max_by_level["intermediate"])
+            array["minItems"] = min_expressions(text_length, high)
+            array["maxItems"] = high
+
         return {
             **self.schema,
             "properties": {**self.schema["properties"], self.field: array},
@@ -212,6 +257,118 @@ def _overview_user(text: str, state: dict[str, Any]) -> str:
     )
 
 
+# --------------------------------------------------------------------- 표현 풀이 지시
+
+_PICK = """- 원문에 실제로 등장한 표현만 고른다. 사전에서 가져온 무관한 표현을 지어내지 않는다.
+- 원문의 활용형이 아니라 사전에 실릴 기본형으로 적는다.
+  원문이 "sums up" 이면 "sum up", "has been thrown at" 이면 "throw at" 으로 적는다.
+- 표현의 경계를 정확히 잡는다. 앞뒤 단어를 덧붙이거나 잘라내지 않는다.
+  "find its way across the pond" 가 아니라 "across the pond" 가 하나의 표현이다.
+- **개수를 채우려고 다어절 표현을 낱개 단어로 쪼개지 않는다.**
+  "a blend of" 를 "blend" 로, "market volatility" 를 "volatility" 로,
+  "share this perspective" 를 "perspective" 로 줄여 적으면 학습 가치가 사라진다.
+  뽑을 것이 모자라면 개수를 줄이지, 쪼개서 늘리지 않는다.
+- 같은 표현을 두 번 넣지 않는다.
+
+  무엇을 고를지는 **낱말 뜻을 합쳐서 의미를 짐작할 수 있는가**로 판단한다.
+  짐작할 수 없는 것일수록 학습 가치가 높다.
+  · 우선해서 고를 것
+    - 낱말 합과 뜻이 다른 표현: phrasal verb, 관용구, 비유적 확장 용법
+      예: "grow wealth"(자산을 늘리다 — grow 의 타동사 용법), "a blend of A and B"
+    - 그 글에서 새로 만들어 쓴 조어
+      예: "yenmageddon"(yen + Armageddon), "financial therapist"
+    - 불규칙 변화형이나 형태가 헷갈리는 낱말
+      예: "indices"(index 의 복수), "criteria", "phenomena"
+    - 함께 쓰는 전치사나 문형이 정해진 표현
+  · 뒤로 미룰 것
+    - 낱말 뜻을 합치면 의미가 그대로 나오는 투명한 복합어
+      예: "financial advisor", "emotional support", "market volatility" 처럼
+      형용사+명사 / 명사+명사 로 뜻이 곧바로 드러나는 것
+    - the, is, good 같은 기초 어휘
+  투명한 복합어만 나열하지 않는다. 그 글의 분야 용어를 늘어놓는 것이 목적이 아니라,
+  읽다가 막힐 만한 지점을 짚어 주는 것이 목적이다."""
+
+_ADVANCED_PICK = """
+- **다어절 표현을 우선 고른다.** 단일어는 사전을 찾으면 나오지만, 여러 낱말이 모여
+  만들어진 뜻은 찾아도 안 나오거나 갈린다. 거기가 막히는 지점이다.
+  우선: "pass muster", "weigh in on", "take it on the chin", "a blend of"
+- 단일어는 **그 자리에서 사전적 기본 뜻과 다르게 쓰인 경우에만** 넣는다.
+  넣는다: "trumpet"(나팔이 아니라 떠벌리다), "yenmageddon"(그 글에서 만든 조어),
+          "grow"(자라다가 아니라 자산을 늘리다), "indices"(index 의 불규칙 복수)
+  뺀다:   "resilience", "volatility", "significant" 처럼 사전 뜻 그대로인 낱말"""
+
+_TYPE_RULE = """
+[type] — 유형
+- 아래 기준을 위에서부터 차례로 확인해, 처음 맞는 것 하나를 고른다.
+  "고급 어휘"는 다른 어디에도 해당하지 않을 때 쓰는 마지막 선택지다.
+  1. Phrasal Verb — 동사 + 부사/전치사 조합이고, 낱말 뜻의 합과 의미가 다르다.
+     예: sum up, throw at, come across, put off
+     **반드시 두 낱말 이상이다.** trigger, emphasize 같은 단일 동사는 여기가 아니라
+     7번 고급 어휘다.
+  2. 관용구 — 두 단어 이상의 굳어진 비유 표현으로, 직역하면 뜻이 통하지 않는다.
+     예: across the pond, take it on the chin, a piece of cake
+  3. 연어(Collocation) — 원어민이 습관적으로 함께 쓰는 자연스러운 단어 짝.
+     예: cope with, meet a deadline, heavy rain
+  4. 구어 표현 — 대화나 비격식 글에서 주로 쓰이는 표현. 예: wanna, gonna
+  5. 전문 용어 — 특정 분야(금융, 법률, 의학, 기술)의 용어.
+  6. 문법 포인트 — 단어의 뜻이 아니라 문법 형태 자체가 학습 대상일 때.
+     예: 접미사 -prone 으로 만든 복합 형용사
+  7. 고급 어휘 — 위 어디에도 해당하지 않는, 수준 높은 단일 단어."""
+
+_MEANING_BEGINNER = """
+[meaning] — 뜻
+- **한국어 대역어 한두 개만** 쓴다. 설명 문장을 붙이지 않는다.
+  맞다: "대처하다, 감당하다"
+  맞다: "회복력"
+  틀렸다: "대처하다, 감당하다. 힘든 상황을 견디며 버텨낸다는 뜻이다."  ← 설명 문장 금지
+  틀렸다: "어려움에 맞서 그것을 이겨내는 것을 뜻한다"                  ← 풀어쓴 문장 금지
+- 쉼표로 나열하고 마침표로 끝내지 않는다."""
+
+_MEANING_WITH_NUANCE = """
+[meaning] — 뜻
+- **한국어 대역어 한두 개만** 쓴다. 설명은 nuance 칸에 따로 쓴다.
+  예: "대처하다, 감당하다" / "기준을 충족하다"
+- 쉼표로 나열하고 마침표로 끝내지 않는다.
+
+[nuance] — 어떤 상황에서 쓰는가
+- 아래 중 이 표현에 해당하는 것을 한두 문장으로 쓴다. 대역어를 되풀이하지 않는다.
+  · 주어진 원문에서 어떤 뜻으로 쓰였는지 (사전 뜻이 여럿일 때 특히 중요하다)
+  · 비유에서 나온 표현이면 무엇에 빗댄 말인지
+    예: across the pond — 대서양을 "연못"에 빗댄 표현
+  · 함께 쓰이는 전치사나 문형이 정해져 있다면 그 형태
+    예: weigh in on ~ 처럼 on 과 함께 쓴다
+  · 비슷한 표현과 무엇이 다른지
+    예: pass muster 는 meet the standard 보다 "심사자가 있다"는 함의가 강하다
+  · 격식/비격식처럼 쓸 자리가 제한된다면 그 점"""
+
+_EXAMPLE_RULE = """
+[example] / [example_ko] — 예문과 그 한국어 뜻
+- example 은 원문과 다른 맥락에서 그 표현을 쓴 5~12 단어의 짧은 영어 문장.
+- 원문 문장을 그대로 다시 쓰지 않는다.
+- 어순이나 전치사가 조금이라도 헷갈리면 예문을 아예 생략한다. 틀린 예문은 없는 것만 못하다.
+- 특히 목적어를 사이에 넣을 수 있는 구동사는 어순을 확신할 때만 쓴다.
+  "throw many reviews at the film" 은 맞지만 "throw at the film many reviews" 는 틀렸다.
+- 원어민이 실제로 쓸 법한 자연스러운 문장만 넣는다.
+- example 을 넣었다면 example_ko 에 그 문장의 한국어 뜻을 반드시 함께 넣는다.
+  학습자가 이 한국어만 보고 영어 문장을 복원하는 연습에 쓰이므로,
+  영어 문장의 정보가 빠짐없이 담긴 자연스러운 한국어여야 한다.
+- example 을 생략하면 example_ko 도 넣지 않는다."""
+
+
+def expressions_task(level: str) -> str:
+    """난이도에 따라 지시를 조립한다.
+
+    초급 프롬프트에는 nuance 설명을 **넣지 않는다.** 설명 자리를 알려 주면
+    모델이 meaning 에 섞어 쓴다.
+    """
+    pick = _PICK + (_ADVANCED_PICK if level == "advanced" else "")
+    meaning = _MEANING_BEGINNER if level == "beginner" else _MEANING_WITH_NUANCE
+    return (
+        "이번 작업은 표현 풀이다. 표의 각 칸에 들어갈 내용은 아래와 같다.\n"
+        "\n[expression] — 표현 (영어)\n" + pick + "\n" + _TYPE_RULE + meaning + _EXAMPLE_RULE
+    )
+
+
 PART_SPECS: tuple[PartSpec, ...] = (
     PartSpec(
         field="translation",
@@ -229,84 +386,12 @@ PART_SPECS: tuple[PartSpec, ...] = (
     PartSpec(
         field="expressions",
         title="표현 풀이",
-        task=(
-            "이번 작업은 표현 풀이다. 표의 각 칸에 들어갈 내용은 아래와 같다.\n"
-            "\n"
-            "[expression] — 표현 (영어)\n"
-            "- 원문에 실제로 등장한 표현만 고른다. 사전에서 가져온 무관한 표현을 지어내지 않는다.\n"
-            "- 원문의 활용형이 아니라 사전에 실릴 기본형으로 적는다.\n"
-            '  원문이 "sums up" 이면 "sum up", "has been thrown at" 이면 "throw at" 으로 적는다.\n'
-            "- 표현의 경계를 정확히 잡는다. 앞뒤 단어를 덧붙이거나 잘라내지 않는다.\n"
-            '  "find its way across the pond" 가 아니라 "across the pond" 가 하나의 표현이다.\n'
-            "- **개수를 채우려고 다어절 표현을 낱개 단어로 쪼개지 않는다.**\n"
-            '  "a blend of" 를 "blend" 로, "market volatility" 를 "volatility" 로,\n'
-            '  "share this perspective" 를 "perspective" 로 줄여 적으면 학습 가치가 사라진다.\n'
-            "  뽑을 것이 모자라면 개수를 줄이지, 쪼개서 늘리지 않는다.\n"
-            "- 같은 표현을 두 번 넣지 않는다.\n"
-            "\n"
-            "  무엇을 고를지는 **낱말 뜻을 합쳐서 의미를 짐작할 수 있는가**로 판단한다.\n"
-            "  짐작할 수 없는 것일수록 학습 가치가 높다.\n"
-            "  · 우선해서 고를 것\n"
-            "    - 낱말 합과 뜻이 다른 표현: phrasal verb, 관용구, 비유적 확장 용법\n"
-            '      예: "grow wealth"(자산을 늘리다 — grow 의 타동사 용법), "a blend of A and B"\n'
-            "    - 그 글에서 새로 만들어 쓴 조어\n"
-            '      예: "yenmageddon"(yen + Armageddon), "financial therapist"\n'
-            "    - 불규칙 변화형이나 형태가 헷갈리는 낱말\n"
-            '      예: "indices"(index 의 복수), "criteria", "phenomena"\n'
-            "    - 함께 쓰는 전치사나 문형이 정해진 표현\n"
-            "  · 뒤로 미룰 것\n"
-            "    - 낱말 뜻을 합치면 의미가 그대로 나오는 투명한 복합어\n"
-            '      예: "financial advisor", "emotional support", "market volatility" 처럼\n'
-            "      형용사+명사 / 명사+명사 로 뜻이 곧바로 드러나는 것\n"
-            "    - the, is, good 같은 기초 어휘\n"
-            "  투명한 복합어만 나열하지 않는다. 그 글의 분야 용어를 늘어놓는 것이 목적이 아니라,\n"
-            "  읽다가 막힐 만한 지점을 짚어 주는 것이 목적이다.\n"
-            "\n"
-            "[type] — 유형\n"
-            "- 아래 기준을 위에서부터 차례로 확인해, 처음 맞는 것 하나를 고른다.\n"
-            '  "고급 어휘"는 다른 어디에도 해당하지 않을 때 쓰는 마지막 선택지다.\n'
-            "  1. Phrasal Verb — 동사 + 부사/전치사 조합이고, 낱말 뜻의 합과 의미가 다르다.\n"
-            "     예: sum up, throw at, come across, put off\n"
-            "     **반드시 두 낱말 이상이다.** trigger, emphasize 같은 단일 동사는 여기가 아니라\n"
-            "     7번 고급 어휘다.\n"
-            "  2. 관용구 — 두 단어 이상의 굳어진 비유 표현으로, 직역하면 뜻이 통하지 않는다.\n"
-            "     예: across the pond, take it on the chin, a piece of cake\n"
-            "  3. 연어(Collocation) — 원어민이 습관적으로 함께 쓰는 자연스러운 단어 짝.\n"
-            "     예: cope with, meet a deadline, heavy rain\n"
-            "  4. 구어 표현 — 대화나 비격식 글에서 주로 쓰이는 표현. 예: wanna, gonna\n"
-            "  5. 전문 용어 — 특정 분야(금융, 법률, 의학, 기술)의 용어.\n"
-            "  6. 문법 포인트 — 단어의 뜻이 아니라 문법 형태 자체가 학습 대상일 때.\n"
-            "     예: 접미사 -prone 으로 만든 복합 형용사\n"
-            "  7. 고급 어휘 — 위 어디에도 해당하지 않는, 수준 높은 단일 단어.\n"
-            "\n"
-            "[meaning] — 의미 및 설명\n"
-            "- 두 부분으로 쓴다. 먼저 한국어 뜻을 쓰고, 이어서 이 표현을 어떻게 다뤄야 하는지 짚는다.\n"
-            "- 앞부분: 한국어 뜻. 유의어가 있으면 쉼표로 두세 개까지 덧붙인다.\n"
-            "- 뒷부분: 아래 중 이 표현에 해당하는 것을 한 문장으로 쓴다.\n"
-            "  · 주어진 원문에서 어떤 뜻으로 쓰였는지 (사전 뜻이 여럿일 때 특히 중요하다)\n"
-            "  · 비유에서 나온 표현이면 무엇에 빗댄 말인지\n"
-            '    예: across the pond — 대서양을 "연못"에 빗댄 표현\n'
-            "  · 함께 쓰이는 전치사나 문형이 정해져 있다면 그 형태\n"
-            "    예: weigh in on ~ 처럼 on 과 함께 쓴다\n"
-            "  · 격식/비격식처럼 쓸 자리가 제한된다면 그 점\n"
-            "- 사전 뜻만 나열하고 끝내지 않는다. 두세 줄을 넘기지도 않는다.\n"
-            "\n"
-            "[example] / [example_ko] — 예문과 그 한국어 뜻\n"
-            "- example 은 원문과 다른 맥락에서 그 표현을 쓴 5~12 단어의 짧은 영어 문장.\n"
-            "- 원문 문장을 그대로 다시 쓰지 않는다.\n"
-            "- 어순이나 전치사가 조금이라도 헷갈리면 예문을 아예 생략한다. 틀린 예문은 없는 것만 못하다.\n"
-            "- 특히 목적어를 사이에 넣을 수 있는 구동사는 어순을 확신할 때만 쓴다.\n"
-            '  "throw many reviews at the film" 은 맞지만 "throw at the film many reviews" 는 틀렸다.\n'
-            "- 원어민이 실제로 쓸 법한 자연스러운 문장만 넣는다.\n"
-            "- example 을 넣었다면 example_ko 에 그 문장의 한국어 뜻을 반드시 함께 넣는다.\n"
-            "  학습자가 이 한국어만 보고 영어 문장을 복원하는 연습에 쓰이므로, "
-            "영어 문장의 정보가 빠짐없이 담긴 자연스러운 한국어여야 한다.\n"
-            "- example 을 생략하면 example_ko 도 넣지 않는다."
-        ),
+        task=expressions_task,
         schema=_wrap("expressions", {"type": "array", "items": _EXPRESSION_ITEM}),
         model=ExpressionsPart,
         build_user=_plain_user("다음 텍스트에서 학습 가치가 있는 표현을 뽑아라."),
-        counts_by_level=EXPRESSION_COUNTS,
+        max_by_level=EXPRESSION_MAX,
+        item_by_level=expression_item,
     ),
     PartSpec(
         field="structures",
@@ -426,7 +511,7 @@ def build_messages(
 ) -> list[ChatMessage]:
     system = SHARED_SYSTEM.format(
         level_guide=LEVEL_GUIDE.get(level, LEVEL_GUIDE["intermediate"]),
-        task=spec.task,
+        task=spec.task_for(level),
     )
     if retry:
         system = f"{system}\n\n{RETRY_NUDGE}"
