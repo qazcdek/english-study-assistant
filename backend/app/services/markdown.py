@@ -50,6 +50,13 @@ def render_expressions(expressions: list[Expression]) -> str:
             row.append(_cell(e.example or "—"))
         lines.append("| " + " | ".join(row) + " |")
 
+    # 뉘앙스는 길어서 표 칸에 넣으면 좁아 깨진다. 표 아래 목록으로 붙인다.
+    notes = [e for e in expressions if e.nuance.strip()]
+    if notes:
+        lines.append("")
+        for e in notes:
+            lines.append(f"* **{e.expression.strip()}** — {_one_line(e.nuance)}")
+
     return "\n".join(lines)
 
 

@@ -53,7 +53,11 @@ class AnalyzeRequest(BaseModel):
 class Expression(BaseModel):
     expression: str = Field(description="원문에 등장한 영어 표현 그대로")
     type: ExpressionType
-    meaning: str = Field(description="한국어 의미 및 설명")
+    meaning: str = Field(description="한국어 대역어 한두 개")
+    nuance: str = Field(
+        default="",
+        description="어떤 상황에서 쓰는지·뉘앙스. 초급에서는 쓰지 않는다",
+    )
     example: str | None = Field(default=None, description="다른 맥락의 예문. 확실하지 않으면 생략")
     example_ko: str | None = Field(default=None, description="example 의 한국어 뜻. 작문 연습의 제시문")
 
