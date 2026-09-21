@@ -57,8 +57,17 @@ class Expression(BaseModel):
 
 
 class StructureNote(BaseModel):
+    """구문 해설.
+
+    한 필드에 몰아넣으면 모델이 구조 이름만 대고 끝내거나 문법 일반론으로 흘렀다.
+    빠뜨릴 수 없도록 조각을 나눈다.
+    """
+
     fragment: str = Field(description="해설 대상이 되는 원문 조각")
-    explanation: str = Field(description="한국어 문법 해설")
+    name: str = Field(description="이 구조의 이름. 표준 문법 용어")
+    role: str = Field(description="이 문장에서 그 구조가 하는 일. 문법 일반론이 아님")
+    rewrite: str = Field(default="", description="쉬운 말로 바꿔 쓴 등가 표현. 어려우면 빈 문자열")
+    pitfall: str = Field(default="", description="한국어 화자가 놓치기 쉬운 지점")
 
 
 class Overview(BaseModel):

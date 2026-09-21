@@ -177,3 +177,15 @@ async def test_analyzer_sends_level_specific_schema():
 
     # FakeProvider 가 파트를 스키마로 구분하므로, 호출이 제대로 갈렸다면 네 파트 모두 기록된다
     assert [f for f, _ in provider.calls] == list(PART_FIELDS)
+
+
+async def test_structure_markdown_keeps_all_four_parts():
+    """한 필드에 몰아넣으면 구조 이름만 대고 끝나므로 조각을 나눠 받는다."""
+    service = AnalyzerService(FakeProvider())
+    events = await collect(service)
+    md = next(e for e in events if isinstance(e, PartEvent) and e.field == "structures").markdown
+
+    assert "**It's unlikely to find its way** — 형식주어 it 구문" in md
+    assert "실제 주어는 뒤의 to부정사구다" in md
+    assert "쉽게 쓰면: `The chance that it will spread is low`" in md
+    assert "주의: 한국어에는 형식주어가 없어" in md

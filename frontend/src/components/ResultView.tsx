@@ -67,13 +67,35 @@ export function ResultView({ state, level }: { state: AnalysisState; level: Leve
         {result.structures.length === 0 ? (
           <p className="text-sm text-stone-400">특별히 설명할 구문이 없습니다.</p>
         ) : (
-          <ul className="flex flex-col gap-3">
+          <ul className="flex flex-col gap-4">
             {result.structures.map((s, i) => (
               <li key={`${s.fragment}-${i}`} className="text-sm leading-relaxed">
-                <span className="font-mono font-medium text-indigo-600 dark:text-indigo-300">
-                  {s.fragment}
-                </span>
-                <p className="mt-1 text-stone-600 dark:text-stone-300">{s.explanation}</p>
+                <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+                  <span className="font-mono font-medium text-indigo-600 dark:text-indigo-300">
+                    {s.fragment}
+                  </span>
+                  <span className="rounded-full bg-stone-100 px-2 py-0.5 text-xs text-stone-500 dark:bg-stone-800 dark:text-stone-400">
+                    {s.name}
+                  </span>
+                </div>
+
+                <p className="mt-1.5 text-stone-600 dark:text-stone-300">{s.role}</p>
+
+                {s.rewrite && (
+                  <p className="mt-1.5 flex flex-wrap items-baseline gap-2">
+                    <span className="text-xs text-stone-400">쉽게 쓰면</span>
+                    <span className="font-mono text-stone-700 dark:text-stone-200">
+                      {s.rewrite}
+                    </span>
+                  </p>
+                )}
+
+                {s.pitfall && (
+                  <p className="mt-1.5 flex flex-wrap items-baseline gap-2">
+                    <span className="shrink-0 text-xs text-amber-600 dark:text-amber-500">주의</span>
+                    <span className="text-stone-600 dark:text-stone-300">{s.pitfall}</span>
+                  </p>
+                )}
               </li>
             ))}
           </ul>

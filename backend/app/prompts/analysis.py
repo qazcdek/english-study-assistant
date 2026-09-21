@@ -84,10 +84,18 @@ _EXPRESSION_ITEM = {
     "additionalProperties": False,
 }
 
+# 해설을 한 필드로 두면 구조 이름만 대고 끝내거나 문법 일반론으로 흐른다.
+# 조각을 나눠 required 로 묶으면 각각을 반드시 채워야 한다.
 _STRUCTURE_ITEM = {
     "type": "object",
-    "properties": {"fragment": {"type": "string"}, "explanation": {"type": "string"}},
-    "required": ["fragment", "explanation"],
+    "properties": {
+        "fragment": {"type": "string"},
+        "name": {"type": "string"},
+        "role": {"type": "string"},
+        "rewrite": {"type": "string"},
+        "pitfall": {"type": "string"},
+    },
+    "required": ["fragment", "name", "role", "rewrite", "pitfall"],
     "additionalProperties": False,
 }
 
@@ -312,18 +320,31 @@ PART_SPECS: tuple[PartSpec, ...] = (
             "  분사구문을 설명하면서 문장 전체를 인용하면 안 되고, 분사구만 잘라 인용한다.\n"
             "- 항목끼리 인용 범위가 겹치지 않게 한다.\n"
             "\n"
-            "[explanation] — 해설\n"
-            "- 아래 세 가지를 순서대로 쓴다.\n"
-            "  1. 이 구조의 이름. 표준 문법 용어를 정확히 쓴다.\n"
-            "     (예: if 를 생략한 도치 가정법, 형식주어 it, 명사를 뒤에서 꾸미는 관계절)\n"
-            "  2. 그 구조가 이 문장에서 하는 일. 문법 일반론이 아니라 이 문장에 대해 쓴다.\n"
-            "     수동태라면 '수동태는 대상에 초점을 둔다' 가 아니라, "
+            "[name] — 구조 이름\n"
+            "- 표준 문법 용어로 짧게 적는다. 설명을 붙이지 않는다.\n"
+            "  예: if 를 생략한 도치 가정법 / 형식주어 it / 명사를 뒤에서 꾸미는 관계절 /\n"
+            "      주어가 드러나지 않는 분사구문 / 행위자를 밝히지 않은 수동태\n"
+            "\n"
+            "[role] — 이 문장에서 하는 일\n"
+            "- **이 문장에 대해** 한두 문장으로 쓴다. 문법 일반론을 늘어놓지 않는다.\n"
+            '  수동태라면 "수동태는 대상에 초점을 둔다" 가 아니라, '
             "이 문장에서 행위자를 왜 밝히지 않았는지를 쓴다.\n"
-            "  3. 쉬운 말로 바꿔 쓴 등가 표현, 또는 한국어 화자가 틀리기 쉬운 오독 지점.\n"
-            '     (예: "Had she known" 은 "If she had known" 과 같다)\n'
-            "- \"고급스러운 표현이다\", \"문장을 자연스럽게 만든다\" 같은 평가는 쓰지 않는다.\n"
-            "- 위 세 가지를 각각 한 문장으로, 전체 세 문장 안에서 끝낸다. "
-            "문법 규칙을 일반론으로 늘어놓지 않는다."
+            '- "고급스러운 표현이다", "문장을 자연스럽게 만든다" 같은 평가는 쓰지 않는다.\n'
+            "\n"
+            "[rewrite] — 쉬운 말로 바꿔 쓰기\n"
+            "- 같은 뜻을 유지하면서 구조를 풀어낸 **영어 문장**을 쓴다. 한국어 번역이 아니다.\n"
+            '  예: "Had she known" → "If she had known"\n'
+            '      "will be rejected" → "the server will reject it"\n'
+            '      "It is unlikely to find its way" → "The chance that it will spread is low"\n'
+            "- 원문 조각 하나에 대응하는 짧은 영어만 쓴다. 문장 전체를 다시 쓰지 않는다.\n"
+            "- 바꿔 쓰는 것이 오히려 어색해지는 구조라면 빈 문자열로 둔다.\n"
+            "\n"
+            "[pitfall] — 한국어 화자가 놓치기 쉬운 지점\n"
+            "- 이 구조에서 한국어 화자가 자주 오독하거나 틀리는 점을 한 문장으로 쓴다.\n"
+            "  예: 한국어는 수식어가 명사 앞에 오므로 뒤에서 꾸미는 관계절의 범위를 놓치기 쉽다 /\n"
+            "      한국어에는 형식주어가 없어 it 을 대명사로 잘못 읽기 쉽다 /\n"
+            "      분사구문의 숨은 주어를 가까운 명사로 착각하기 쉽다\n"
+            "- 특별히 짚을 것이 없으면 빈 문자열로 둔다. 억지로 지어내지 않는다."
         ),
         schema=_wrap("structures", {"type": "array", "items": _STRUCTURE_ITEM}),
         model=StructuresPart,
