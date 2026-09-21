@@ -56,6 +56,7 @@ export default function App() {
           text: r.source_text,
           createdAt: Date.parse(r.created_at) || Date.now(),
           state: null,
+          level: r.level,
         })),
       )
     } catch {
@@ -96,7 +97,7 @@ export default function App() {
           void session.refreshUsage()
           void reloadServerHistory()
         } else {
-          const next = addEntry(history, state)
+          const next = addEntry(history, state, level)
           setHistory(next)
           setActiveId(next[0]?.id ?? null)
         }
