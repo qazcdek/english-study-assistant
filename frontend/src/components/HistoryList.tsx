@@ -1,4 +1,5 @@
 import type { HistoryEntry } from '../lib/history'
+import { LevelDot } from './LevelDot'
 
 function TrashIcon() {
   return (
@@ -35,14 +36,15 @@ export function HistoryList({ entries, activeId, onSelect, onDelete }: Props) {
             <button
               type="button"
               onClick={() => onSelect(entry)}
-              className={`w-full truncate rounded-lg py-2 pl-2.5 pr-8 text-left text-xs transition ${
+              className={`flex w-full items-center gap-2 rounded-lg py-2 pl-2 pr-8 text-left text-xs transition ${
                 active
                   ? 'bg-indigo-50 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300'
                   : 'text-stone-500 hover:bg-stone-100 dark:hover:bg-stone-800'
               }`}
               title={entry.text}
             >
-              {entry.text}
+              <LevelDot level={entry.level} />
+              <span className="truncate">{entry.text}</span>
             </button>
 
             <button

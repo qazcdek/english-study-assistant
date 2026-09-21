@@ -1,4 +1,5 @@
 import type { AnalysisState } from './analysis'
+import type { Level } from './types'
 
 const KEY = 'eng-study:history'
 const LIMIT = 30
@@ -9,6 +10,8 @@ export interface HistoryEntry {
   createdAt: number
   /** 서버 히스토리 목록에는 본문이 없어, 고를 때 따로 가져온다. */
   state: AnalysisState | null
+  /** 난이도를 저장하기 전에 쌓인 항목에는 없다. 목록에서 표시를 생략한다. */
+  level?: Level
 }
 
 export function loadHistory(): HistoryEntry[] {
@@ -34,12 +37,17 @@ export function removeEntry(entries: HistoryEntry[], id: string): HistoryEntry[]
   return next
 }
 
-export function addEntry(entries: HistoryEntry[], state: AnalysisState): HistoryEntry[] {
+export function addEntry(
+  entries: HistoryEntry[],
+  state: AnalysisState,
+  level: Level,
+): HistoryEntry[] {
   const entry: HistoryEntry = {
     id: crypto.randomUUID(),
     text: state.result.source_text,
     createdAt: Date.now(),
     state,
+    level,
   }
   const next = [entry, ...entries.filter((e) => e.text !== entry.text)].slice(0, LIMIT)
   saveHistory(next)

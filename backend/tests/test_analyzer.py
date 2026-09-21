@@ -155,7 +155,7 @@ def test_expression_count_limits_follow_level():
         for level in ("beginner", "intermediate", "advanced")
     }
 
-    assert counts == {"beginner": (3, 5), "intermediate": (6, 8), "advanced": (7, 10)}
+    assert counts == {"beginner": (3, 5), "intermediate": (5, 8), "advanced": (5, 8)}
     # 원본 스키마는 건드리지 않는다
     assert "minItems" not in spec.schema["properties"]["expressions"]
 
@@ -189,3 +189,11 @@ async def test_structure_markdown_keeps_all_four_parts():
     assert "실제 주어는 뒤의 to부정사구다" in md
     assert "쉽게 쓰면: `The chance that it will spread is low`" in md
     assert "주의: 한국어에는 형식주어가 없어" in md
+
+
+def test_expression_counts_do_not_grow_with_level():
+    """난이도는 설명의 깊이를 바꾼다. 개수를 늘리면 모델이 다어절 표현을 낱개로 쪼개 하한을 채운다."""
+    from app.prompts.analysis import EXPRESSION_COUNTS
+
+    assert EXPRESSION_COUNTS["intermediate"] == EXPRESSION_COUNTS["advanced"]
+    assert EXPRESSION_COUNTS["beginner"][1] <= EXPRESSION_COUNTS["intermediate"][1]
