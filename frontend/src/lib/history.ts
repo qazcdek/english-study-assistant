@@ -28,6 +28,12 @@ export function saveHistory(entries: HistoryEntry[]): void {
   }
 }
 
+export function removeEntry(entries: HistoryEntry[], id: string): HistoryEntry[] {
+  const next = entries.filter((e) => e.id !== id)
+  saveHistory(next)
+  return next
+}
+
 export function addEntry(entries: HistoryEntry[], state: AnalysisState): HistoryEntry[] {
   const entry: HistoryEntry = {
     id: crypto.randomUUID(),

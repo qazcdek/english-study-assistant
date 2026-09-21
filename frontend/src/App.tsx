@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 
 import { AccountBar } from './components/AccountBar'
 import { ApiKeyPanel } from './components/ApiKeyPanel'
@@ -12,12 +12,13 @@ import { initialState, reduce, type AnalysisState } from './lib/analysis'
 import {
   ApiError,
   analyzeStream,
+  deleteHistory,
   getHistoryDetail,
   giveConsent,
   health as fetchHealth,
   listHistory,
 } from './lib/api'
-import { addEntry, loadHistory, type HistoryEntry } from './lib/history'
+import { addEntry, loadHistory, removeEntry, type HistoryEntry } from './lib/history'
 import { useSession } from './lib/useSession'
 import type { Level, LlmHealth } from './lib/types'
 
@@ -46,21 +47,26 @@ export default function App() {
   }, [ready])
 
   // 웹 모드는 히스토리를 서버에서 가져와 기기 간 동기화한다.
+  const reloadServerHistory = useCallback(async () => {
+    try {
+      const rows = await listHistory()
+      setHistory(
+        rows.map((r) => ({
+          id: String(r.id),
+          text: r.source_text,
+          createdAt: Date.parse(r.created_at) || Date.now(),
+          state: null,
+        })),
+      )
+    } catch {
+      // 목록 갱신 실패로 분석 자체를 막을 필요는 없다.
+    }
+  }, [])
+
   useEffect(() => {
     if (session.stage !== 'ready') return
-    void listHistory()
-      .then((rows) =>
-        setHistory(
-          rows.map((r) => ({
-            id: String(r.id),
-            text: r.source_text,
-            createdAt: Date.parse(r.created_at) || Date.now(),
-            state: null,
-          })),
-        ),
-      )
-      .catch(() => {})
-  }, [session.stage])
+    void reloadServerHistory()
+  }, [session.stage, reloadServerHistory])
 
   async function handleSubmit() {
     const trimmed = text.trim()
@@ -88,16 +94,7 @@ export default function App() {
       if (!controller.signal.aborted) {
         if (cloud) {
           void session.refreshUsage()
-          void listHistory().then((rows) =>
-            setHistory(
-              rows.map((r) => ({
-                id: String(r.id),
-                text: r.source_text,
-                createdAt: Date.parse(r.created_at) || Date.now(),
-                state: null,
-              })),
-            ),
-          )
+          void reloadServerHistory()
         } else {
           const next = addEntry(history, state)
           setHistory(next)
@@ -109,6 +106,25 @@ export default function App() {
       setAnalysis(null)
     } finally {
       setRunning(false)
+    }
+  }
+
+  async function handleDeleteHistory(entry: HistoryEntry) {
+    if (cloud) {
+      try {
+        await deleteHistory(Number(entry.id))
+      } catch (e) {
+        setError(e instanceof ApiError ? e : new ApiError('unknown', '삭제하지 못했습니다.'))
+        return
+      }
+      await reloadServerHistory()
+    } else {
+      setHistory(removeEntry(history, entry.id))
+    }
+    // 보고 있던 항목을 지웠다면 결과 화면도 비운다.
+    if (entry.id === activeId) {
+      setActiveId(null)
+      setAnalysis(null)
     }
   }
 
@@ -224,7 +240,12 @@ export default function App() {
           <h2 className="mb-2 px-2 text-xs font-medium uppercase tracking-wide text-stone-400">
             최근 분석
           </h2>
-          <HistoryList entries={history} activeId={activeId} onSelect={handleSelectHistory} />
+          <HistoryList
+            entries={history}
+            activeId={activeId}
+            onSelect={handleSelectHistory}
+            onDelete={handleDeleteHistory}
+          />
         </aside>
       </div>
     </div>
