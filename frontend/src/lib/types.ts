@@ -1,0 +1,154 @@
+export type Level = 'beginner' | 'intermediate' | 'advanced'
+
+export type ExpressionType =
+  | '고급 어휘'
+  | '관용구'
+  | 'Phrasal Verb'
+  | '연어(Collocation)'
+  | '문법 포인트'
+  | '구어 표현'
+  | '전문 용어'
+
+export interface Expression {
+  expression: string
+  type: ExpressionType
+  meaning: string
+  example?: string | null
+  /** example 의 한국어 뜻. 작문 연습의 제시문으로 쓴다. */
+  example_ko?: string | null
+}
+
+export interface StructureNote {
+  fragment: string
+  explanation: string
+}
+
+export interface Overview {
+  domain: string
+  tone: string
+  formality: '매우 격식' | '격식' | '중립' | '비격식' | '속어에 가까움'
+  style: '문어체' | '구어체' | '혼합'
+  key_expressions: string[]
+  comment: string
+}
+
+export const PART_FIELDS = ['translation', 'expressions', 'structures', 'overview'] as const
+export type PartField = (typeof PART_FIELDS)[number]
+
+export const PART_TITLES: Record<PartField, string> = {
+  translation: '자연스러운 번역',
+  expressions: '표현 풀이',
+  structures: '문장 구조',
+  overview: '총평',
+}
+
+/** 파트별로 채워지므로 실패한 파트는 비어 있을 수 있다. */
+export interface AnalysisResult {
+  source_text: string
+  translation: string
+  expressions: Expression[]
+  structures: StructureNote[]
+  overview: Overview | null
+}
+
+export interface MarkdownSections {
+  translation: string
+  expressions: string
+  structures: string
+  overview: string
+  full: string
+}
+
+export interface AnalyzeMeta {
+  model: string
+  elapsed_ms: number
+  retried_parts: string[]
+  failed_parts: string[]
+}
+
+export interface AnalyzeResponse {
+  result: AnalysisResult
+  markdown: MarkdownSections
+  meta: AnalyzeMeta
+}
+
+// --- SSE 이벤트 ---
+
+export interface PartEvent {
+  type: 'part'
+  field: PartField
+  title: string
+  index: number
+  total: number
+  data: Record<string, unknown>
+  markdown: string
+  elapsed_ms: number
+  retried: boolean
+}
+
+export interface PartErrorEvent {
+  type: 'part_error'
+  field: PartField
+  title: string
+  index: number
+  total: number
+  code: string
+  message: string
+  detail?: string | null
+}
+
+export interface DoneEvent {
+  type: 'done'
+  result: AnalysisResult
+  markdown: MarkdownSections
+  meta: AnalyzeMeta
+}
+
+export interface StreamErrorEvent {
+  type: 'error'
+  code: string
+  message: string
+  detail?: string | null
+}
+
+export type StreamEvent = PartEvent | PartErrorEvent | DoneEvent | StreamErrorEvent
+
+export interface LlmHealth {
+  reachable: boolean
+  base_url: string
+  models: string[]
+  detail?: string | null
+}
+
+export interface HealthResponse {
+  status: 'ok'
+  llm: LlmHealth
+}
+
+// --- 작문 연습 ---
+
+export type Verdict = '정확함' | '통함' | '다시'
+
+export interface PracticeRequest {
+  expression: string
+  meaning: string
+  prompt_ko: string
+  model_answer: string
+  learner_answer: string
+  level: Level
+}
+
+export interface PracticeResult {
+  verdict: Verdict
+  uses_target: boolean
+  good_point: string
+  target_note: string
+  corrected: string
+  other_notes: string[]
+}
+
+export interface PracticeResponse {
+  result: PracticeResult
+  model_answer: string
+  meta: AnalyzeMeta
+}

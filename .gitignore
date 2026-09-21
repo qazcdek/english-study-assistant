@@ -1,0 +1,11 @@
+# dev.sh 가 남기는 실행 중 프로세스 번호
+.dev.pid
+
+# 편집기 / OS
+.vscode/
+.idea/
+.DS_Store
+
+# 환경 설정 — .env.example 만 커밋한다
+.env
+.env.local

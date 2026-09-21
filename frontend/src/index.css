@@ -1,0 +1,13 @@
+@import 'tailwindcss';
+
+@theme {
+  --font-sans: 'Pretendard', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+}
+
+html {
+  color-scheme: light dark;
+}
+
+body {
+  @apply bg-stone-50 text-stone-900 antialiased dark:bg-stone-950 dark:text-stone-100;
+}

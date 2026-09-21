@@ -1,0 +1,13 @@
+<!--
+  파비콘. 앱 강조색(indigo-600) 라운드 사각형 안에 흰 원, 그 안에 "Eng".
+  text 의 y 값(28.32)은 dominant-baseline 기준이 아니라, 실제 렌더링 픽셀을 스캔해
+  잉크 상하단의 가운데가 32(원의 중심)에 오도록 맞춘 값이다.
+  g 의 디센더 때문에 baseline 기준으로 맞추면 글자가 아래로 치우쳐 보인다.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Eng">
+  <rect width="64" height="64" rx="15" fill="#4f46e5"/>
+  <circle cx="32" cy="32" r="26" fill="#ffffff"/>
+  <text x="32" y="28.32" text-anchor="middle" dominant-baseline="central"
+        font-family="system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif"
+        font-size="25" font-weight="700" letter-spacing="-0.9" fill="#4f46e5">Eng</text>
+</svg>
