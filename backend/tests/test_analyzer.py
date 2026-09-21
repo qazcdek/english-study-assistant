@@ -140,3 +140,40 @@ async def test_structures_prompt_lists_already_covered_expressions():
     assert "이미 다룬 표현:" in prompt
     assert "across the pond" in prompt
     assert "sum up" in prompt
+
+
+def test_expression_count_limits_follow_level():
+    """개수는 프롬프트 문구가 아니라 스키마로 강제한다. 작은 모델이 하한을 목표로 삼기 때문이다."""
+    from app.prompts.analysis import PART_SPECS
+
+    spec = next(s for s in PART_SPECS if s.field == "expressions")
+    counts = {
+        level: (
+            spec.schema_for(level)["properties"]["expressions"]["minItems"],
+            spec.schema_for(level)["properties"]["expressions"]["maxItems"],
+        )
+        for level in ("beginner", "intermediate", "advanced")
+    }
+
+    assert counts == {"beginner": (3, 5), "intermediate": (6, 8), "advanced": (7, 10)}
+    # 원본 스키마는 건드리지 않는다
+    assert "minItems" not in spec.schema["properties"]["expressions"]
+
+
+def test_key_expressions_are_capped_at_three():
+    """'특히 챙길 것'이라는 선별의 뜻이 살려면 목록 전체를 옮겨 적으면 안 된다."""
+    from app.prompts.analysis import PART_SPECS
+
+    spec = next(s for s in PART_SPECS if s.field == "overview")
+    key = spec.schema["properties"]["overview"]["properties"]["key_expressions"]
+
+    assert (key["minItems"], key["maxItems"]) == (1, 3)
+
+
+async def test_analyzer_sends_level_specific_schema():
+    provider = FakeProvider()
+    service = AnalyzerService(provider)
+    [e async for e in service.stream(AnalyzeRequest(text="hello", level="advanced"))]
+
+    # FakeProvider 가 파트를 스키마로 구분하므로, 호출이 제대로 갈렸다면 네 파트 모두 기록된다
+    assert [f for f, _ in provider.calls] == list(PART_FIELDS)
