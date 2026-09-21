@@ -31,7 +31,7 @@ from app.schemas import (
     PartErrorEvent,
     PartEvent,
 )
-from app.services import markdown
+from app.services import markdown, refine
 
 _FENCE_RE = re.compile(r"^\s*```(?:json)?\s*|\s*```\s*$", re.IGNORECASE)
 
@@ -120,6 +120,9 @@ class AnalyzerService:
 
             if was_retried:
                 retried.append(spec.field)
+
+            # 프롬프트로 부탁해도 새는 것들을 규칙으로 잡는다. 추가 호출은 없다.
+            value = refine.apply(spec.field, value, state)
 
             # 총평 프롬프트가 표현 목록을 참조하므로 원본 형태로도 남겨 둔다.
             state[spec.field] = (
