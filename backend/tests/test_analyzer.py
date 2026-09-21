@@ -142,22 +142,45 @@ async def test_structures_prompt_lists_already_covered_expressions():
     assert "sum up" in prompt
 
 
-def test_expression_count_limits_follow_level():
+def test_expression_max_follows_level_but_floor_follows_length():
     """개수는 프롬프트 문구가 아니라 스키마로 강제한다. 작은 모델이 하한을 목표로 삼기 때문이다."""
     from app.prompts.analysis import PART_SPECS
 
     spec = next(s for s in PART_SPECS if s.field == "expressions")
-    counts = {
-        level: (
-            spec.schema_for(level)["properties"]["expressions"]["minItems"],
-            spec.schema_for(level)["properties"]["expressions"]["maxItems"],
-        )
-        for level in ("beginner", "intermediate", "advanced")
-    }
 
-    assert counts == {"beginner": (3, 5), "intermediate": (5, 8), "advanced": (5, 8)}
+    def limits(level, length):
+        a = spec.schema_for(level, length)["properties"]["expressions"]
+        return a["minItems"], a["maxItems"]
+
+    # 상한은 난이도를 따른다
+    assert limits("beginner", 800)[1] == 5
+    assert limits("intermediate", 800)[1] == limits("advanced", 800)[1] == 8
+    # 하한은 글 길이를 따른다
+    assert limits("intermediate", 150)[0] == 1
+    assert limits("intermediate", 800)[0] == 3
     # 원본 스키마는 건드리지 않는다
     assert "minItems" not in spec.schema["properties"]["expressions"]
+
+
+def test_expression_floor_scales_with_text_length():
+    """짧은 글에 억지로 개수를 채우게 하면 다어절 표현을 낱개로 쪼개거나 쉬운 낱말을 끌어온다."""
+    from app.prompts.analysis import min_expressions
+
+    assert min_expressions(0, 8) == 1
+    assert min_expressions(199, 8) == 1
+    assert min_expressions(200, 8) == 1
+    assert min_expressions(400, 8) == 2
+    assert min_expressions(600, 8) == 3
+
+
+def test_expression_floor_never_exceeds_three():
+    """하한이 높으면 모델이 규칙을 어겨서라도 숫자를 맞춘다. 고급은 다어절만 고르므로 특히 위험하다."""
+    from app.prompts.analysis import MAX_MIN_EXPRESSIONS, min_expressions
+
+    assert MAX_MIN_EXPRESSIONS == 3
+    assert min_expressions(800, 8) == 3
+    assert min_expressions(2000, 8) == 3
+    assert min_expressions(100000, 8) == 3
 
 
 def test_key_expressions_are_capped_at_three():
@@ -193,7 +216,68 @@ async def test_structure_markdown_keeps_all_four_parts():
 
 def test_expression_counts_do_not_grow_with_level():
     """난이도는 설명의 깊이를 바꾼다. 개수를 늘리면 모델이 다어절 표현을 낱개로 쪼개 하한을 채운다."""
-    from app.prompts.analysis import EXPRESSION_COUNTS
+    from app.prompts.analysis import EXPRESSION_MAX
 
-    assert EXPRESSION_COUNTS["intermediate"] == EXPRESSION_COUNTS["advanced"]
-    assert EXPRESSION_COUNTS["beginner"][1] <= EXPRESSION_COUNTS["intermediate"][1]
+    assert EXPRESSION_MAX["intermediate"] == EXPRESSION_MAX["advanced"]
+    assert EXPRESSION_MAX["beginner"] <= EXPRESSION_MAX["intermediate"]
+
+
+# --------------------------------------------------------------------- 난이도
+
+
+def expressions_spec():
+    from app.prompts.analysis import PART_SPECS
+
+    return next(s for s in PART_SPECS if s.field == "expressions")
+
+
+def test_beginner_schema_has_no_nuance_field():
+    """초급은 대역어만 쓴다. 프롬프트로 부탁하는 대신 쓸 자리를 없앤다.
+
+    additionalProperties: False 이므로 모델이 nuance 를 만들어 낼 수 없다.
+    """
+    item = expressions_spec().schema_for("beginner", 400)["properties"]["expressions"]["items"]
+
+    assert "nuance" not in item["properties"]
+    assert "nuance" not in item["required"]
+    assert item["additionalProperties"] is False
+
+
+def test_intermediate_and_advanced_require_nuance():
+    for level in ("intermediate", "advanced"):
+        item = expressions_spec().schema_for(level, 400)["properties"]["expressions"]["items"]
+        assert "nuance" in item["required"], level
+
+
+def test_example_is_available_at_every_level():
+    """초급도 예문은 남긴다. 작문 연습이 예문에 딸려 있어 빼면 연습도 사라진다."""
+    for level in ("beginner", "intermediate", "advanced"):
+        item = expressions_spec().schema_for(level, 400)["properties"]["expressions"]["items"]
+        assert {"example", "example_ko"} <= set(item["properties"]), level
+
+
+def test_beginner_prompt_never_mentions_nuance():
+    """설명 자리를 알려 주면 모델이 meaning 에 섞어 쓴다."""
+    assert "nuance" not in expressions_spec().task_for("beginner")
+
+
+def test_only_advanced_prompt_prefers_multiword():
+    spec = expressions_spec()
+
+    assert "다어절 표현을 우선" in spec.task_for("advanced")
+    assert "다어절 표현을 우선" not in spec.task_for("intermediate")
+    assert "다어절 표현을 우선" not in spec.task_for("beginner")
+
+
+async def test_nuance_is_rendered_below_the_table():
+    """뉘앙스는 길어서 표 칸에 넣으면 좁아 깨진다."""
+    payload = dict(PART_PAYLOADS["expressions"])
+    payload["expressions"] = [
+        {**payload["expressions"][0], "nuance": "대서양을 연못에 빗댄 표현이다."}
+    ]
+    service = AnalyzerService(FakeProvider({"expressions": json.dumps(payload, ensure_ascii=False)}))
+    events = await collect(service)
+    md = next(e for e in events if isinstance(e, PartEvent) and e.field == "expressions").markdown
+
+    assert "| 표현 (영어) |" in md
+    assert "* **across the pond** — 대서양을 연못에 빗댄 표현이다." in md

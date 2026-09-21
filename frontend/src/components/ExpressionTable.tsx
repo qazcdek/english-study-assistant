@@ -103,6 +103,12 @@ export function ExpressionTable({ expressions, keyExpressions = [], level }: Pro
                     </td>
                     <td className="py-3 leading-relaxed text-stone-700 dark:text-stone-300">
                       {e.meaning}
+                      {e.nuance && (
+                        // 초급에서는 이 줄이 아예 없다.
+                        <p className="mt-1 text-xs leading-relaxed text-stone-500 dark:text-stone-400">
+                          {e.nuance}
+                        </p>
+                      )}
                     </td>
                     {hasExample && (
                       <td className="py-3 pl-3">

@@ -69,7 +69,8 @@ llama-server 를 먼저 띄운 뒤 (아래 1절):
 [프롬프트 설계](documents/04-prompt-design.md) ·
 [실측 기록](documents/05-benchmark.md) ·
 [작문 연습](documents/06-practice.md) ·
-[웹 배포](documents/07-web-deployment.md)
+[웹 배포](documents/07-web-deployment.md) ·
+[난이도 설계(기획안)](documents/08-level-design.md)
 
 ---
 
