@@ -6,7 +6,7 @@ import { ResultView } from './components/ResultView'
 import { StatusBar } from './components/StatusBar'
 import { initialState, reduce, type AnalysisState } from './lib/analysis'
 import { ApiError, analyzeStream, health as fetchHealth } from './lib/api'
-import { addEntry, loadHistory, type HistoryEntry } from './lib/history'
+import { addEntry, loadHistory, removeEntry, type HistoryEntry } from './lib/history'
 import type { Level, LlmHealth } from './lib/types'
 
 export default function App() {
@@ -61,6 +61,15 @@ export default function App() {
       setAnalysis(null)
     } finally {
       setRunning(false)
+    }
+  }
+
+  function handleDeleteHistory(entry: HistoryEntry) {
+    setHistory(removeEntry(history, entry.id))
+    // 보고 있던 항목을 지웠다면 결과 화면도 비운다.
+    if (entry.id === activeId) {
+      setActiveId(null)
+      setAnalysis(null)
     }
   }
 
@@ -123,7 +132,12 @@ export default function App() {
           <h2 className="mb-2 px-2 text-xs font-medium uppercase tracking-wide text-stone-400">
             최근 분석
           </h2>
-          <HistoryList entries={history} activeId={activeId} onSelect={handleSelectHistory} />
+          <HistoryList
+            entries={history}
+            activeId={activeId}
+            onSelect={handleSelectHistory}
+            onDelete={handleDeleteHistory}
+          />
         </aside>
       </div>
     </div>
