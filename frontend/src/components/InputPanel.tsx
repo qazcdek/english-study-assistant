@@ -7,7 +7,7 @@ const LEVELS: { value: Level; label: string }[] = [
 ]
 
 // backend/app/schemas.py 의 MAX_INPUT_CHARS 와 같아야 한다.
-const MAX_CHARS = 800
+const MAX_CHARS = 2000
 
 interface Props {
   text: string

@@ -85,6 +85,6 @@ def test_stream_reports_a_failed_part_and_keeps_going(make_client):
 def test_input_length_limit(client):
     from app.schemas import MAX_INPUT_CHARS
 
-    assert MAX_INPUT_CHARS == 800
+    assert MAX_INPUT_CHARS == 2000
     assert client.post("/api/analyze", json={"text": "a" * MAX_INPUT_CHARS}).status_code == 200
     assert client.post("/api/analyze", json={"text": "a" * (MAX_INPUT_CHARS + 1)}).status_code == 422

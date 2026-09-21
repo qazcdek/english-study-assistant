@@ -11,7 +11,10 @@ from pydantic import BaseModel, Field, field_validator
 Level = Literal["beginner", "intermediate", "advanced"]
 
 # 입력 길이 상한. frontend/src/components/InputPanel.tsx 의 MAX_CHARS 와 같아야 한다.
-MAX_INPUT_CHARS = 800
+#
+# 로컬은 내가 혼자 쓰고 llama-server 한도만 신경 쓰면 되므로 넉넉히 둔다.
+# 웹 배포(main)는 회원의 Gemini 한도를 소모하므로 800자로 더 좁다.
+MAX_INPUT_CHARS = 2000
 
 ExpressionType = Literal[
     "고급 어휘",
