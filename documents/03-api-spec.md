@@ -85,8 +85,11 @@ data: {"type":"done","result":{...},"markdown":{...},"meta":{...}}
     ],
     "structures": [
       {
-        "fragment": "It's unlikely to find...",
-        "explanation": "`be unlikely to`는 '~할 것 같지 않다'라는 뜻으로 ..."
+        "fragment": "It is unlikely to find its way",
+        "name": "형식주어 it 구문",
+        "role": "실제 주어는 뒤의 to부정사구다. it 은 자리만 채운다.",
+        "rewrite": "The chance that it will spread is low",
+        "pitfall": "한국어에는 형식주어가 없어 it 을 대명사로 잘못 읽기 쉽다."
       }
     ],
     "overview": {
