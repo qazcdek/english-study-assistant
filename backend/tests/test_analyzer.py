@@ -142,22 +142,44 @@ async def test_structures_prompt_lists_already_covered_expressions():
     assert "sum up" in prompt
 
 
-def test_expression_count_limits_follow_level():
+def test_expression_max_follows_level_but_floor_follows_length():
     """개수는 프롬프트 문구가 아니라 스키마로 강제한다. 작은 모델이 하한을 목표로 삼기 때문이다."""
     from app.prompts.analysis import PART_SPECS
 
     spec = next(s for s in PART_SPECS if s.field == "expressions")
-    counts = {
-        level: (
-            spec.schema_for(level)["properties"]["expressions"]["minItems"],
-            spec.schema_for(level)["properties"]["expressions"]["maxItems"],
-        )
-        for level in ("beginner", "intermediate", "advanced")
-    }
 
-    assert counts == {"beginner": (3, 5), "intermediate": (5, 8), "advanced": (5, 8)}
+    def limits(level, length):
+        a = spec.schema_for(level, length)["properties"]["expressions"]
+        return a["minItems"], a["maxItems"]
+
+    # 상한은 난이도를 따른다
+    assert limits("beginner", 800)[1] == 5
+    assert limits("intermediate", 800)[1] == limits("advanced", 800)[1] == 8
+    # 하한은 글 길이를 따른다
+    assert limits("intermediate", 150)[0] == 1
+    assert limits("intermediate", 800)[0] == 4
     # 원본 스키마는 건드리지 않는다
     assert "minItems" not in spec.schema["properties"]["expressions"]
+
+
+def test_expression_floor_scales_with_text_length():
+    """짧은 글에 억지로 개수를 채우게 하면 다어절 표현을 낱개로 쪼개거나 쉬운 낱말을 끌어온다."""
+    from app.prompts.analysis import min_expressions
+
+    assert min_expressions(0, 8) == 1
+    assert min_expressions(199, 8) == 1
+    assert min_expressions(200, 8) == 1
+    assert min_expressions(400, 8) == 2
+    assert min_expressions(800, 8) == 4
+
+
+def test_expression_floor_stays_below_the_cap():
+    """하한이 상한과 같아지면 개수가 고정되어 다시 억지로 채우게 된다."""
+    from app.prompts.analysis import min_expressions
+
+    assert min_expressions(2000, 8) == 7
+    assert min_expressions(2000, 5) == 4
+    assert min_expressions(100000, 8) < 8
 
 
 def test_key_expressions_are_capped_at_three():
@@ -193,7 +215,7 @@ async def test_structure_markdown_keeps_all_four_parts():
 
 def test_expression_counts_do_not_grow_with_level():
     """난이도는 설명의 깊이를 바꾼다. 개수를 늘리면 모델이 다어절 표현을 낱개로 쪼개 하한을 채운다."""
-    from app.prompts.analysis import EXPRESSION_COUNTS
+    from app.prompts.analysis import EXPRESSION_MAX
 
-    assert EXPRESSION_COUNTS["intermediate"] == EXPRESSION_COUNTS["advanced"]
-    assert EXPRESSION_COUNTS["beginner"][1] <= EXPRESSION_COUNTS["intermediate"][1]
+    assert EXPRESSION_MAX["intermediate"] == EXPRESSION_MAX["advanced"]
+    assert EXPRESSION_MAX["beginner"] <= EXPRESSION_MAX["intermediate"]
