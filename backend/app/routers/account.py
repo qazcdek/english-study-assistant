@@ -14,7 +14,7 @@ from app.schemas import (
     VocabularyCreate,
     VocabularyItemOut,
 )
-from app.services import usage
+from app.services import records, usage
 
 router = APIRouter(prefix="/api", tags=["account"])
 
@@ -72,7 +72,8 @@ def get_history(record_id: int, user: UserDep, db: DbDep) -> HistoryDetail:
         level=row.level,
         created_at=_iso(row.created_at),
         failed_parts=row.failed_parts or [],
-        result=row.result,
+        # 프롬프트를 손볼 때마다 결과 스키마가 바뀐다. 옛 형식으로 저장된 기록을 올려서 넘긴다.
+        result=records.upgrade(row.result),
         markdown=row.markdown,
     )
 

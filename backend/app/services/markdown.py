@@ -69,7 +69,9 @@ def render_structures(structures: list[StructureNote]) -> str:
     for i, s in enumerate(structures):
         if i:
             lines.append("")
-        lines.append(f"* **{s.fragment.strip()}** — {s.name.strip()}")
+        # 구문 해설이 한 칸이던 시절의 기록에는 이름이 없다.
+        name = s.name.strip()
+        lines.append(f"* **{s.fragment.strip()}**" + (f" — {name}" if name else ""))
         lines.append(f"  * {_one_line(s.role)}")
         if s.rewrite.strip():
             lines.append(f"  * 쉽게 쓰면: `{_one_line(s.rewrite)}`")

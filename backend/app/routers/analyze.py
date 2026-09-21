@@ -19,7 +19,7 @@ from app.schemas import (
     PracticeRequest,
     PracticeResponse,
 )
-from app.services import usage
+from app.services import records, usage
 from app.services.analyzer import AnalyzerService
 
 router = APIRouter(prefix="/api", tags=["analyze"])
@@ -88,7 +88,7 @@ def _save_analysis(db, user, request: AnalyzeRequest, response: AnalyzeResponse)
             user_id=user.id,
             source_text=request.text,
             level=request.level,
-            result=response.result.model_dump(),
+            result=records.stamp(response.result.model_dump()),
             markdown=response.markdown.model_dump(),
             failed_parts=response.meta.failed_parts,
             elapsed_ms=response.meta.elapsed_ms,

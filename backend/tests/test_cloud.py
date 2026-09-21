@@ -205,3 +205,59 @@ def test_spa_fallback_does_not_swallow_api_404(monkeypatch, tmp_path):
     with TestClient(main_module.create_app()) as client:
         assert client.get("/api/nope").status_code == 404
         assert client.get("/some/route").text == "<html>spa</html>"
+
+
+def test_old_format_records_still_open(cloud):
+    """프롬프트를 손볼 때마다 결과 스키마가 바뀌었는데, 옛 기록을 열면 500 이 났다."""
+    from app.db import AnalysisRecord
+
+    user_id = make_user()
+    login(cloud, user_id)
+
+    empty_md = {"translation": "", "expressions": "", "structures": "", "overview": "", "full": ""}
+    with session_scope() as db:
+        row = AnalysisRecord(
+            user_id=user_id,
+            source_text="Had she known what awaited her.",
+            level="intermediate",
+            result={
+                "source_text": "Had she known what awaited her.",
+                "translation": "번역",
+                "expressions": [{"expression": "set foot in", "type": "관용구", "meaning": "발을 들이다"}],
+                "structures": [{"fragment": "Had she known", "explanation": "도치 가정법이다."}],
+                "overview": {
+                    "frequency": "자주",
+                    "formality": "격식",
+                    "style": "문어체",
+                    "domain": "소설",
+                    "comment": "코멘트",
+                },
+            },
+            markdown=empty_md,
+            failed_parts=[],
+        )
+        db.add(row)
+        db.flush()
+        record_id = row.id
+
+    resp = cloud.get(f"/api/history/{record_id}")
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["result"]["structures"][0]["role"] == "도치 가정법이다."
+    assert body["result"]["overview"]["tone"] == ""
+    assert body["result"]["expressions"][0]["nuance"] == ""
+
+
+def test_new_records_carry_a_schema_version(cloud):
+    """버전을 남겨 두면 다음 스키마 변경 때 모양을 추측하지 않아도 된다."""
+    from app.db import AnalysisRecord
+    from app.services.records import RESULT_VERSION
+
+    user_id = make_user()
+    login(cloud, user_id)
+    cloud.post("/api/analyze", json={"text": "across the pond and back again"})
+
+    with session_scope() as db:
+        row = db.query(AnalysisRecord).filter(AnalysisRecord.user_id == user_id).one()
+        assert row.result["schema_version"] == RESULT_VERSION
