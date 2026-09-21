@@ -138,17 +138,34 @@ def _wrap(field: str, value_schema: dict) -> dict:
 
 # 난이도별 표현 개수. 스키마에 실어 보내면 토큰 단계에서 강제된다.
 # 프롬프트 문구만으로는 작은 모델이 하한을 목표로 삼아 적게 뽑는다.
-# 난이도별 표현 개수.
+# 난이도별 표현 개수 상한.
 #
-# 상급이라고 개수를 늘리면 안 된다. 짧은 글에서 하한을 채우려고 모델이 좋은 다어절 표현을
-# 낱개 단어로 쪼갠다("a blend of" -> "blend", "market volatility" -> "volatility").
-# 난이도는 설명의 깊이를 바꾸는 것이지 개수나 난도를 바꾸는 것이 아니다.
-# 초급만 부담을 줄이려 적게 두고, 중급과 상급은 같다.
-EXPRESSION_COUNTS: dict[str, tuple[int, int]] = {
-    "beginner": (3, 5),
-    "intermediate": (5, 8),
-    "advanced": (5, 8),
+# 상한만 난이도를 따른다. 하한은 글 길이에서 계산한다(min_expressions 참고).
+# 난이도로 개수를 늘리면 짧은 글에서 하한을 채우려고 모델이 좋은 다어절 표현을
+# 낱개 단어로 쪼갠다("a blend of" -> "blend"). 난이도는 설명의 깊이를 바꾸는 것이지
+# 개수나 난도를 바꾸는 것이 아니다.
+EXPRESSION_MAX: dict[str, int] = {
+    "beginner": 5,
+    "intermediate": 8,
+    "advanced": 8,
 }
+
+# 200자마다 표현 하나. 짧은 글에 억지로 개수를 채우게 하지 않기 위해서다.
+CHARS_PER_EXPRESSION = 200
+
+
+def min_expressions(text_length: int, max_items: int) -> int:
+    """글 길이에서 표현 개수의 하한을 구한다.
+
+    하한은 "적어도 이만큼은"이지 "이만큼을 채워라"가 아니다.
+    하한이 높으면 모델이 규칙을 어겨서라도 숫자를 맞춘다 —
+    다어절 표현을 낱개로 쪼개거나 학습 가치가 낮은 낱말을 끌어온다.
+
+    상한을 넘지 않게 자른다. 긴 글에서 하한이 상한과 같아지면 개수가 고정되어
+    다시 억지로 채우게 되므로, 상한보다 작게 유지한다.
+    """
+    wanted = max(1, text_length // CHARS_PER_EXPRESSION)
+    return max(1, min(wanted, max_items - 1))
 
 
 @dataclass(frozen=True)
@@ -159,14 +176,15 @@ class PartSpec:
     schema: dict
     model: type
     build_user: Callable[[str, dict[str, Any]], str]
-    # 난이도에 따라 배열 길이를 바꿔야 하는 파트만 채운다.
-    counts_by_level: dict[str, tuple[int, int]] | None = None
+    # 배열 길이를 제한해야 하는 파트만 채운다.
+    max_by_level: dict[str, int] | None = None
 
-    def schema_for(self, level: str) -> dict:
-        """난이도별 개수 제한을 얹은 스키마."""
-        if self.counts_by_level is None:
+    def schema_for(self, level: str, text_length: int) -> dict:
+        """난이도별 상한과 글 길이에서 구한 하한을 얹은 스키마."""
+        if self.max_by_level is None:
             return self.schema
-        low, high = self.counts_by_level.get(level, self.counts_by_level["intermediate"])
+        high = self.max_by_level.get(level, self.max_by_level["intermediate"])
+        low = min_expressions(text_length, high)
         array = dict(self.schema["properties"][self.field], minItems=low, maxItems=high)
         return {
             **self.schema,
@@ -306,7 +324,7 @@ PART_SPECS: tuple[PartSpec, ...] = (
         schema=_wrap("expressions", {"type": "array", "items": _EXPRESSION_ITEM}),
         model=ExpressionsPart,
         build_user=_plain_user("다음 텍스트에서 학습 가치가 있는 표현을 뽑아라."),
-        counts_by_level=EXPRESSION_COUNTS,
+        max_by_level=EXPRESSION_MAX,
     ),
     PartSpec(
         field="structures",
