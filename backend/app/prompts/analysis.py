@@ -38,15 +38,15 @@ STYLES = ["문어체", "구어체", "혼합"]
 LEVEL_GUIDE = {
     "beginner": (
         "학습자는 초급이다. 문법 용어를 최소한으로 쓰고 풀어서 설명한다. "
-        "표현은 가장 중요한 5개 이하, 구문 해설은 2개 이하로 줄인다."
+        "표현은 3~5개, 구문 해설은 2개 이하로 줄인다."
     ),
     "intermediate": (
         "학습자는 중급이다. 일반적인 문법 용어를 써도 좋다. "
-        "표현은 3~8개, 구문 해설은 2~4개가 적당하다."
+        "표현은 6~8개, 구문 해설은 2~4개가 적당하다."
     ),
     "advanced": (
         "학습자는 상급이다. 뉘앙스 차이, 어원, 비슷한 표현과의 비교까지 짚어 준다. "
-        "표현은 5~10개, 구문 해설은 3~5개까지 다룰 수 있다."
+        "표현은 7~10개, 구문 해설은 3~5개까지 다룰 수 있다."
     ),
 }
 
@@ -98,7 +98,13 @@ _OVERVIEW_OBJECT = {
         "tone": {"type": "string"},
         "formality": {"type": "string", "enum": FORMALITIES},
         "style": {"type": "string", "enum": STYLES},
-        "key_expressions": {"type": "array", "items": {"type": "string"}},
+        # 1~3개로 좁혀야 "특히 챙길 것"이라는 선별의 뜻이 산다.
+        "key_expressions": {
+            "type": "array",
+            "items": {"type": "string"},
+            "minItems": 1,
+            "maxItems": 3,
+        },
         "comment": {"type": "string"},
     },
     "required": ["domain", "tone", "formality", "style", "key_expressions", "comment"],
@@ -119,6 +125,15 @@ def _wrap(field: str, value_schema: dict) -> dict:
 # --------------------------------------------------------------------- 파트 정의
 
 
+# 난이도별 표현 개수. 스키마에 실어 보내면 토큰 단계에서 강제된다.
+# 프롬프트 문구만으로는 작은 모델이 하한을 목표로 삼아 적게 뽑는다.
+EXPRESSION_COUNTS: dict[str, tuple[int, int]] = {
+    "beginner": (3, 5),
+    "intermediate": (6, 8),
+    "advanced": (7, 10),
+}
+
+
 @dataclass(frozen=True)
 class PartSpec:
     field: str
@@ -127,6 +142,19 @@ class PartSpec:
     schema: dict
     model: type
     build_user: Callable[[str, dict[str, Any]], str]
+    # 난이도에 따라 배열 길이를 바꿔야 하는 파트만 채운다.
+    counts_by_level: dict[str, tuple[int, int]] | None = None
+
+    def schema_for(self, level: str) -> dict:
+        """난이도별 개수 제한을 얹은 스키마."""
+        if self.counts_by_level is None:
+            return self.schema
+        low, high = self.counts_by_level.get(level, self.counts_by_level["intermediate"])
+        array = dict(self.schema["properties"][self.field], minItems=low, maxItems=high)
+        return {
+            **self.schema,
+            "properties": {**self.schema["properties"], self.field: array},
+        }
 
 
 def _plain_user(instruction: str) -> Callable[[str, dict[str, Any]], str]:
@@ -193,8 +221,25 @@ PART_SPECS: tuple[PartSpec, ...] = (
             '  원문이 "sums up" 이면 "sum up", "has been thrown at" 이면 "throw at" 으로 적는다.\n'
             "- 표현의 경계를 정확히 잡는다. 앞뒤 단어를 덧붙이거나 잘라내지 않는다.\n"
             '  "find its way across the pond" 가 아니라 "across the pond" 가 하나의 표현이다.\n'
-            "- the, is, good 같이 학습 가치가 낮은 기초 어휘는 제외한다.\n"
             "- 같은 표현을 두 번 넣지 않는다.\n"
+            "\n"
+            "  무엇을 고를지는 **낱말 뜻을 합쳐서 의미를 짐작할 수 있는가**로 판단한다.\n"
+            "  짐작할 수 없는 것일수록 학습 가치가 높다.\n"
+            "  · 우선해서 고를 것\n"
+            "    - 낱말 합과 뜻이 다른 표현: phrasal verb, 관용구, 비유적 확장 용법\n"
+            '      예: "grow wealth"(자산을 늘리다 — grow 의 타동사 용법), "a blend of A and B"\n'
+            "    - 그 글에서 새로 만들어 쓴 조어\n"
+            '      예: "yenmageddon"(yen + Armageddon), "financial therapist"\n'
+            "    - 불규칙 변화형이나 형태가 헷갈리는 낱말\n"
+            '      예: "indices"(index 의 복수), "criteria", "phenomena"\n'
+            "    - 함께 쓰는 전치사나 문형이 정해진 표현\n"
+            "  · 뒤로 미룰 것\n"
+            "    - 낱말 뜻을 합치면 의미가 그대로 나오는 투명한 복합어\n"
+            '      예: "financial advisor", "emotional support", "market volatility" 처럼\n'
+            "      형용사+명사 / 명사+명사 로 뜻이 곧바로 드러나는 것\n"
+            "    - the, is, good 같은 기초 어휘\n"
+            "  투명한 복합어만 나열하지 않는다. 그 글의 분야 용어를 늘어놓는 것이 목적이 아니라,\n"
+            "  읽다가 막힐 만한 지점을 짚어 주는 것이 목적이다.\n"
             "\n"
             "[type] — 유형\n"
             "- 아래 기준을 위에서부터 차례로 확인해, 처음 맞는 것 하나를 고른다.\n"
@@ -238,6 +283,7 @@ PART_SPECS: tuple[PartSpec, ...] = (
         schema=_wrap("expressions", {"type": "array", "items": _EXPRESSION_ITEM}),
         model=ExpressionsPart,
         build_user=_plain_user("다음 텍스트에서 학습 가치가 있는 표현을 뽑아라."),
+        counts_by_level=EXPRESSION_COUNTS,
     ),
     PartSpec(
         field="structures",
@@ -313,7 +359,9 @@ PART_SPECS: tuple[PartSpec, ...] = (
             "\n"
             "[key_expressions] — 꼭 챙길 표현\n"
             "- 위에서 받은 표현 목록에 있는 것만 고른다. 목록에 없는 말을 새로 만들지 않는다.\n"
-            "- 이 글을 이해하는 데 가장 중요한 것 1~3개.\n"
+            "- **1~3개만** 고른다. 목록 전체를 그대로 옮겨 적지 않는다.\n"
+            "- 뜻을 몰랐다면 이 글을 오해했을 표현을 고른다.\n"
+            "  낱말 뜻을 합쳐서 짐작할 수 있는 투명한 표현은 여기에 넣지 않는다.\n"
             "\n"
             "[comment] — 코멘트\n"
             "- 아래 세 가지를 담되 3~4문장을 넘기지 않는다.\n"
