@@ -52,7 +52,7 @@ export default function App() {
         controller.signal,
       )
       if (!controller.signal.aborted) {
-        const next = addEntry(history, state)
+        const next = addEntry(history, state, level)
         setHistory(next)
         setActiveId(next[0]?.id ?? null)
       }
