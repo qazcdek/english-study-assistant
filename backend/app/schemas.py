@@ -10,6 +10,9 @@ from pydantic import BaseModel, Field, field_validator
 
 Level = Literal["beginner", "intermediate", "advanced"]
 
+# 입력 길이 상한. frontend/src/components/InputPanel.tsx 의 MAX_CHARS 와 같아야 한다.
+MAX_INPUT_CHARS = 800
+
 ExpressionType = Literal[
     "고급 어휘",
     "관용구",
@@ -27,7 +30,9 @@ Style = Literal["문어체", "구어체", "혼합"]
 
 
 class AnalyzeRequest(BaseModel):
-    text: str = Field(min_length=1, max_length=4000, description="분석할 영어 문장 또는 문단")
+    text: str = Field(
+        min_length=1, max_length=MAX_INPUT_CHARS, description="분석할 영어 문장 또는 문단"
+    )
     level: Level = "intermediate"
 
     @field_validator("text")

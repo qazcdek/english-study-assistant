@@ -63,7 +63,7 @@ data: {"type":"done","result":{...},"markdown":{...},"meta":{...}}
 
 | 필드 | 타입 | 필수 | 설명 |
 |---|---|---|---|
-| `text` | string (1~4000) | O | 분석할 영어 문장/문단 |
+| `text` | string (1~800) | O | 분석할 영어 문장/문단 |
 | `level` | `beginner` \| `intermediate` \| `advanced` | X | 설명 난이도. 기본 `intermediate` |
 
 **200** — 일부 파트가 실패해도 200 이다. 실패한 파트는 `meta.failed_parts` 에 이름이 들어가고
