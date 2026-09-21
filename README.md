@@ -1,5 +1,11 @@
 # English Study Assistant
 
+> **브랜치 두 개**
+> - `local` — 내 PC 의 llama-server 로 돌리는 1인용. 로그인 없음.
+> - `main` — 웹 배포용. Google 로그인 + 회원별 Gemini API 키. ([배포 문서](documents/07-web-deployment.md))
+>
+> 같은 코드에 `APP_MODE` 로 갈린다. 아래 1~3절은 `local` 기준이다.
+
 영어 문장이나 문단을 붙여넣으면 로컬 LLM이 **자연스러운 번역 · 표현 풀이 · 문장 구조 · 총평**
 네 가지로 정리해 주는 1인용 학습 웹 앱.
 
@@ -12,6 +18,8 @@
 ```
 eng_study/
 ├── dev.sh       개발 서버 실행 스크립트
+├── Dockerfile   웹 배포용 (프론트 빌드 + 백엔드를 한 이미지로)
+├── render.yaml  Render 블루프린트
 ├── documents/   기획·설계 문서
 ├── backend/     FastAPI + llama-server 프로바이더
 └── frontend/    React + Vite + TypeScript
@@ -60,7 +68,8 @@ llama-server 를 먼저 띄운 뒤 (아래 1절):
 [API 명세](documents/03-api-spec.md) ·
 [프롬프트 설계](documents/04-prompt-design.md) ·
 [실측 기록](documents/05-benchmark.md) ·
-[작문 연습](documents/06-practice.md)
+[작문 연습](documents/06-practice.md) ·
+[웹 배포](documents/07-web-deployment.md)
 
 ---
 
@@ -136,3 +145,24 @@ Qwen3.8-27B (UD-IQ4_XS, `-c 65536 -ngl 99 -fa on --jinja`) 에서 확인한 값:
 | thinking 켠 경우 | 4.3배 느려지고 품질 차이는 미미 — 끄는 것이 기본값 |
 
 자세한 측정값과 파트 분할을 택한 근거는 [실측 기록](documents/05-benchmark.md) 참고.
+
+
+---
+
+## 6. 웹 배포 (main 브랜치)
+
+Google 로그인으로 가입하고, **회원이 등록한 Gemini API 키**로 회원 본인의 사용 한도 안에서
+동작한다. 서버는 키를 암호화해 보관만 한다.
+
+> Google 로그인으로는 회원의 Gemini 사용 한도를 쓸 수 없다. 로그인은 신원 확인에만 쓰고,
+> 호출에 쓸 키는 회원이 따로 등록한다. 이유는 [배포 문서 1절](documents/07-web-deployment.md) 참고.
+
+10명 기준 전액 무료로 굴러가는 구성:
+
+| 계층 | 선택 |
+|---|---|
+| 앱 | Render 무료 웹 서비스 (신용카드 불필요, 15분 미사용 시 절전) |
+| DB | Neon 무료 Postgres (Render 무료 DB 는 30일 뒤 삭제된다) |
+| 프론트 | 백엔드와 같은 오리진 — 서비스 하나로 끝나고 쿠키 문제가 없다 |
+
+배포 절차는 [documents/07-web-deployment.md](documents/07-web-deployment.md) 6절에 있다.

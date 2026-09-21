@@ -1,8 +1,10 @@
 from contextlib import asynccontextmanager
+from pathlib import Path
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import FileResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
 
 from app.config import get_settings
 from app.errors import AppError, LLMError
@@ -83,7 +85,38 @@ def create_app() -> FastAPI:
         app.include_router(auth.router)
         app.include_router(account.router)
 
+    _mount_frontend(app)
     return app
+
+
+def _static_dir() -> Path:
+    return Path(__file__).resolve().parent.parent / "static"
+
+
+def _mount_frontend(app: FastAPI) -> None:
+    """빌드된 프론트엔드가 옆에 있으면 같은 오리진에서 서빙한다.
+
+    프론트와 API 를 다른 도메인에 두면 세션 쿠키가 cross-site 가 되어
+    SameSite=None; Secure 와 CORS 자격 증명 설정을 모두 맞춰야 한다.
+    한 오리진에서 서빙하면 그 문제가 통째로 사라진다.
+    """
+    static_dir = _static_dir()
+    index = static_dir / "index.html"
+    if not index.is_file():
+        return
+
+    app.mount("/assets", StaticFiles(directory=static_dir / "assets"), name="assets")
+
+    @app.get("/favicon.svg", include_in_schema=False)
+    def favicon() -> FileResponse:
+        return FileResponse(static_dir / "favicon.svg")
+
+    @app.get("/{full_path:path}", include_in_schema=False)
+    def spa(full_path: str) -> FileResponse:
+        # /api 밑의 미매칭 경로까지 삼키면 404 가 HTML 로 바뀌어 디버깅이 어려워진다.
+        if full_path.startswith("api/"):
+            raise HTTPException(status_code=404, detail="Not Found")
+        return FileResponse(index)
 
 
 app = create_app()

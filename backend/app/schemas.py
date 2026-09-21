@@ -207,6 +207,20 @@ class PracticeResponse(BaseModel):
     meta: AnalyzeMeta
 
 
+# --------------------------------------------------------------------------- 앱 설정
+
+
+class AppConfigResponse(BaseModel):
+    """프론트가 어떤 화면을 그릴지 정하는 데 필요한 최소 정보."""
+
+    mode: Literal["local", "cloud"]
+    requires_login: bool
+    model: str
+    daily_analysis_limit: int = 0
+    daily_practice_limit: int = 0
+    api_key_issue_url: str = ""
+
+
 # --------------------------------------------------------------------------- 계정 (cloud)
 
 

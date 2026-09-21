@@ -1,0 +1,50 @@
+# Render 블루프린트. 대시보드에서 "New > Blueprint" 로 이 저장소를 연결하면 된다.
+#
+# 프론트엔드는 Docker 빌드 1단계에서 만들어져 백엔드와 같은 오리진에서 서빙된다.
+# 서비스가 하나라 무료 플랜 하나로 끝나고, 세션 쿠키도 same-site 로 유지된다.
+#
+# DB 는 Render 무료 Postgres 가 30일 후 삭제되므로 쓰지 않는다.
+# Neon(https://neon.tech) 무료 Postgres 를 만들어 DATABASE_URL 에 넣는다.
+services:
+  - type: web
+    name: eng-study
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    healthCheckPath: /api/config
+    autoDeploy: true
+    envVars:
+      - key: APP_MODE
+        value: cloud
+
+      # Google Cloud 콘솔에서 만든 OAuth 클라이언트
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+
+      # 배포 후 받은 주소로 둘 다 채운다. 예: https://eng-study.onrender.com
+      # 같은 오리진에서 서빙하므로 두 값이 같다.
+      - key: PUBLIC_BASE_URL
+        sync: false
+      - key: FRONTEND_BASE_URL
+        sync: false
+
+      # Neon 등에서 만든 Postgres 연결 문자열
+      - key: DATABASE_URL
+        sync: false
+
+      - key: SESSION_SECRET
+        generateValue: true
+      # Fernet 키는 형식이 정해져 있어 직접 만들어 넣는다.
+      #   python -c "from cryptography.fernet import Fernet;print(Fernet.generate_key().decode())"
+      - key: ENCRYPTION_KEY
+        sync: false
+
+      - key: GEMINI_MODEL
+        value: gemini-3.5-flash-lite
+      - key: DAILY_ANALYSIS_LIMIT
+        value: "60"
+      - key: DAILY_PRACTICE_LIMIT
+        value: "200"

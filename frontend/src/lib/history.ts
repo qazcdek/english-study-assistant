@@ -7,7 +7,8 @@ export interface HistoryEntry {
   id: string
   text: string
   createdAt: number
-  state: AnalysisState
+  /** 서버 히스토리 목록에는 본문이 없어, 고를 때 따로 가져온다. */
+  state: AnalysisState | null
 }
 
 export function loadHistory(): HistoryEntry[] {

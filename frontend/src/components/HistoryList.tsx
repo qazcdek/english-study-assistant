@@ -10,7 +10,7 @@ export function HistoryList({ entries, activeId, onSelect }: Props) {
   if (entries.length === 0) {
     return (
       <p className="px-2 text-xs leading-relaxed text-stone-400">
-        분석한 문장이 여기에 쌓입니다. 브라우저에만 저장됩니다.
+        분석한 문장이 여기에 쌓입니다.
       </p>
     )
   }

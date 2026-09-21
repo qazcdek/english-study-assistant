@@ -152,3 +152,55 @@ export interface PracticeResponse {
   model_answer: string
   meta: AnalyzeMeta
 }
+
+// --- 앱 설정 / 계정 (cloud 모드) ---
+
+export interface AppConfig {
+  mode: 'local' | 'cloud'
+  requires_login: boolean
+  model: string
+  daily_analysis_limit: number
+  daily_practice_limit: number
+  api_key_issue_url: string
+}
+
+export interface Account {
+  email: string
+  name: string
+  picture: string
+  has_consented: boolean
+  has_api_key: boolean
+  api_key_hint: string
+}
+
+export interface Usage {
+  day: string
+  analyses: number
+  practices: number
+  analysis_limit: number
+  practice_limit: number
+}
+
+export interface HistoryItem {
+  id: number
+  source_text: string
+  level: Level
+  created_at: string
+  failed_parts: string[]
+}
+
+export interface HistoryDetail extends HistoryItem {
+  result: AnalysisResult
+  markdown: MarkdownSections
+}
+
+export interface VocabularyItem {
+  id: number
+  expression: string
+  type: string
+  meaning: string
+  example: string
+  example_ko: string
+  source_text: string
+  created_at: string
+}

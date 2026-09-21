@@ -188,3 +188,20 @@ def test_local_mode_has_no_auth_routes(monkeypatch):
         assert client.get("/api/auth/me").status_code == 404
         # 로그인 없이 바로 분석된다.
         assert client.post("/api/analyze", json={"text": "hello"}).status_code == 200
+
+
+def test_spa_fallback_does_not_swallow_api_404(monkeypatch, tmp_path):
+    """빌드된 프론트를 같은 오리진에서 서빙할 때, /api 미매칭은 HTML 이 아니라 404 여야 한다."""
+    import app.main as main_module
+
+    static = tmp_path / "static"
+    (static / "assets").mkdir(parents=True)
+    (static / "index.html").write_text("<html>spa</html>")
+
+    monkeypatch.setattr(main_module, "_static_dir", lambda: static)
+    monkeypatch.setenv("APP_MODE", "local")
+    get_settings.cache_clear()
+
+    with TestClient(main_module.create_app()) as client:
+        assert client.get("/api/nope").status_code == 404
+        assert client.get("/some/route").text == "<html>spa</html>"

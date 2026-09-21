@@ -1,15 +1,30 @@
 import { useEffect, useRef, useState } from 'react'
 
+import { AccountBar } from './components/AccountBar'
+import { ApiKeyPanel } from './components/ApiKeyPanel'
+import { ConsentPanel } from './components/ConsentPanel'
 import { HistoryList } from './components/HistoryList'
 import { InputPanel } from './components/InputPanel'
+import { LoginPanel } from './components/LoginPanel'
 import { ResultView } from './components/ResultView'
 import { StatusBar } from './components/StatusBar'
 import { initialState, reduce, type AnalysisState } from './lib/analysis'
-import { ApiError, analyzeStream, health as fetchHealth } from './lib/api'
+import {
+  ApiError,
+  analyzeStream,
+  getHistoryDetail,
+  giveConsent,
+  health as fetchHealth,
+  listHistory,
+} from './lib/api'
 import { addEntry, loadHistory, type HistoryEntry } from './lib/history'
+import { useSession } from './lib/useSession'
 import type { Level, LlmHealth } from './lib/types'
 
 export default function App() {
+  const session = useSession()
+  const cloud = session.config?.requires_login ?? false
+
   const [text, setText] = useState('')
   const [level, setLevel] = useState<Level>('intermediate')
   const [running, setRunning] = useState(false)
@@ -20,12 +35,32 @@ export default function App() {
   const [llmHealth, setLlmHealth] = useState<LlmHealth | null>(null)
   const abortRef = useRef<AbortController | null>(null)
 
+  const ready = session.stage === 'ready' || session.stage === 'local'
+
   useEffect(() => {
+    if (!ready) return
     fetchHealth()
       .then((h) => setLlmHealth(h.llm))
       .catch(() => setLlmHealth({ reachable: false, base_url: '백엔드 미응답', models: [] }))
     return () => abortRef.current?.abort()
-  }, [])
+  }, [ready])
+
+  // 웹 모드는 히스토리를 서버에서 가져와 기기 간 동기화한다.
+  useEffect(() => {
+    if (session.stage !== 'ready') return
+    void listHistory()
+      .then((rows) =>
+        setHistory(
+          rows.map((r) => ({
+            id: String(r.id),
+            text: r.source_text,
+            createdAt: Date.parse(r.created_at) || Date.now(),
+            state: null,
+          })),
+        ),
+      )
+      .catch(() => {})
+  }, [session.stage])
 
   async function handleSubmit() {
     const trimmed = text.trim()
@@ -37,7 +72,6 @@ export default function App() {
     setError(null)
     setActiveId(null)
 
-    // 파트가 도착할 때마다 화면을 갱신한다.
     let state = initialState(trimmed)
     setAnalysis(state)
 
@@ -52,9 +86,23 @@ export default function App() {
         controller.signal,
       )
       if (!controller.signal.aborted) {
-        const next = addEntry(history, state)
-        setHistory(next)
-        setActiveId(next[0]?.id ?? null)
+        if (cloud) {
+          void session.refreshUsage()
+          void listHistory().then((rows) =>
+            setHistory(
+              rows.map((r) => ({
+                id: String(r.id),
+                text: r.source_text,
+                createdAt: Date.parse(r.created_at) || Date.now(),
+                state: null,
+              })),
+            ),
+          )
+        } else {
+          const next = addEntry(history, state)
+          setHistory(next)
+          setActiveId(next[0]?.id ?? null)
+        }
       }
     } catch (e) {
       setError(e instanceof ApiError ? e : new ApiError('unknown', '알 수 없는 오류입니다.'))
@@ -64,14 +112,60 @@ export default function App() {
     }
   }
 
-  function handleSelectHistory(entry: HistoryEntry) {
+  async function handleSelectHistory(entry: HistoryEntry) {
     abortRef.current?.abort()
     setRunning(false)
     setText(entry.text)
-    setAnalysis(entry.state)
     setActiveId(entry.id)
     setError(null)
+
+    if (entry.state) {
+      setAnalysis(entry.state)
+      return
+    }
+    // 서버 히스토리는 목록에 본문이 없다. 고를 때 가져온다.
+    try {
+      const detail = await getHistoryDetail(Number(entry.id))
+      setAnalysis({
+        result: detail.result,
+        markdown: detail.markdown,
+        fullMarkdown: detail.markdown.full,
+        status: {
+          translation: { state: 'done' },
+          expressions: { state: 'done' },
+          structures: { state: 'done' },
+          overview: { state: 'done' },
+        },
+      })
+    } catch {
+      setError(new ApiError('unknown', '기록을 불러오지 못했습니다.'))
+    }
   }
+
+  // ------------------------------------------------------------ 로그인 전 화면
+
+  if (session.stage === 'loading') {
+    return <p className="p-10 text-center text-sm text-stone-400">불러오는 중…</p>
+  }
+
+  if (session.stage !== 'ready' && session.stage !== 'local') {
+    return (
+      <div className="mx-auto max-w-6xl px-4 py-16 sm:px-6">
+        {session.stage === 'login' && <LoginPanel error={session.error} />}
+        {session.stage === 'consent' && session.config && (
+          <ConsentPanel
+            config={session.config}
+            onAgree={async () => session.setAccount(await giveConsent())}
+          />
+        )}
+        {session.stage === 'api-key' && session.config && (
+          <ApiKeyPanel config={session.config} onSaved={session.setAccount} />
+        )}
+      </div>
+    )
+  }
+
+  // ------------------------------------------------------------ 본 화면
 
   return (
     <div className="mx-auto flex max-w-6xl flex-col gap-6 px-4 py-8 sm:px-6">
@@ -80,8 +174,15 @@ export default function App() {
         <p className="hidden text-sm text-stone-400 sm:block">
           영어 문장을 번역 · 표현 · 구조 · 총평으로 정리합니다
         </p>
-        <div className="ml-auto">
-          <StatusBar health={llmHealth} />
+        <div className="ml-auto flex items-center gap-3">
+          {!cloud && <StatusBar health={llmHealth} />}
+          {cloud && session.account && (
+            <AccountBar
+              account={session.account}
+              usage={session.usage}
+              onChanged={session.setAccount}
+            />
+          )}
         </div>
       </header>
 
@@ -102,7 +203,7 @@ export default function App() {
               {error.detail && (
                 <p className="mt-1 font-mono text-xs opacity-70">{error.detail.slice(0, 300)}</p>
               )}
-              {error.code === 'llm_unavailable' && (
+              {error.code === 'llm_unavailable' && !cloud && (
                 <p className="mt-2 font-mono text-xs opacity-70">
                   llama-server -m model.gguf -c 8192 --host 127.0.0.1 --port 8080
                 </p>

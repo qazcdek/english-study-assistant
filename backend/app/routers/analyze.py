@@ -1,16 +1,17 @@
 import json
 from collections.abc import AsyncIterator
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Request
 from fastapi.responses import StreamingResponse
 
 from app.config import get_settings
 from app.db import AnalysisRecord, PracticeRecord
-from app.deps import AnalyzerDep, MaybeDb, MaybeUser, PracticeDep, ProviderDep
+from app.deps import AnalyzerDep, MaybeDb, MaybeUser, PracticeDep
 from app.errors import LLMError
 from app.schemas import (
     AnalyzeRequest,
     AnalyzeResponse,
+    AppConfigResponse,
     DoneEvent,
     HealthResponse,
     LLMHealth,
@@ -23,11 +24,37 @@ from app.services.analyzer import AnalyzerService
 router = APIRouter(prefix="/api", tags=["analyze"])
 
 
-@router.get("/health", response_model=HealthResponse)
-async def health(provider: ProviderDep) -> HealthResponse:
-    """백엔드는 살아 있다는 전제로, llama-server 연결 상태를 함께 알려준다."""
+API_KEY_ISSUE_URL = "https://aistudio.google.com/apikey"
+
+
+@router.get("/config", response_model=AppConfigResponse)
+def app_config() -> AppConfigResponse:
+    """프론트가 로그인 화면을 띄울지, 바로 분석 화면을 띄울지 정하는 데 쓴다."""
     settings = get_settings()
-    reachable, models, detail = await provider.health()
+    return AppConfigResponse(
+        mode=settings.app_mode,
+        requires_login=settings.is_cloud,
+        model=settings.gemini_model if settings.is_cloud else settings.llm_model,
+        daily_analysis_limit=settings.daily_analysis_limit if settings.is_cloud else 0,
+        daily_practice_limit=settings.daily_practice_limit if settings.is_cloud else 0,
+        api_key_issue_url=API_KEY_ISSUE_URL if settings.is_cloud else "",
+    )
+
+
+@router.get("/health", response_model=HealthResponse)
+async def health(request: Request) -> HealthResponse:
+    """로컬 모드에서 llama-server 연결 상태를 알려준다.
+
+    cloud 모드에서는 회원 키로만 호출할 수 있어 서버가 미리 확인할 것이 없다.
+    키 유효성은 등록 시점에 한 번 확인한다(PUT /api/auth/api-key).
+    """
+    settings = get_settings()
+    if settings.is_cloud:
+        return HealthResponse(
+            llm=LLMHealth(reachable=True, base_url=settings.gemini_base_url, models=[settings.gemini_model])
+        )
+
+    reachable, models, detail = await request.app.state.provider.health()
     return HealthResponse(
         llm=LLMHealth(
             reachable=reachable,
