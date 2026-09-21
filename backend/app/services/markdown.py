@@ -85,14 +85,15 @@ def render_overview(overview: Overview | None) -> str:
     if overview is None:
         return f"### 총평\n\n{FAILED_NOTE}"
 
-    lines = [
-        "### 총평",
-        "",
-        f"* **분야**: {overview.domain}",
-        f"* **톤**: {overview.tone}",
-        f"* **격식 수준**: {overview.formality}",
-        f"* **문체**: {overview.style}",
-    ]
+    # 값이 비면 줄 자체를 넣지 않는다. 옛 기록에는 없는 칸이 있다.
+    rows = (
+        ("분야", overview.domain),
+        ("톤", overview.tone),
+        ("격식 수준", overview.formality),
+        ("문체", overview.style),
+    )
+    lines = ["### 총평", ""]
+    lines += [f"* **{label}**: {value.strip()}" for label, value in rows if value.strip()]
     if overview.key_expressions:
         picked = ", ".join(f"`{e}`" for e in overview.key_expressions)
         lines += ["", f"**꼭 챙길 표현**: {picked}"]
