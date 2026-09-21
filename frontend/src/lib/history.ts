@@ -1,4 +1,5 @@
 import type { AnalysisState } from './analysis'
+import { upgradeResult } from './legacy'
 import type { Level } from './types'
 
 const KEY = 'eng-study:history'
@@ -16,7 +17,14 @@ export interface HistoryEntry {
 export function loadHistory(): HistoryEntry[] {
   try {
     const raw = localStorage.getItem(KEY)
-    return raw ? (JSON.parse(raw) as HistoryEntry[]) : []
+    const entries = raw ? (JSON.parse(raw) as HistoryEntry[]) : []
+    // 옛 형식으로 저장된 항목을 지금 형식으로 올린다. 그러지 않으면 이름이 바뀐
+    // 필드의 내용이 통째로 사라진 채 그려진다.
+    return entries.map((entry) =>
+      entry.state
+        ? { ...entry, state: { ...entry.state, result: upgradeResult(entry.state.result) } }
+        : entry,
+    )
   } catch {
     return []
   }
