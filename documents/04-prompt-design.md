@@ -112,8 +112,23 @@ JSON 스키마의 `minItems`/`maxItems` 는 llama-server 든 Gemini 든 토큰 �
 | level | minItems | maxItems |
 |---|---|---|
 | beginner | 3 | 5 |
-| intermediate | 6 | 8 |
-| advanced | 7 | 10 |
+| intermediate | 5 | 8 |
+| advanced | 5 | 8 |
+
+**상급이라고 개수를 늘리면 안 된다.** 처음에는 상급을 7~10개로 뒀는데, 짧은 글에서 하한을
+채우려고 모델이 좋은 다어절 표현을 **낱개 단어로 쪼갰다.**
+
+```
+중급  a blend of             →  상급  blend
+중급  share this perspective →  상급  perspective
+중급  market volatility      →  상급  volatility
+```
+
+상급 결과가 중급보다 오히려 쉬워지는 역전이 일어났다.
+난이도는 **설명의 깊이**를 바꾸는 것이지 개수나 난도를 바꾸는 것이 아니다.
+그래서 중급과 상급의 개수를 같게 두고, `LEVEL_GUIDE` 의 상급 항목에
+"표현을 더 많이 뽑거나 쉬운 낱말까지 끌어오지 않는다"를 명시했다.
+`expression` 칸 명세에도 "개수를 채우려고 다어절 표현을 낱개로 쪼개지 않는다"를 넣었다.
 
 `key_expressions` 도 `minItems: 1, maxItems: 3` 으로 묶었다.
 "특히 챙길 것"이라는 선별의 뜻이 살려면 목록 전체를 옮겨 적으면 안 된다.
@@ -273,9 +288,12 @@ llama-server 는 GBNF 문법으로 변환해 토큰 단계에서 스키마를 �
 
 | level | 조정 |
 |---|---|
-| `beginner` | 문법 용어를 최소화하고 풀어서 설명. 표현 5개 이하 |
+| `beginner` | 문법 용어를 최소화하고 풀어서 설명. 구문 해설 2개 이하 |
 | `intermediate` | 기본값. 일반적인 문법 용어 사용 |
-| `advanced` | 뉘앙스·어원·유사 표현 비교까지 포함 |
+| `advanced` | **설명을 깊게** — 뉘앙스·어원·유사 표현 비교·쓰면 어색해지는 자리까지 |
+
+난이도는 **설명의 깊이만** 바꾼다. 표현 개수와 선정 기준은 초급을 제외하면 같다.
+이유는 2.1.2 참고.
 
 ## 5. 실패 대응
 
