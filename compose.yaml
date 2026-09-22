@@ -1,0 +1,24 @@
+# 로컬 개발용 Postgres.
+#
+# 기본 포트(5432)를 쓰면 이미 깔려 있는 Postgres 와 부딪힌다. 앞에 1 을 붙여 15432 로 둔다.
+# dev.sh 가 알아서 띄우고 내리므로 직접 다룰 일은 거의 없다.
+services:
+  db:
+    image: postgres:17-alpine
+    container_name: eng-study-db
+    environment:
+      POSTGRES_USER: eng
+      POSTGRES_PASSWORD: eng
+      POSTGRES_DB: eng_study
+    ports:
+      - "15432:5432"
+    volumes:
+      - eng-study-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U eng -d eng_study"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+volumes:
+  eng-study-pgdata:

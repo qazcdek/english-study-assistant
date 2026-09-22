@@ -1,5 +1,7 @@
 import type {
   HealthResponse,
+  HistoryDetail,
+  HistoryItem,
   Level,
   PracticeRequest,
   PracticeResponse,
@@ -106,6 +108,22 @@ export async function gradePractice(request: PracticeRequest): Promise<PracticeR
   if (!response.ok) throw await parseError(response)
   return response.json()
 }
+
+async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
+  let response: Response
+  try {
+    response = await fetch(`${BASE}${path}`, init)
+  } catch {
+    throw new ApiError('network', '백엔드 서버에 연결할 수 없습니다.')
+  }
+  if (!response.ok) throw await parseError(response)
+  return response.json() as Promise<T>
+}
+
+export const listHistory = () => request<HistoryItem[]>('/api/history')
+export const getHistoryDetail = (id: number) => request<HistoryDetail>(`/api/history/${id}`)
+export const deleteHistory = (id: number) =>
+  request<{ ok: boolean }>(`/api/history/${id}`, { method: 'DELETE' })
 
 export async function health(): Promise<HealthResponse> {
   const response = await fetch(`${BASE}/api/health`)

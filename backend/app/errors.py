@@ -35,3 +35,15 @@ class LLMTruncatedError(LLMError):
         "LLM 응답이 max_tokens 한도에서 잘렸습니다. "
         "LLM_MAX_TOKENS 를 늘리거나 LLM_ENABLE_THINKING 을 끄고 다시 시도해 주세요."
     )
+
+
+class AppError(Exception):
+    """LLM 호출 밖에서 발생하는, 사용자에게 그대로 보여줄 오류."""
+
+    code = "app_error"
+    http_status = 400
+    message = "요청을 처리할 수 없습니다."
+
+    def __init__(self, detail: str = "") -> None:
+        super().__init__(detail or self.message)
+        self.detail = detail
