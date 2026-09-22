@@ -228,6 +228,19 @@ class PracticeResponse(BaseModel):
     meta: AnalyzeMeta
 
 
+class HistoryItem(BaseModel):
+    id: int
+    source_text: str
+    level: Level
+    created_at: str
+    failed_parts: list[str] = Field(default_factory=list)
+
+
+class HistoryDetail(HistoryItem):
+    result: AnalysisResult
+    markdown: MarkdownSections
+
+
 class ErrorBody(BaseModel):
     code: str
     message: str

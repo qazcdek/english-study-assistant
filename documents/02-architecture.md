@@ -17,7 +17,7 @@
 
 | 레이어 | 책임 | 하지 않는 것 |
 |---|---|---|
-| frontend | 입력 UI, 결과 렌더링, 로컬 히스토리 | 프롬프트 작성, LLM 직접 호출 |
+| frontend | 입력 UI, 결과 렌더링 | 프롬프트 작성, LLM 직접 호출, 기록 보관 |
 | backend/api | HTTP 경계, 요청 검증, 에러 매핑 | 프롬프트 문자열 보관 |
 | backend/services | 프롬프트 조립 → LLM 호출 → 검증 → 마크다운 변환 | HTTP 세부사항 |
 | backend/providers | LLM 전송 계층 (httpx, 타임아웃, 재시도) | 프롬프트 내용 이해 |
@@ -72,6 +72,7 @@ llama-server 를 `-np 1` 로 띄우면 동시 요청이 어차피 직렬화되�
 ```
 eng_study/
 ├── dev.sh                # 개발 서버 실행/종료 (설치 + 기동 + stop/status)
+├── compose.yaml          # 로컬 Postgres (15432)
 ├── documents/            # 기획·설계 문서
 ├── backend/
 │   ├── app/
@@ -86,6 +87,7 @@ eng_study/
 │   │   ├── prompts/
 │   │   │   ├── analysis.py   # 분석 4파트
 │   │   │   └── practice.py   # 작문 연습 채점
+│   │   ├── db/               # 분석 기록 테이블과 세션
 │   │   └── services/
 │   │       ├── analyzer.py   # 파트별 오케스트레이션
 │   │       ├── practice.py   # 작문 연습 채점
