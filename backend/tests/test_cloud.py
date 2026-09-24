@@ -261,3 +261,26 @@ def test_new_records_carry_a_schema_version(cloud):
     with session_scope() as db:
         row = db.query(AnalysisRecord).filter(AnalysisRecord.user_id == user_id).one()
         assert row.result["schema_version"] == RESULT_VERSION
+
+
+def test_cloud_input_limit_is_narrower(cloud):
+    """회원 각자의 Gemini 한도를 소모하므로 local(2000자)보다 좁다 (09-mode-matrix.md 3.1)."""
+    from app.config import get_settings
+
+    login(cloud, make_user())
+    limit = get_settings().max_input_chars
+
+    assert limit == 800
+    assert cloud.post("/api/analyze", json={"text": "a" * limit}).status_code == 200
+    assert cloud.post("/api/analyze", json={"text": "a" * (limit + 1)}).status_code == 422
+    assert cloud.get("/api/config").json()["max_input_chars"] == limit
+
+
+def test_reading_records_does_not_require_consent_or_key(cloud):
+    """동의와 API 키는 LLM 을 부를 때 필요한 것이지, 저장된 기록을 읽는 데 필요한 것이 아니다."""
+    login(cloud, make_user(consented=False, with_key=False))
+
+    assert cloud.get("/api/history").status_code == 200
+    assert cloud.get("/api/vocabulary").status_code == 200
+    # 분석은 여전히 막힌다
+    assert cloud.post("/api/analyze", json={"text": "a" * 30}).status_code == 403
