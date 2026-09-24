@@ -1,10 +1,11 @@
 # English Study Assistant
 
-> **브랜치 두 개**
+> **한 코드베이스, 두 가지 배포 형태.** `APP_MODE` 로 갈린다.
 > - `local` — 내 PC 의 llama-server 로 돌리는 1인용. 로그인 없음.
-> - `main` — 웹 배포용. Google 로그인 + 회원별 Gemini API 키. ([배포 문서](documents/07-web-deployment.md))
+> - `cloud` — 웹 배포. Google 로그인 + 회원별 Gemini API 키. ([배포 문서](documents/07-web-deployment.md))
 >
-> 같은 코드에 `APP_MODE` 로 갈린다. 아래 1~3절은 `local` 기준이다.
+> **모드에 따라 달라지는 것은 [09-mode-matrix.md](documents/09-mode-matrix.md) 한 곳에 모아 두었다.**
+> 고치기 전에 그 표를 먼저 본다. 아래 1~3절은 `local` 기준이다.
 
 영어 문장이나 문단을 붙여넣으면 로컬 LLM이 **자연스러운 번역 · 표현 풀이 · 문장 구조 · 총평**
 네 가지로 정리해 주는 1인용 학습 웹 앱.
@@ -70,7 +71,8 @@ llama-server 를 먼저 띄운 뒤 (아래 1절):
 [실측 기록](documents/05-benchmark.md) ·
 [작문 연습](documents/06-practice.md) ·
 [웹 배포](documents/07-web-deployment.md) ·
-[난이도 설계(기획안)](documents/08-level-design.md)
+[난이도 설계](documents/08-level-design.md) ·
+[모드별 차이](documents/09-mode-matrix.md)
 
 ---
 

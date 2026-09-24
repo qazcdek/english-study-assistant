@@ -281,3 +281,16 @@ async def test_nuance_is_rendered_below_the_table():
 
     assert "| 표현 (영어) |" in md
     assert "* **across the pond** — 대서양을 연못에 빗댄 표현이다." in md
+
+
+def test_overview_markdown_skips_empty_rows():
+    """옛 기록을 올리면 tone 처럼 없는 칸이 빈 값으로 남는다. 라벨만 덩그러니 두지 않는다."""
+    from app.schemas import Overview
+    from app.services.markdown import render_overview
+
+    md = render_overview(
+        Overview(domain="소설", tone="", formality="격식", style="문어체", comment="코멘트")
+    )
+
+    assert "**분야**: 소설" in md
+    assert "**톤**" not in md

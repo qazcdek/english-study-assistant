@@ -5,7 +5,8 @@
 #   ./dev.sh              백엔드 + 프론트엔드 동시 실행
 #   ./dev.sh backend      백엔드만
 #   ./dev.sh frontend     프론트엔드만
-#   ./dev.sh stop         다른 데서 띄워 둔 서버를 내린다
+#   ./dev.sh stop         다른 데서 띄워 둔 서버를 내린다 (DB 컨테이너는 그대로 둔다)
+#   ./dev.sh db           Postgres 컨테이너만 띄운다
 #   ./dev.sh status       지금 뭐가 떠 있는지 본다
 #   ./dev.sh check        llama-server 연결만 확인하고 종료
 #
@@ -45,6 +46,29 @@ require_free_port() {
   if port_in_use "$port"; then
     die "$port 포트가 이미 사용 중입니다 ($what). 먼저 내리거나 ${what^^}_PORT 로 다른 포트를 지정하세요."
   fi
+}
+
+DB_PORT="${DB_PORT:-15432}"
+
+start_db() {
+  command -v docker >/dev/null 2>&1 || die "docker 를 찾을 수 없습니다. 분석 기록을 Postgres 에 저장합니다."
+
+  if port_in_use "$DB_PORT"; then
+    ok "Postgres 이미 떠 있음 ${DIM}127.0.0.1:${DB_PORT}${RESET}"
+    return 0
+  fi
+
+  info "Postgres 컨테이너를 띄웁니다…"
+  (cd "$ROOT" && docker compose up -d) >/dev/null 2>&1 || die "docker compose up 에 실패했습니다."
+
+  for _ in $(seq 1 40); do
+    if (cd "$ROOT" && docker compose exec -T db pg_isready -U eng -d eng_study) >/dev/null 2>&1; then
+      ok "Postgres 준비됨 ${DIM}127.0.0.1:${DB_PORT}${RESET}"
+      return 0
+    fi
+    sleep 0.5
+  done
+  die "Postgres 가 준비되지 않았습니다. docker compose logs db 를 확인하세요."
 }
 
 check_llm() {
@@ -189,7 +213,7 @@ show_status() {
     info "dev.sh 는 실행 중이 아닙니다."
   fi
 
-  for entry in "백엔드:$BACKEND_PORT" "프론트엔드:$FRONTEND_PORT"; do
+  for entry in "백엔드:$BACKEND_PORT" "프론트엔드:$FRONTEND_PORT" "Postgres:$DB_PORT"; do
     local name="${entry%%:*}" port="${entry##*:}"
     if port_in_use "$port"; then
       ok "$name  ${DIM}http://127.0.0.1:${port}${RESET}"
@@ -205,6 +229,9 @@ main() {
     check)
       check_llm
       ;;
+    db)
+      start_db
+      ;;
     stop)
       stop_servers
       ;;
@@ -213,7 +240,7 @@ main() {
       ;;
     backend)
       require_free_port "$BACKEND_PORT" backend
-      setup_backend; check_llm
+      setup_backend; start_db; check_llm
       trap cleanup INT TERM EXIT
       run_backend
       printf '%s\n' "$$" "${PIDS[@]}" > "$PIDFILE"
@@ -231,7 +258,7 @@ main() {
     all)
       require_free_port "$BACKEND_PORT" backend
       require_free_port "$FRONTEND_PORT" frontend
-      setup_backend; setup_frontend; check_llm
+      setup_backend; setup_frontend; start_db; check_llm
       trap cleanup INT TERM EXIT
       run_backend
       run_frontend
@@ -245,7 +272,7 @@ main() {
       sed -n '3,14p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
       ;;
     *)
-      die "알 수 없는 인자: $1  (backend | frontend | stop | status | check | help)"
+      die "알 수 없는 인자: $1  (backend | frontend | db | stop | status | check | help)"
       ;;
   esac
 }

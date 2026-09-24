@@ -74,9 +74,12 @@ export function ResultView({ state, level }: { state: AnalysisState; level: Leve
                   <span className="font-mono font-medium text-indigo-600 dark:text-indigo-300">
                     {s.fragment}
                   </span>
-                  <span className="rounded-full bg-stone-100 px-2 py-0.5 text-xs text-stone-500 dark:bg-stone-800 dark:text-stone-400">
-                    {s.name}
-                  </span>
+                  {/* 구문 해설이 한 칸이던 시절의 기록에는 이름이 없다. */}
+                  {s.name && (
+                    <span className="rounded-full bg-stone-100 px-2 py-0.5 text-xs text-stone-500 dark:bg-stone-800 dark:text-stone-400">
+                      {s.name}
+                    </span>
+                  )}
                 </div>
 
                 <p className="mt-1.5 text-stone-600 dark:text-stone-300">{s.role}</p>

@@ -16,18 +16,26 @@ from app.routers import account, analyze, auth
 async def lifespan(app: FastAPI):
     settings = get_settings()
 
+    # 분석 기록은 두 모드 모두 DB 에 남긴다. local 은 docker Postgres, cloud 는 Neon.
+    from app.db import User, init_engine, session_scope
+    from app.deps import LOCAL_USER_ID
+
+    init_engine(settings.database_url)
+
     if settings.is_cloud:
         # 웹 배포: 로그인과 회원별 Gemini 키로 동작한다.
-        # 프로바이더는 요청마다 만들므로 여기서는 DB 만 준비한다.
+        # 프로바이더는 요청마다 만들므로 앱 수준에서는 만들지 않는다.
         settings.require_cloud_settings()
-        from app.db import init_engine
-
-        init_engine(settings.database_url)
         app.state.provider = None
         yield
         return
 
-    # 로컬: llama-server 프로바이더 하나를 앱 수명 동안 공유한다.
+    # 로컬: 로그인이 없으므로 모든 기록을 매달 사용자 행 하나를 만들어 둔다.
+    with session_scope() as db:
+        if db.get(User, LOCAL_USER_ID) is None:
+            db.add(User(id=LOCAL_USER_ID, google_sub="local", email="local", name="local"))
+
+    # llama-server 프로바이더 하나를 앱 수명 동안 공유한다.
     app.state.provider = LlamaServerProvider(
         settings.llm_base_url,
         model=settings.llm_model,
@@ -81,9 +89,10 @@ def create_app() -> FastAPI:
         )
 
     app.include_router(analyze.router)
+    # 히스토리·단어장·연습 기록은 두 모드 모두 쓴다.
+    app.include_router(account.router)
     if settings.is_cloud:
         app.include_router(auth.router)
-        app.include_router(account.router)
 
     _mount_frontend(app)
     return app
