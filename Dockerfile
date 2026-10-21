@@ -15,6 +15,10 @@ COPY backend/pyproject.toml ./
 COPY backend/app ./app
 RUN pip install --no-cache-dir .
 
+# 스키마는 앱이 뜰 때 Alembic 이 올린다. 이 둘이 빠지면 배포본이 부팅하다 죽는다.
+COPY backend/alembic.ini ./
+COPY backend/migrations ./migrations
+
 # 프론트엔드를 같은 오리진에서 서빙한다 (세션 쿠키가 same-site 로 유지된다)
 COPY --from=web /web/dist ./static
 

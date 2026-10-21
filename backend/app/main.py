@@ -18,8 +18,11 @@ async def lifespan(app: FastAPI):
 
     # 분석 기록은 두 모드 모두 DB 에 남긴다. local 은 docker Postgres, cloud 는 Neon.
     from app.db import User, init_engine, session_scope
+    from app.db.migrate import upgrade_to_head
     from app.deps import LOCAL_USER_ID
 
+    # 스키마는 Alembic 이 만든다. 엔진보다 먼저 올려야 첫 요청이 빈 테이블을 안 본다.
+    upgrade_to_head()
     init_engine(settings.database_url)
 
     if settings.is_cloud:

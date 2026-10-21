@@ -131,7 +131,7 @@ cloud   로그인 → 이용 동의 → API 키 등록 → 분석 화면.  Accou
 | 결과 스키마 (필드 추가·이름 변경) | **`RESULT_VERSION` 올리고 `records.upgrade` 에 규칙 추가** · 마크다운 렌더러 · 화면 · 빈 값 처리 |
 | 프롬프트 | 두 모델 모두에서 확인 (Gemini 와 llama-server 는 스키마 제약 지원이 다르다 — 08-level-design 3.2) |
 | 새 API 엔드포인트 | cloud 에서 인증이 필요한가 · local 에서도 동작하는가 · `main.py` 라우터 등록이 모드별인가 |
-| DB 테이블 | **`create_all` 은 기존 테이블을 바꾸지 않는다.** 컬럼을 더하면 이미 있는 DB 에 직접 `ALTER TABLE` 을 해야 한다. 실제로 이 통합 과정에서 `users.google_sub does not exist` 로 앱이 뜨지 않았다. Alembic 도입 전까지는 두 DB(로컬 docker, Neon) 모두 손으로 맞춰야 한다 |
+| DB 테이블 | **모델만 고치면 안 된다. 리비전을 만든다** — `alembic revision --autogenerate -m "무엇을"`. 안 만들면 `test_migrations.py` 가 모델과의 차이를 찍고 실패한다. 두 모드가 같은 스키마를 쓰므로 리비전도 하나다 ([07 §6.5](07-web-deployment.md)) |
 | 프론트 화면 | local 에서도 열리는가 (`cloud` 분기를 걸었는지) |
 
 ## 6. 두 모드를 함께 개발하는 방법

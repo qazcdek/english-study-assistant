@@ -153,6 +153,44 @@ DATABASE_URL=sqlite+pysqlite:///./local-cloud.db \
 
 DB 는 SQLite 로도 돌아간다. 테이블은 시작할 때 자동으로 만들어진다.
 
+### 6.5 스키마를 바꿀 때 (Alembic)
+
+**테이블 구조는 Alembic 이 만든다.** 앱이 뜰 때 `upgrade head` 가 돈다 —
+Render 무료 티어에는 배포 전 단계가 없어서 거기 걸 자리가 없다. 수십 밀리초라
+콜드 스타트에 영향이 없다.
+
+```
+1  app/db/models.py 를 고친다
+2  cd backend && .venv/bin/alembic revision --autogenerate -m "무엇을 바꿨는지"
+3  migrations/versions/ 에 생긴 파일을 읽어 본다 (autogenerate 는 완벽하지 않다)
+4  uv run pytest tests/test_migrations.py
+5  커밋한다. 배포하면 앱이 뜰 때 알아서 올라간다
+```
+
+**2번을 빼먹으면 `test_migrations.py` 가 잡는다.** 모델과 리비전의 차이를 그대로
+찍어 주고 실패한다 — `create_all` 시절에는 모델만 고쳐도 테이블이 따라왔지만
+이제는 아니다.
+
+`alembic.ini` 에는 URL 을 적지 않는다. `migrations/env.py` 가 앱 설정에서 읽어
+엔진과 **같은 변환**(`normalize_url`)을 거친다. 두 모드가 각자 다른 DB 를 쓰므로
+한 곳에 못 박으면 틀린 DB 에 거는 사고가 난다.
+
+**`alembic.ini` 와 `migrations/` 는 이미지에 들어가야 한다.** 처음 넣을 때 실제로
+빠뜨려서 배포본이 부팅하다 죽을 상태였다. `Dockerfile` 이 `backend/app` 만
+복사하고 있었다 — 지금은 `test_migrations.py` 가 그것까지 본다.
+
+#### 한 번만 필요한 분기
+
+이미 `create_all` 로 만들어진 DB(로컬 개발용과 배포본)에는 테이블이 있는데
+`alembic_version` 이 없다. 거기에 `upgrade` 를 걸면 "이미 있는 테이블" 로 깨지므로,
+그 경우에만 **첫 리비전을 찍고 넘어간다**(`app/db/migrate.py`).
+지금 스키마가 첫 리비전과 같아서 안전하다.
+
+**두 DB 가 모두 넘어온 뒤에는 이 분기를 지운다.** 남겨 두면, 마이그레이션이 깨진
+DB 를 조용히 "최신" 으로 찍어 버릴 수 있다.
+
+---
+
 ## 7. 저장하는 데이터
 
 | 테이블 | 내용 |
@@ -172,9 +210,6 @@ DB 는 SQLite 로도 돌아간다. 테이블은 시작할 때 자동으로 만�
 ## 8. 남은 것
 
 - **오답 다시 풀기 / 단어장 화면** — 데이터는 쌓이지만 이를 보여줄 프론트 화면이 아직 없다.
-- **Alembic 마이그레이션** — 지금은 시작 시 `create_all` 로 테이블을 만든다.
-  **테이블 컬럼**이 바뀌면 수동 조치가 필요하다. 회원이 생기기 전에 Alembic 으로 옮기는 편이 낫다.
-  (JSON 컬럼 안의 결과 스키마는 아래 방식으로 따로 다룬다.)
 
 ### 8.1 저장된 분석 결과의 스키마 변경
 
