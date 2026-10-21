@@ -64,7 +64,7 @@ llama-server 를 먼저 띄운 뒤 (아래 1절):
 같은 포트 값을 `stop` / `status` 에도 똑같이 넘겨야 한다.
 아래 2·3절은 수동으로 띄우거나 내부 동작을 확인할 때 참고한다.
 
-문서: [기획서](documents/01-product-spec.md) ·
+문서: **[문서 지도](documents/00-index.md)** · [기획서](documents/01-product-spec.md) ·
 [아키텍처](documents/02-architecture.md) ·
 [API 명세](documents/03-api-spec.md) ·
 [프롬프트 설계](documents/04-prompt-design.md) ·
@@ -73,6 +73,8 @@ llama-server 를 먼저 띄운 뒤 (아래 1절):
 [웹 배포](documents/07-web-deployment.md) ·
 [난이도 설계](documents/08-level-design.md) ·
 [모드별 차이](documents/09-mode-matrix.md)
+
+진행 상황: [ROADMAP](documents/plan/ROADMAP.md) · [ISSUES](documents/plan/ISSUES.md) · [DONE](documents/plan/DONE.md) · 개발 지침은 [CLAUDE.md](CLAUDE.md).
 
 ---
 
