@@ -86,3 +86,28 @@ def test_documents_cited_by_code_are_listed_in_the_claude_md_table():
     assert not cited - listed, (
         "코드가 가리키는데 CLAUDE.md 4절 표에 없는 문서: " + " · ".join(sorted(cited - listed))
     )
+
+
+def test_every_command_in_the_tooling_doc_is_wired_into_dev_sh():
+    """12-tooling.md 7절의 명령이 `dev.sh` 의 분기와 help 목록에 다 있어야 한다.
+
+    `ptr` 를 case 에만 넣고 머리 주석을 안 고쳐 한 마일스톤 동안 help 에 없었다.
+    """
+    table = (ROOT / "documents" / "12-tooling.md").read_text(encoding="utf-8").split("## 7.")[1]
+    verbs = set(re.findall(r"`\./dev\.sh ([a-z]+)`", table))
+    assert verbs, "7절에서 명령을 하나도 못 찾았다. 표 형식이 바뀌었다"
+
+    dev = (ROOT / "dev.sh").read_text(encoding="utf-8")
+    branches = {
+        verb
+        for label in re.findall(r"^ {4}([a-z|-]+)\)$", dev, re.MULTILINE)
+        for verb in label.split("|")
+    }
+    helped = set(re.findall(r"^# +\./dev\.sh ([a-z]+)", dev, re.MULTILINE))
+
+    gaps = []
+    for verb in sorted(verbs):
+        missing = [w for w, s in (("분기", branches), ("help 목록", helped)) if verb not in s]
+        if missing:
+            gaps.append(f"{verb} — {' · '.join(missing)} 에 없다")
+    assert not gaps, "dev.sh 에 안 걸린 명령:\n  " + "\n  ".join(gaps)

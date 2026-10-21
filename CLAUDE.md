@@ -48,6 +48,7 @@ README.md                 ← 사람이 처음 띄울 때 보는 안내 ([README
 |---|---|
 | 아무 코드나 | [10 코드 규약](documents/10-code-conventions.md) |
 | 문서 구조 자체 | [11 문서 아키텍처](documents/11-docs-architecture.md) |
+| 검사·생성 도구 | [12 도구 규약](documents/12-tooling.md) |
 | 모드에 따라 갈리는 것 | **[09 모드별 차이](documents/09-mode-matrix.md) — 먼저** |
 | `app/prompts/` | [04 프롬프트 설계](documents/04-prompt-design.md) · [05 실측](documents/05-benchmark.md) |
 | `app/routers/` | [03 API 명세](documents/03-api-spec.md) |
