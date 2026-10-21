@@ -37,11 +37,29 @@ export function ExpressionTable({ expressions, keyExpressions = [], level }: Pro
   }
 
   const hasExample = expressions.some((e) => e.example)
+  // 예문이 하나도 없으면 체크박스가 사라져 **연습 기능이 없는 것처럼 보인다.**
+  // 실제로 배포본에서 그렇게 보였다 (H-019). 없으면 없다고 적는다.
+  const practiceable = expressions.some(canPractice)
+  // 연습할 수 있는 표현이 하나도 없으면 가려 둘 이유가 없다. 체크박스도 없으므로
+  // 가린 채로 두면 예문을 **영영 못 보게 된다.**
+  const masked = hideExamples && practiceable
   const columnCount = hasExample ? 4 : 3
 
   return (
     <div>
-      {hasExample && (
+      {!hasExample && (
+        <p className="mb-2 text-right text-xs text-stone-400">
+          이번 분석에는 예문이 없어 <b className="font-medium">직접 써보기</b>를 할 수 없습니다
+        </p>
+      )}
+
+      {hasExample && !practiceable && (
+        <p className="mb-2 text-right text-xs text-stone-400">
+          한국어 제시문이 없어 이번에는 <b className="font-medium">직접 써보기</b>를 할 수 없습니다
+        </p>
+      )}
+
+      {hasExample && practiceable && (
         <label className="mb-2 flex cursor-pointer items-center justify-end gap-1.5 text-xs text-stone-400">
           <input
             type="checkbox"
@@ -66,7 +84,7 @@ export function ExpressionTable({ expressions, keyExpressions = [], level }: Pro
               {hasExample && (
                 // 버튼만 들어갈 때는 유형 칸과 같은 폭이면 충분하다.
                 // 예문을 펼쳐 보일 때만 넓게 쓴다.
-                <th className={`py-2 pl-3 font-medium ${hideExamples ? 'w-[14%]' : 'w-[22%]'}`}>
+                <th className={`py-2 pl-3 font-medium ${masked ? 'w-[14%]' : 'w-[22%]'}`}>
                   예문
                 </th>
               )}
@@ -114,7 +132,7 @@ export function ExpressionTable({ expressions, keyExpressions = [], level }: Pro
                       <td className="py-3 pl-3">
                         {!e.example ? (
                           <span className="text-xs text-stone-300 dark:text-stone-600">—</span>
-                        ) : !hideExamples ? (
+                        ) : !masked ? (
                           <p className="font-mono text-xs italic text-stone-400">“{e.example}”</p>
                         ) : canPractice(e) ? (
                           <button

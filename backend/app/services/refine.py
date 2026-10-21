@@ -72,15 +72,19 @@ def _dedupe(items: list[T], text_of) -> list[T]:
 
 
 def clean_expressions(items: list[Expression]) -> list[Expression]:
+    """[문서] plan/ISSUES.md H-019"""
     for e in items:
         e.expression = _strip(e.expression)
         e.meaning = _strip(e.meaning)
         e.nuance = _strip(e.nuance)
         e.example = _strip(e.example) if e.example else None
         e.example_ko = _strip(e.example_ko) if e.example_ko else None
-        # 예문만 있고 한국어 제시문이 없으면 작문 연습을 할 수 없다. 짝을 맞춘다.
-        if not e.example or not e.example_ko:
-            e.example = e.example_ko = None
+        # 한국어 제시문이 없으면 그 표현은 **연습만** 못 한다. 예문 자체는 멀쩡하므로
+        # 버리지 않는다 — 화면이 `가려짐` 으로 표시하고, 펼치면 읽을 수 있다.
+        # 전에는 짝을 맞추려고 둘 다 버렸는데, 그러면 모든 표현이 그렇게 될 때
+        # **예문 칸과 연습 입구가 통째로 사라졌다** (H-019).
+        if not e.example:
+            e.example_ko = None
 
     return _dedupe(items, lambda e: e.expression)
 
