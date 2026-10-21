@@ -1,10 +1,12 @@
 import type { Overview } from '../lib/types'
 
-function Row({ label, children }: { label: string; children: React.ReactNode }) {
+/** 값이 비면 줄 자체를 그리지 않는다. 옛 기록에는 없는 칸이 있다. */
+function Row({ label, value }: { label: string; value: string }) {
+  if (!value.trim()) return null
   return (
     <div className="flex items-baseline gap-3 py-1.5 text-sm">
       <span className="w-20 shrink-0 text-stone-400">{label}</span>
-      <span className="font-medium">{children}</span>
+      <span className="font-medium">{value}</span>
     </div>
   )
 }
@@ -13,10 +15,10 @@ export function OverviewCard({ overview }: { overview: Overview }) {
   return (
     <div>
       <div className="divide-y divide-stone-100 dark:divide-stone-800/60">
-        <Row label="분야">{overview.domain}</Row>
-        <Row label="톤">{overview.tone}</Row>
-        <Row label="격식 수준">{overview.formality}</Row>
-        <Row label="문체">{overview.style}</Row>
+        <Row label="분야" value={overview.domain} />
+        <Row label="톤" value={overview.tone} />
+        <Row label="격식 수준" value={overview.formality} />
+        <Row label="문체" value={overview.style} />
       </div>
 
       {overview.key_expressions.length > 0 && (

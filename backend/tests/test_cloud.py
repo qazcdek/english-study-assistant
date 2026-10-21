@@ -205,3 +205,82 @@ def test_spa_fallback_does_not_swallow_api_404(monkeypatch, tmp_path):
     with TestClient(main_module.create_app()) as client:
         assert client.get("/api/nope").status_code == 404
         assert client.get("/some/route").text == "<html>spa</html>"
+
+
+def test_old_format_records_still_open(cloud):
+    """프롬프트를 손볼 때마다 결과 스키마가 바뀌었는데, 옛 기록을 열면 500 이 났다."""
+    from app.db import AnalysisRecord
+
+    user_id = make_user()
+    login(cloud, user_id)
+
+    empty_md = {"translation": "", "expressions": "", "structures": "", "overview": "", "full": ""}
+    with session_scope() as db:
+        row = AnalysisRecord(
+            user_id=user_id,
+            source_text="Had she known what awaited her.",
+            level="intermediate",
+            result={
+                "source_text": "Had she known what awaited her.",
+                "translation": "번역",
+                "expressions": [{"expression": "set foot in", "type": "관용구", "meaning": "발을 들이다"}],
+                "structures": [{"fragment": "Had she known", "explanation": "도치 가정법이다."}],
+                "overview": {
+                    "frequency": "자주",
+                    "formality": "격식",
+                    "style": "문어체",
+                    "domain": "소설",
+                    "comment": "코멘트",
+                },
+            },
+            markdown=empty_md,
+            failed_parts=[],
+        )
+        db.add(row)
+        db.flush()
+        record_id = row.id
+
+    resp = cloud.get(f"/api/history/{record_id}")
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["result"]["structures"][0]["role"] == "도치 가정법이다."
+    assert body["result"]["overview"]["tone"] == ""
+    assert body["result"]["expressions"][0]["nuance"] == ""
+
+
+def test_new_records_carry_a_schema_version(cloud):
+    """버전을 남겨 두면 다음 스키마 변경 때 모양을 추측하지 않아도 된다."""
+    from app.db import AnalysisRecord
+    from app.services.records import RESULT_VERSION
+
+    user_id = make_user()
+    login(cloud, user_id)
+    cloud.post("/api/analyze", json={"text": "across the pond and back again"})
+
+    with session_scope() as db:
+        row = db.query(AnalysisRecord).filter(AnalysisRecord.user_id == user_id).one()
+        assert row.result["schema_version"] == RESULT_VERSION
+
+
+def test_cloud_input_limit_is_narrower(cloud):
+    """회원 각자의 Gemini 한도를 소모하므로 local(2000자)보다 좁다 (09-mode-matrix.md 3.1)."""
+    from app.config import get_settings
+
+    login(cloud, make_user())
+    limit = get_settings().max_input_chars
+
+    assert limit == 800
+    assert cloud.post("/api/analyze", json={"text": "a" * limit}).status_code == 200
+    assert cloud.post("/api/analyze", json={"text": "a" * (limit + 1)}).status_code == 422
+    assert cloud.get("/api/config").json()["max_input_chars"] == limit
+
+
+def test_reading_records_does_not_require_consent_or_key(cloud):
+    """동의와 API 키는 LLM 을 부를 때 필요한 것이지, 저장된 기록을 읽는 데 필요한 것이 아니다."""
+    login(cloud, make_user(consented=False, with_key=False))
+
+    assert cloud.get("/api/history").status_code == 200
+    assert cloud.get("/api/vocabulary").status_code == 200
+    # 분석은 여전히 막힌다
+    assert cloud.post("/api/analyze", json={"text": "a" * 30}).status_code == 403

@@ -2,14 +2,14 @@ import json
 from collections.abc import AsyncIterator
 
 from fastapi import APIRouter, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import StreamingResponse
 
 from app.config import get_settings
 from app.db import AnalysisRecord, PracticeRecord
-from app.deps import AnalyzerDep, MaybeDb, MaybeUser, PracticeDep
+from app.deps import ActiveUser, AnalyzerDep, DbDep, PracticeDep
 from app.errors import LLMError
 from app.schemas import (
-    MAX_INPUT_CHARS,
     AnalyzeRequest,
     AnalyzeResponse,
     AppConfigResponse,
@@ -19,7 +19,7 @@ from app.schemas import (
     PracticeRequest,
     PracticeResponse,
 )
-from app.services import usage
+from app.services import records, usage
 from app.services.analyzer import AnalyzerService
 
 router = APIRouter(prefix="/api", tags=["analyze"])
@@ -39,7 +39,7 @@ def app_config() -> AppConfigResponse:
         daily_analysis_limit=settings.daily_analysis_limit if settings.is_cloud else 0,
         daily_practice_limit=settings.daily_practice_limit if settings.is_cloud else 0,
         api_key_issue_url=API_KEY_ISSUE_URL if settings.is_cloud else "",
-        max_input_chars=MAX_INPUT_CHARS,
+        max_input_chars=settings.max_input_chars,
     )
 
 
@@ -67,28 +67,44 @@ async def health(request: Request) -> HealthResponse:
     )
 
 
+def _check_length(request: AnalyzeRequest) -> None:
+    """모드별 입력 상한. 스키마의 절대 상한보다 좁다 (09-mode-matrix.md 3.1)."""
+    limit = get_settings().max_input_chars
+    if len(request.text) > limit:
+        raise RequestValidationError(
+            [
+                {
+                    "type": "string_too_long",
+                    "loc": ("body", "text"),
+                    "msg": f"String should have at most {limit} characters",
+                    "input": request.text[:50],
+                }
+            ]
+        )
+
+
 def _charge_analysis(db, user) -> None:
     """호출 전에 한도를 확인하고 사용량을 올린다.
 
-    실패한 호출도 회원의 Gemini 한도를 소모하므로 성공 여부와 무관하게 먼저 센다.
+    회원 각자의 Gemini 한도를 쓰는 cloud 에서만 센다 (09-mode-matrix.md 3.3).
+    실패한 호출도 한도를 소모하므로 성공 여부와 무관하게 먼저 센다.
     분석 한 번은 LLM 호출 네 번이다.
     """
-    if db is None or user is None:
+    settings = get_settings()
+    if not settings.is_cloud:
         return
     usage.check_and_increment(
-        db, user, kind="analyses", limit=get_settings().daily_analysis_limit, llm_calls=4
+        db, user, kind="analyses", limit=settings.daily_analysis_limit, llm_calls=4
     )
 
 
 def _save_analysis(db, user, request: AnalyzeRequest, response: AnalyzeResponse) -> None:
-    if db is None or user is None:
-        return
     db.add(
         AnalysisRecord(
             user_id=user.id,
             source_text=request.text,
             level=request.level,
-            result=response.result.model_dump(),
+            result=records.stamp(response.result.model_dump()),
             markdown=response.markdown.model_dump(),
             failed_parts=response.meta.failed_parts,
             elapsed_ms=response.meta.elapsed_ms,
@@ -99,9 +115,10 @@ def _save_analysis(db, user, request: AnalyzeRequest, response: AnalyzeResponse)
 
 @router.post("/analyze", response_model=AnalyzeResponse)
 async def analyze(
-    request: AnalyzeRequest, analyzer: AnalyzerDep, db: MaybeDb, user: MaybeUser
+    request: AnalyzeRequest, analyzer: AnalyzerDep, db: DbDep, user: ActiveUser
 ) -> AnalyzeResponse:
     """네 파트를 모두 끝낸 뒤 한 번에 돌려준다."""
+    _check_length(request)
     _charge_analysis(db, user)
     response = await analyzer.analyze(request)
     _save_analysis(db, user, request, response)
@@ -130,7 +147,7 @@ async def _sse(
 
 @router.post("/analyze/stream")
 async def analyze_stream(
-    request: AnalyzeRequest, analyzer: AnalyzerDep, db: MaybeDb, user: MaybeUser
+    request: AnalyzeRequest, analyzer: AnalyzerDep, db: DbDep, user: ActiveUser
 ) -> StreamingResponse:
     """파트가 완성되는 대로 SSE 로 흘려보낸다.
 
@@ -138,6 +155,7 @@ async def analyze_stream(
     한 파트가 실패해도 나머지는 계속 진행하므로, 스트림은 항상 `done` 으로 끝난다
     (연결 불가·타임아웃처럼 이어가도 소용없는 경우는 제외).
     """
+    _check_length(request)
     _charge_analysis(db, user)
     return StreamingResponse(
         _sse(analyzer, request, db, user),
@@ -152,29 +170,29 @@ async def analyze_stream(
 
 @router.post("/practice", response_model=PracticeResponse)
 async def practice(
-    request: PracticeRequest, grader: PracticeDep, db: MaybeDb, user: MaybeUser
+    request: PracticeRequest, grader: PracticeDep, db: DbDep, user: ActiveUser
 ) -> PracticeResponse:
     """예문을 가린 채 학습자가 쓴 영어 문장을 채점한다."""
-    if db is not None and user is not None:
+    settings = get_settings()
+    if settings.is_cloud:
         usage.check_and_increment(
-            db, user, kind="practices", limit=get_settings().daily_practice_limit
+            db, user, kind="practices", limit=settings.daily_practice_limit
         )
 
     response = await grader.grade(request)
 
-    if db is not None and user is not None:
-        db.add(
-            PracticeRecord(
-                user_id=user.id,
-                expression=request.expression,
-                prompt_ko=request.prompt_ko,
-                model_answer=request.model_answer,
-                learner_answer=request.learner_answer,
-                verdict=response.result.verdict,
-                uses_target=response.result.uses_target,
-                feedback=response.result.model_dump(),
-            )
+    db.add(
+        PracticeRecord(
+            user_id=user.id,
+            expression=request.expression,
+            prompt_ko=request.prompt_ko,
+            model_answer=request.model_answer,
+            learner_answer=request.learner_answer,
+            verdict=response.result.verdict,
+            uses_target=response.result.uses_target,
+            feedback=response.result.model_dump(),
         )
-        db.commit()
+    )
+    db.commit()
 
     return response

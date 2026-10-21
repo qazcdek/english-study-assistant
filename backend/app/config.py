@@ -48,7 +48,17 @@ class Settings(BaseSettings):
     encryption_key: str = ""
 
     # --- 저장소 (cloud) ---
-    database_url: str = "sqlite+pysqlite:///./eng_study.db"
+    # local 은 compose.yaml 이 띄우는 Postgres, cloud 는 Neon 을 가리킨다.
+    # 기본 포트(5432)는 이미 깔려 있는 Postgres 와 부딪히므로 15432 를 쓴다.
+    database_url: str = "postgresql+psycopg://eng:eng@127.0.0.1:15432/eng_study"
+
+    # --- 입력 제한 ---
+    #
+    # 모드별로 다르다. 한쪽만 보고 고치면 다른 쪽이 조용히 어긋난다 (09-mode-matrix.md 3.1).
+    #   local  넉넉히. 혼자 쓰고 llama-server 한도만 신경 쓰면 된다
+    #   cloud  좁게.  회원 각자의 Gemini 한도를 소모한다
+    local_max_input_chars: int = 2000
+    cloud_max_input_chars: int = 800
 
     # --- 사용량 제한 ---
     daily_analysis_limit: int = 60
@@ -61,6 +71,14 @@ class Settings(BaseSettings):
     @property
     def is_cloud(self) -> bool:
         return self.app_mode == "cloud"
+
+    @property
+    def max_input_chars(self) -> int:
+        """이 모드에서 받는 입력 길이 상한.
+
+        프론트는 이 값을 하드코딩하지 않고 `GET /api/config` 로 받아 쓴다.
+        """
+        return self.cloud_max_input_chars if self.is_cloud else self.local_max_input_chars
 
     @property
     def cors_origin_list(self) -> list[str]:

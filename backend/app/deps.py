@@ -26,9 +26,12 @@ from app.services.practice import PracticeService
 SettingsDep = Annotated[Settings, Depends(get_settings)]
 
 
-def db_session(settings: SettingsDep) -> Iterator[Session]:
-    if not settings.is_cloud:
-        raise RuntimeError("로컬 모드에는 DB 가 없습니다.")
+# 로그인이 없는 로컬 모드에서 모든 기록을 매다는 사용자 행.
+LOCAL_USER_ID = 1
+
+
+def db_session() -> Iterator[Session]:
+    """두 모드 모두 DB 를 쓴다. local 은 docker Postgres, cloud 는 Neon."""
     yield from get_session()
 
 
@@ -71,24 +74,36 @@ def ready_user(user: UserDep) -> User:
 ReadyUser = Annotated[User, Depends(ready_user)]
 
 
-def maybe_db(settings: SettingsDep) -> Iterator[Session | None]:
-    """cloud 면 세션을, 로컬이면 None. 두 모드를 함께 쓰는 라우터용."""
+def _local_user(db: Session) -> User:
+    user = db.get(User, LOCAL_USER_ID)
+    if user is None:  # pragma: no cover - 시작할 때 만든다
+        raise RuntimeError("로컬 사용자 행이 없습니다. 앱을 다시 시작하세요.")
+    return user
+
+
+def session_user(request: Request, settings: SettingsDep, db: DbDep) -> User:
+    """지금 요청의 주인. **신원만** 확인한다.
+
+    저장된 기록을 읽고 지우는 데에는 동의나 API 키가 필요 없다.
+    그것들은 LLM 을 부를 때 필요한 것이다.
+    """
     if not settings.is_cloud:
-        yield None
-        return
-    yield from get_session()
+        return _local_user(db)
+    return current_user(request, settings, db)
 
 
-MaybeDb = Annotated[Session | None, Depends(maybe_db)]
+def active_user(request: Request, settings: SettingsDep, db: DbDep) -> User:
+    """LLM 을 부를 수 있는 상태인 주인.
 
-
-def maybe_user(request: Request, settings: SettingsDep, db: MaybeDb) -> User | None:
-    if not settings.is_cloud or db is None:
-        return None
+    cloud 는 이용 동의와 API 키 등록까지 끝나야 한다. local 은 그런 관문이 없다.
+    """
+    if not settings.is_cloud:
+        return _local_user(db)
     return ready_user(current_user(request, settings, db))
 
 
-MaybeUser = Annotated[User | None, Depends(maybe_user)]
+SessionUser = Annotated[User, Depends(session_user)]
+ActiveUser = Annotated[User, Depends(active_user)]
 
 
 async def get_provider(request: Request, settings: SettingsDep) -> AsyncIterator[LLMProvider]:

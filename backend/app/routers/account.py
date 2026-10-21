@@ -4,7 +4,7 @@ from fastapi import APIRouter, Query
 
 from app.config import get_settings
 from app.db import AnalysisRecord, PracticeRecord, VocabularyItem
-from app.deps import DbDep, UserDep
+from app.deps import DbDep, SessionUser
 from app.errors import AppError
 from app.schemas import (
     HistoryDetail,
@@ -14,7 +14,7 @@ from app.schemas import (
     VocabularyCreate,
     VocabularyItemOut,
 )
-from app.services import usage
+from app.services import records, usage
 
 router = APIRouter(prefix="/api", tags=["account"])
 
@@ -24,7 +24,7 @@ def _iso(value) -> str:
 
 
 @router.get("/usage", response_model=UsageResponse)
-def get_usage(user: UserDep, db: DbDep) -> UsageResponse:
+def get_usage(user: SessionUser, db: DbDep) -> UsageResponse:
     settings = get_settings()
     counter = usage.snapshot(db, user)
     db.commit()
@@ -41,7 +41,7 @@ def get_usage(user: UserDep, db: DbDep) -> UsageResponse:
 
 
 @router.get("/history", response_model=list[HistoryItem])
-def list_history(user: UserDep, db: DbDep, limit: int = Query(30, ge=1, le=100)):
+def list_history(user: SessionUser, db: DbDep, limit: int = Query(30, ge=1, le=100)):
     rows = (
         db.query(AnalysisRecord)
         .filter(AnalysisRecord.user_id == user.id)
@@ -62,7 +62,7 @@ def list_history(user: UserDep, db: DbDep, limit: int = Query(30, ge=1, le=100))
 
 
 @router.get("/history/{record_id}", response_model=HistoryDetail)
-def get_history(record_id: int, user: UserDep, db: DbDep) -> HistoryDetail:
+def get_history(record_id: int, user: SessionUser, db: DbDep) -> HistoryDetail:
     row = db.get(AnalysisRecord, record_id)
     if row is None or row.user_id != user.id:
         raise AppError("기록을 찾을 수 없습니다.")
@@ -72,13 +72,14 @@ def get_history(record_id: int, user: UserDep, db: DbDep) -> HistoryDetail:
         level=row.level,
         created_at=_iso(row.created_at),
         failed_parts=row.failed_parts or [],
-        result=row.result,
+        # 프롬프트를 손볼 때마다 결과 스키마가 바뀐다. 옛 형식으로 저장된 기록을 올려서 넘긴다.
+        result=records.upgrade(row.result),
         markdown=row.markdown,
     )
 
 
 @router.delete("/history/{record_id}")
-def delete_history(record_id: int, user: UserDep, db: DbDep) -> dict:
+def delete_history(record_id: int, user: SessionUser, db: DbDep) -> dict:
     row = db.get(AnalysisRecord, record_id)
     if row is None or row.user_id != user.id:
         raise AppError("기록을 찾을 수 없습니다.")
@@ -91,7 +92,7 @@ def delete_history(record_id: int, user: UserDep, db: DbDep) -> dict:
 
 
 @router.get("/vocabulary", response_model=list[VocabularyItemOut])
-def list_vocabulary(user: UserDep, db: DbDep):
+def list_vocabulary(user: SessionUser, db: DbDep):
     rows = (
         db.query(VocabularyItem)
         .filter(VocabularyItem.user_id == user.id)
@@ -114,7 +115,7 @@ def list_vocabulary(user: UserDep, db: DbDep):
 
 
 @router.post("/vocabulary", response_model=VocabularyItemOut)
-def add_vocabulary(item: VocabularyCreate, user: UserDep, db: DbDep) -> VocabularyItemOut:
+def add_vocabulary(item: VocabularyCreate, user: SessionUser, db: DbDep) -> VocabularyItemOut:
     existing = (
         db.query(VocabularyItem)
         .filter(
@@ -145,7 +146,7 @@ def add_vocabulary(item: VocabularyCreate, user: UserDep, db: DbDep) -> Vocabula
 
 
 @router.delete("/vocabulary/{item_id}")
-def delete_vocabulary(item_id: int, user: UserDep, db: DbDep) -> dict:
+def delete_vocabulary(item_id: int, user: SessionUser, db: DbDep) -> dict:
     row = db.get(VocabularyItem, item_id)
     if row is None or row.user_id != user.id:
         raise AppError("단어장 항목을 찾을 수 없습니다.")
@@ -159,7 +160,7 @@ def delete_vocabulary(item_id: int, user: UserDep, db: DbDep) -> dict:
 
 @router.get("/practice/history", response_model=list[PracticeHistoryItem])
 def list_practice(
-    user: UserDep,
+    user: SessionUser,
     db: DbDep,
     limit: int = Query(50, ge=1, le=200),
     verdict: str | None = Query(default=None, description="다시 로 걸러 오답만 볼 수 있다"),

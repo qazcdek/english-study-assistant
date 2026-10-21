@@ -20,7 +20,7 @@ import {
   health as fetchHealth,
   listHistory,
 } from './lib/api'
-import { addEntry, loadHistory, removeEntry, type HistoryEntry } from './lib/history'
+import type { HistoryEntry } from './lib/history'
 import { useSession } from './lib/useSession'
 import type { Level, LlmHealth } from './lib/types'
 
@@ -33,7 +33,7 @@ export default function App() {
   const [running, setRunning] = useState(false)
   const [error, setError] = useState<ApiError | null>(null)
   const [analysis, setAnalysis] = useState<AnalysisState | null>(null)
-  const [history, setHistory] = useState<HistoryEntry[]>(() => loadHistory())
+  const [history, setHistory] = useState<HistoryEntry[]>([])
   const [activeId, setActiveId] = useState<string | null>(null)
   const [llmHealth, setLlmHealth] = useState<LlmHealth | null>(null)
   const abortRef = useRef<AbortController | null>(null)
@@ -69,7 +69,8 @@ export default function App() {
   }, [])
 
   useEffect(() => {
-    if (session.stage !== 'ready') return
+    // 두 모드 모두 기록은 서버에 있다. cloud 는 로그인·키 등록까지 끝나야 읽을 수 있다.
+    if (session.stage !== 'ready' && session.stage !== 'local') return
     void reloadServerHistory()
   }, [session.stage, reloadServerHistory])
 
@@ -97,14 +98,8 @@ export default function App() {
         controller.signal,
       )
       if (!controller.signal.aborted) {
-        if (cloud) {
-          void session.refreshUsage()
-          void reloadServerHistory()
-        } else {
-          const next = addEntry(history, state, level)
-          setHistory(next)
-          setActiveId(next[0]?.id ?? null)
-        }
+        if (cloud) void session.refreshUsage()
+        await reloadServerHistory()
       }
     } catch (e) {
       setError(e instanceof ApiError ? e : new ApiError('unknown', '알 수 없는 오류입니다.'))
@@ -115,17 +110,13 @@ export default function App() {
   }
 
   async function handleDeleteHistory(entry: HistoryEntry) {
-    if (cloud) {
-      try {
-        await deleteHistory(Number(entry.id))
-      } catch (e) {
-        setError(e instanceof ApiError ? e : new ApiError('unknown', '삭제하지 못했습니다.'))
-        return
-      }
-      await reloadServerHistory()
-    } else {
-      setHistory(removeEntry(history, entry.id))
+    try {
+      await deleteHistory(Number(entry.id))
+    } catch (e) {
+      setError(e instanceof ApiError ? e : new ApiError('unknown', '삭제하지 못했습니다.'))
+      return
     }
+    await reloadServerHistory()
     // 보고 있던 항목을 지웠다면 결과 화면도 비운다.
     if (entry.id === activeId) {
       setActiveId(null)
@@ -140,11 +131,7 @@ export default function App() {
     setActiveId(entry.id)
     setError(null)
 
-    if (entry.state) {
-      setAnalysis(entry.state)
-      return
-    }
-    // 서버 히스토리는 목록에 본문이 없다. 고를 때 가져온다.
+    // 목록에는 본문이 없다. 고를 때 가져온다.
     try {
       const detail = await getHistoryDetail(Number(entry.id))
       setAnalysis({

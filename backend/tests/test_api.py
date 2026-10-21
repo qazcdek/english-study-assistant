@@ -3,6 +3,7 @@ import json
 import pytest
 from fastapi.testclient import TestClient
 
+from app.config import get_settings
 from app.deps import get_provider
 from app.main import create_app
 from tests.fake_provider import FakeProvider
@@ -82,16 +83,18 @@ def test_stream_reports_a_failed_part_and_keeps_going(make_client):
     assert events[-1]["result"]["translation"]
 
 
-def test_input_length_limit(client):
-    from app.schemas import MAX_INPUT_CHARS
+def test_local_input_limit(client):
+    """모드마다 상한이 다르다. local 은 넉넉히 (09-mode-matrix.md 3.1)."""
+    limit = get_settings().max_input_chars
 
-    assert MAX_INPUT_CHARS == 800
-    assert client.post("/api/analyze", json={"text": "a" * MAX_INPUT_CHARS}).status_code == 200
-    assert client.post("/api/analyze", json={"text": "a" * (MAX_INPUT_CHARS + 1)}).status_code == 422
+    assert limit == 2000
+    assert client.post("/api/analyze", json={"text": "a" * limit}).status_code == 200
+    assert client.post("/api/analyze", json={"text": "a" * (limit + 1)}).status_code == 422
 
 
-def test_config_reports_input_limit(client):
-    """프론트가 같은 값을 쓰도록 서버가 알려준다. 하드코딩하면 어긋난다."""
-    from app.schemas import MAX_INPUT_CHARS
+def test_config_reports_the_mode_specific_limit(client):
+    """프론트가 같은 값을 쓰도록 서버가 알려준다. 하드코딩하면 모드가 바뀔 때 어긋난다."""
+    body = client.get("/api/config").json()
 
-    assert client.get("/api/config").json()["max_input_chars"] == MAX_INPUT_CHARS
+    assert body["mode"] == "local"
+    assert body["max_input_chars"] == get_settings().max_input_chars == 2000
