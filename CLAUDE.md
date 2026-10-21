@@ -66,12 +66,42 @@ cd backend && uv run ruff check  # 린트
 - hover 같은 포인터 동작은 **headless 브라우저로 검증되지 않는다**
   (headless Chrome 은 `hover: hover` 를 false 로 보고한다). 직접 띄워 확인한다.
 
-## 문서
+## 문서 규약
 
-[documents/00-index.md](documents/00-index.md) 에 지도가 있다. 성격이 셋으로 갈린다.
+**이 문서가 문서 계층의 꼭대기다.** 여기서 [문서 지도](documents/00-index.md) 로 가고,
+지도에서 나머지 전부로 간다. 지도를 거치지 않는 문서는 없다.
 
-- `documents/01~NN` — **설계 결정 기록.** 왜 그렇게 했는지. 코드 주석이 절 번호로 가리키므로
-  **파일명과 절 번호를 바꾸지 않는다.** 새 설계는 다음 번호로 이어 붙인다.
-- `documents/plan/` — **진행 상황.** ROADMAP(의도한 계획) · ISSUES(의도치 않게 생긴 문제) · DONE(세부 기록).
-  앞의 둘은 같은 방식으로 적는다 — 체크박스 + 태그 + 한 줄 요약. 세부는 DONE 에만.
-- `README.md` — 사람이 처음 띄울 때 보는 안내.
+```
+CLAUDE.md                 ← 지금 읽고 있는 것. 메타 규약, 세션마다 자동으로 읽힌다
+└── documents/00-index.md ← 유일한 색인. 층·상태·"읽어야 할 때" 가 여기 모인다
+    ├── 제품 설계 규약 운영 기록   01~09
+    └── 진행                      plan/ROADMAP · ISSUES · DONE
+README.md                 ← 사람이 처음 띄울 때 보는 설치·실행 안내. 색인이 아니다 ([README](README.md))
+```
+
+지켜야 할 것은 넷이다.
+
+1. **색인은 00-index 하나뿐.** 다른 문서에 목록을 복사하지 않는다. 둘이 되면 갈라진다.
+2. **모든 문서는 표준 머리말을 단다** — 층 · 상태 · 읽어야 할 때 · 위 · 함께.
+   `위` 가 되돌아 나가는 길이라서, 이게 있으면 **고아도 막다른 문서도 안 생긴다.**
+   형식은 [00-index 4.1](documents/00-index.md).
+3. **파일명과 절 번호를 바꾸지 않는다.** 코드 주석이 주소로 쓴다 ([00-index 3절](documents/00-index.md)).
+   새 문서는 다음 번호로 이어 붙인다.
+4. **상태는 셋뿐.** 유효(코드가 이대로다) · 기록(그때의 측정·판단, 손대지 않는다) · 대체됨.
+   **기록 층 문서(05, 08)를 지금 사실에 맞춰 고치지 않는다.** 그때의 판단이 사라진다.
+
+`./dev.sh docs` 가 끊긴 링크 · 머리말 누락 · 색인에 없는 문서 · 태그 불일치를 찾아 준다.
+
+### 어떤 작업에 어떤 문서를 펴는가
+
+문서를 안 보고 고치는 것이 가장 흔한 실패다. **코드를 고치기 전에** 짝을 맞춘다.
+
+| 건드리는 것 | 함께 펴는 문서 |
+|---|---|
+| `app/prompts/` | [04 프롬프트 설계](documents/04-prompt-design.md) · [05 실측](documents/05-benchmark.md) |
+| `app/routers/` | [03 API 명세](documents/03-api-spec.md) |
+| 모드에 따라 갈리는 것 | **[09 모드별 차이](documents/09-mode-matrix.md) — 먼저** |
+| 인증 · 배포 · 저장 스키마 | [07 웹 배포](documents/07-web-deployment.md) |
+| 난이도 기준 | [08 난이도 설계](documents/08-level-design.md) |
+| 작문 연습 | [06 작문 연습](documents/06-practice.md) |
+| 화면에 보이는 것 | [01 제품 기획서](documents/01-product-spec.md) |

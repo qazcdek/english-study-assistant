@@ -1,9 +1,14 @@
-# 07. 웹 배포 (main 브랜치)
+# 07. 웹 배포 (cloud 모드)
 
-`local` 브랜치는 내 PC 의 llama-server 에 붙는 1인용 도구다.
-`main` 브랜치는 같은 코드에 **Google 로그인과 회원별 Gemini 키**를 얹어 웹에 배포한다.
+> **층** 운영 · **상태** 유효
+> **읽어야 할 때** 인증·배포·저장 스키마를 바꿀 때. 배포가 깨졌을 때
+> **위** [문서 지도](00-index.md) · **함께** [모드별 차이](09-mode-matrix.md) · [아키텍처](02-architecture.md)
 
-두 형태는 `APP_MODE` 하나로 갈린다.
+`APP_MODE=local` 은 내 PC 의 llama-server 에 붙는 1인용 도구다.
+`APP_MODE=cloud` 는 같은 코드에 **Google 로그인과 회원별 Gemini 키**를 얹어 웹에 배포한다.
+
+전에는 `local` 과 `main` 두 브랜치로 갈라 두었으나 지금은 한 코드베이스이고,
+`APP_MODE` 하나로 갈린다.
 
 | | `APP_MODE=local` | `APP_MODE=cloud` |
 |---|---|---|

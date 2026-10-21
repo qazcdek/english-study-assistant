@@ -7,8 +7,8 @@
 > **모드에 따라 달라지는 것은 [09-mode-matrix.md](documents/09-mode-matrix.md) 한 곳에 모아 두었다.**
 > 고치기 전에 그 표를 먼저 본다. 아래 1~3절은 `local` 기준이다.
 
-영어 문장이나 문단을 붙여넣으면 로컬 LLM이 **자연스러운 번역 · 표현 풀이 · 문장 구조 · 총평**
-네 가지로 정리해 주는 1인용 학습 웹 앱.
+영어 문장이나 문단을 붙여넣으면 LLM 이 **자연스러운 번역 · 표현 풀이 · 문장 구조 · 총평**
+네 가지로 정리해 주고, 표현마다 작문 연습을 시키는 학습 웹 앱.
 
 네 섹션은 각각 독립된 LLM 호출로 처리되어, 완성되는 순서대로 화면에 채워진다
 (SSE 스트리밍). 한 섹션이 실패해도 나머지는 그대로 나온다.
@@ -65,17 +65,9 @@ llama-server 를 먼저 띄운 뒤 (아래 1절):
 같은 포트 값을 `stop` / `status` 에도 똑같이 넘겨야 한다.
 아래 2·3절은 수동으로 띄우거나 내부 동작을 확인할 때 참고한다.
 
-문서: **[문서 지도](documents/00-index.md)** · [기획서](documents/01-product-spec.md) ·
-[아키텍처](documents/02-architecture.md) ·
-[API 명세](documents/03-api-spec.md) ·
-[프롬프트 설계](documents/04-prompt-design.md) ·
-[실측 기록](documents/05-benchmark.md) ·
-[작문 연습](documents/06-practice.md) ·
-[웹 배포](documents/07-web-deployment.md) ·
-[난이도 설계](documents/08-level-design.md) ·
-[모드별 차이](documents/09-mode-matrix.md)
-
-진행 상황: [ROADMAP](documents/plan/ROADMAP.md) · [ISSUES](documents/plan/ISSUES.md) · [DONE](documents/plan/DONE.md) · 개발 지침은 [CLAUDE.md](CLAUDE.md).
+문서는 **[문서 지도](documents/00-index.md)** 하나로 들어간다 — 기획 · 아키텍처 · API ·
+프롬프트 설계 · 배포 · 모드별 차이와, 진행 상황(ROADMAP · ISSUES · DONE)이 거기 모여 있다.
+개발 지침은 [CLAUDE.md](CLAUDE.md).
 
 ---
 
@@ -155,7 +147,7 @@ Qwen3.8-27B (UD-IQ4_XS, `-c 65536 -ngl 99 -fa on --jinja`) 에서 확인한 값:
 
 ---
 
-## 6. 웹 배포 (main 브랜치)
+## 6. 웹 배포 (cloud 모드)
 
 Google 로그인으로 가입하고, **회원이 등록한 Gemini API 키**로 회원 본인의 사용 한도 안에서
 동작한다. 서버는 키를 암호화해 보관만 한다.

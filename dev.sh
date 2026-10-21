@@ -9,6 +9,7 @@
 #   ./dev.sh stop         다른 데서 띄워 둔 서버를 내린다 (DB 컨테이너는 그대로 둔다)
 #   ./dev.sh db           Postgres 컨테이너만 띄운다
 #   ./dev.sh status       지금 뭐가 떠 있는지 본다
+#   ./dev.sh docs         문서 계층 점검 (끊긴 링크 · 머리말 · 색인)
 #   ./dev.sh check        llama-server 연결만 확인하고 종료
 #
 # 모드는 앞에 붙여도 된다: ./dev.sh cloud backend
@@ -130,6 +131,62 @@ setup_frontend() {
     info "프론트엔드 의존성을 설치합니다 (최초 1회)…"
     (cd "$FRONTEND" && npm install --no-audit --no-fund)
     ok "프론트엔드 의존성 설치 완료"
+  fi
+}
+
+check_docs() {
+  # 문서 계층이 성한지 본다: 끊긴 링크 · 머리말 누락 · 색인에 없는 문서.
+  # 규약은 documents/00-index.md 4절, 꼭대기는 CLAUDE.md 다.
+  local index="$ROOT/documents/00-index.md" bad=0
+
+  # 1) 끊긴 상대 링크
+  while IFS= read -r line; do
+    local src="${line%%:*}" target="${line#*:}"
+    local dir; dir="$(dirname "$src")"
+    [[ -e "$dir/$target" ]] || { warn "끊긴 링크  ${src#$ROOT/} → $target"; bad=1; }
+  done < <(
+    find "$ROOT" -name '*.md' -not -path '*/node_modules/*' -not -path '*/.venv/*' \
+         -not -path '*/.pytest_cache/*' -print0 |
+      while IFS= read -r -d '' f; do
+        grep -oE '\]\([^):]+\.md' "$f" | sed -E 's/^\]\(//' | while read -r t; do
+          printf '%s:%s\n' "$f" "$t"
+        done
+      done
+  )
+
+  # 2) 표준 머리말 (층 / 위) — documents/ 아래 전부
+  for f in "$ROOT"/documents/*.md "$ROOT"/documents/plan/*.md; do
+    [[ -e "$f" ]] || continue
+    grep -q '^> \*\*층\*\*' "$f" || { warn "머리말에 '층' 없음  ${f#$ROOT/}"; bad=1; }
+    if [[ "$f" != "$index" ]]; then
+      grep -q '^> \*\*위\*\*\|^> \*\*층\*\*.*색인' "$f" || { warn "머리말에 '위' 없음 (고아)  ${f#$ROOT/}"; bad=1; }
+    fi
+  done
+
+  # 3) 색인이 모든 문서를 가리키는가
+  for f in "$ROOT"/documents/*.md "$ROOT"/documents/plan/*.md; do
+    [[ -e "$f" && "$f" != "$index" ]] || continue
+    local rel="${f#$ROOT/documents/}"
+    grep -q "(${rel%.md}.md)" "$index" || { warn "색인에 없음  documents/$rel"; bad=1; }
+  done
+
+  # 4) 체크된 태그는 DONE 에 세부가 있어야 하고, 안 된 태그는 없어야 한다
+  local plan="$ROOT/documents/plan" tag st n
+  while read -r st tag; do
+    n="$(grep -c "^### ${tag} " "$plan/DONE.md" || true)"
+    case "$st" in
+      x|'~') [[ "$n" -ge 1 ]] || { warn "DONE 에 세부 없음  ${tag} [${st}]"; bad=1; } ;;
+      *)     [[ "$n" -eq 0 ]] || { warn "안 끝났는데 DONE 에 있음  ${tag}"; bad=1; } ;;
+    esac
+  done < <(
+    grep -hoE '^- \[.\] (M[0-9]+-T[0-9]+|H-[0-9]+) ' "$plan/ROADMAP.md" "$plan/ISSUES.md" |
+      sed -E 's/^- \[(.)\] (.*) $/\1 \2/'
+  )
+
+  if [[ $bad -eq 0 ]]; then
+    ok "문서 계층 이상 없음 ${DIM}(링크 · 머리말 · 색인 · 태그)${RESET}"
+  else
+    die "문서 계층에 문제가 있습니다. 규약은 documents/00-index.md 4절."
   fi
 }
 
@@ -271,6 +328,9 @@ main() {
     db)
       start_db
       ;;
+    docs)
+      check_docs
+      ;;
     stop)
       stop_servers
       ;;
@@ -309,10 +369,10 @@ main() {
       wait
       ;;
     -h|--help|help)
-      sed -n '3,17p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
+      sed -n '3,18p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
       ;;
     *)
-      die "알 수 없는 인자: $1  (cloud | backend | frontend | db | stop | status | check | help)"
+      die "알 수 없는 인자: $1  (cloud | backend | frontend | db | docs | stop | status | check | help)"
       ;;
   esac
 }
