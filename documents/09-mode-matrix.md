@@ -44,6 +44,9 @@ cloud   800자   회원 각자의 Gemini 한도를 소모한다
 **`Settings.max_input_chars` 하나만 본다.** 스키마의 `ABSOLUTE_MAX_INPUT_CHARS` 는
 어떤 모드에서도 넘을 수 없는 **절대 상한**(2000)이고, 모드별 제한은 라우터에서 그보다 좁게 건다.
 
+값이 사는 곳 `→ backend/app/config.py::Settings.max_input_chars` ·
+거는 곳 `→ backend/app/routers/analyze.py::_check_length`
+
 ```
 schemas.ABSOLUTE_MAX_INPUT_CHARS = 2000   ← Pydantic 이 막는 하드 천장
 Settings.local_max_input_chars   = 2000   ← 실제 적용
@@ -136,6 +139,8 @@ local 은 `id=1`, cloud 는 동의·키 등록까지 끝난 회원 + 세션 쿠�
 잡히지 않았다.** 실제로 H-002 는 두 모드 모두의 버그였는데 따로 고쳤다.
 
 ### 6.2 이 문서의 표를 테스트가 고정한다
+
+`→ backend/tests/test_mode_matrix.py`
 
 `tests/test_mode_matrix.py` 가 2절·3절의 값을 리터럴로 들고 있다.
 

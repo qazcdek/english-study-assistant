@@ -60,7 +60,12 @@ def code_files() -> list[Path]:
     """주소를 들고 있을 수 있는 소스. 검사기 자신은 뺀다 — 설명문에 예시가 들어간다."""
     mine = {Path(__file__).resolve(), (Path(__file__).parent / "test_doc_references.py").resolve()}
     out = []
-    for pattern in ("backend/app/**/*.py", "backend/tests/**/*.py", "frontend/src/**/*.ts*"):
+    for pattern in (
+        "backend/app/**/*.py",
+        "backend/tests/**/*.py",
+        "backend/tools/**/*.py",
+        "frontend/src/**/*.ts*",
+    ):
         out += [p.resolve() for p in ROOT.glob(pattern) if _in_repo(p) and p.resolve() not in mine]
     return sorted(out)
 

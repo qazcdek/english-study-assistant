@@ -80,6 +80,8 @@ class Settings(BaseSettings):
         """이 모드에서 받는 입력 길이 상한.
 
         프론트는 이 값을 하드코딩하지 않고 `GET /api/config` 로 받아 쓴다.
+
+        [문서] 09-mode-matrix.md §3.1
         """
         return self.cloud_max_input_chars if self.is_cloud else self.local_max_input_chars
 

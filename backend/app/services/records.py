@@ -22,6 +22,8 @@ def upgrade(result: dict[str, Any]) -> dict[str, Any]:
     """읽어 온 기록을 현재 스키마로 올린다.
 
     버전이 없으면 모양을 보고 판단한다. 버전을 찍기 전에 저장된 기록이 있기 때문이다.
+
+    [문서] plan/ISSUES.md H-012
     """
     data = dict(result)
     version = data.get("schema_version", 0)

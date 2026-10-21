@@ -6,6 +6,8 @@
 고치려면 문서를 보게 된다.
 
 **여기를 고칠 때는 09-mode-matrix.md 도 같이 고친다.**
+
+[문서] 09-mode-matrix.md §6.2
 """
 
 import pytest

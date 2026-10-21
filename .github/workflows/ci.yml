@@ -41,6 +41,10 @@ jobs:
       - name: 문서 계층
         run: ./dev.sh docs
 
+      - name: 문서 → 코드 포인터
+        # 생성물이 문서와 어긋나면 실패한다. 고치는 법은 ./dev.sh ptr --write 하나뿐이다.
+        run: ./dev.sh ptr
+
   frontend:
     runs-on: ubuntu-latest
     steps:
