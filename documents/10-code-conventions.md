@@ -127,3 +127,6 @@ def _check_length(request: AnalyzeRequest) -> None:
 
 일하는 순서는 하나다 — **문서를 고치고 `./dev.sh ptr --write`.** CI 가
 `./dev.sh ptr` 로 생성물이 문서와 맞는지 보고, 어긋나면 실패한다.
+
+이런 검사·생성 도구를 **어떻게 만들고 어디에 등록하는지**는
+[12 도구 규약](12-tooling.md).

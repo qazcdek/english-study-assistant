@@ -68,6 +68,7 @@ CLAUDE.md                 메타 규약. 세션마다 자동으로 읽힌다
 |---|---|
 | [09-mode-matrix](09-mode-matrix.md) | **모드에 따라 갈리는 것을 바꿀 때 — 코드를 고치기 전에.** `test_mode_matrix.py` 가 이 표를 고정한다 |
 | [10-code-conventions](10-code-conventions.md) | **코드를 쓰기 전에.** CLAUDE.md 6절의 원칙을 값·파일명 수준으로 푼 곳 |
+| [12-tooling](12-tooling.md) | **검사·생성 도구를 만들거나 고칠 때 — 코드를 쓰기 전에** |
 
 ### 운영
 
