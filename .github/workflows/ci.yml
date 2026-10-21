@@ -1,0 +1,62 @@
+# PR 마다 검사를 강제한다. 지금까지는 전부 "기억해서 치는" 명령이었다 —
+# 부탁하면 안 지켜지고 강제하면 지켜진다 (11-docs-architecture.md §2.3).
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main, local]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    # 린트 · 테스트 · 문서 계층을 한 잡에서 본다. ./dev.sh docs 가 backend/.venv 의
+    # pytest 를 쓰므로 같은 venv 를 그대로 재사용한다.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: 의존성 설치
+        working-directory: backend
+        run: |
+          uv venv
+          uv pip install -e ".[dev]"
+
+      - name: ruff
+        working-directory: backend
+        run: .venv/bin/ruff check .
+
+      - name: pytest
+        working-directory: backend
+        # 외부 의존이 없다. LLM 프로바이더는 전부 가짜로 갈아 끼우고 DB 는 임시 SQLite 다.
+        run: .venv/bin/pytest -q
+
+      - name: 문서 계층
+        run: ./dev.sh docs
+
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: 의존성 설치
+        working-directory: frontend
+        run: npm ci
+
+      - name: 타입 검사와 빌드
+        working-directory: frontend
+        # build 가 `tsc -b && vite build` 라 타입 오류도 여기서 잡힌다.
+        run: npm run build

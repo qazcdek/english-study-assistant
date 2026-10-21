@@ -40,7 +40,7 @@
 - [ ] M1-T2  이용약관 · 개인정보처리방침
 - [ ] M1-T3  Alembic 마이그레이션 — 지금은 `create_all` 이라 컬럼 변경 시 수동 조치가 필요하다
 - [ ] M1-T4  에러 모니터링 (Sentry) — 지금은 배포본에서 터진 걸 알 방법이 없다
-- [ ] M1-T5  CI (GitHub Actions: ruff + pytest)
+- [x] M1-T5  CI — PR 마다 ruff · pytest · 문서 계층 · 프론트 빌드를 돌린다
 
 ## M2. 학습 사이클 완성
 
