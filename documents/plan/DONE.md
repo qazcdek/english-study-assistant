@@ -23,6 +23,23 @@
 
 ## 2026-10-21
 
+### M1-T5 · CI 에서 검사를 강제한다
+2026-10-21 · [`.github/workflows/ci.yml`](../../.github/workflows/ci.yml)
+
+- **무엇을** PR 마다, 그리고 `main`·`local` 로 푸시될 때마다 두 잡이 돈다.
+  **backend** — `ruff check` · `pytest` · `./dev.sh docs`.
+  **frontend** — `npm run build` (`tsc -b && vite build` 라 타입 오류도 여기서 잡힌다).
+- **왜** 지금까지 만든 장치가 전부 **기억해서 치는 명령**이었다. 문서 그래프도, 주소 검사도,
+  모드 행렬도 아무도 안 돌리면 없는 것과 같다. 11 §2.3 에 "부탁하면 안 지켜지고
+  강제하면 지켜진다" 고 적어 놓고, 정작 그 장치들을 거는 장치가 없었다.
+- **어떻게** 문서 검사는 `backend/.venv` 의 pytest 를 쓰므로 backend 잡 안에서
+  의존성을 한 번만 깔고 이어서 돌린다. 테스트는 외부 의존이 없다 — LLM 프로바이더는
+  전부 가짜로 갈아 끼우고 DB 는 임시 SQLite 라 llama-server 없이 돈다
+  (llama-server 를 내린 상태에서 109개 통과를 확인했다). 프론트 빌드도 로컬에서 먼저 돌려 봤다.
+- **남은 것** `backend/uv.lock` 이 아직 추적되지 않아 CI 가 매번 새로 해석한다.
+  재현성을 원하면 lock 을 커밋하고 `uv sync --locked` 로 바꾼다 — 사용자 판단.
+
+
 ### H-017 · 근거 문서 주소를 규약으로 못박고 양방향으로 검사한다
 2026-10-21 · [`backend/tests/test_doc_references.py`](../../backend/tests/test_doc_references.py) · [10 §7](../10-code-conventions.md)
 
