@@ -67,9 +67,21 @@ def test_wrapping_quotes_are_stripped():
     assert kept[0].example_ko == "그가 요약했다."
 
 
-def test_example_without_korean_prompt_is_dropped():
-    """작문 연습은 한국어 제시문이 있어야 가능하다. 짝이 안 맞으면 둘 다 버린다."""
+def test_an_example_without_a_korean_prompt_is_kept():
+    """한국어 제시문이 없으면 **연습만** 못 한다. 예문 자체는 멀쩡하므로 남긴다.
+
+    전에는 짝을 맞추려고 둘 다 버렸는데, 모든 표현이 그렇게 되면 화면에서
+    예문 칸과 연습 입구가 통째로 사라졌다 (H-019).
+    """
     kept = refine.clean_expressions([expr("sum up", example="He summed it up.")])
+
+    assert kept[0].example == "He summed it up."
+    assert kept[0].example_ko is None
+
+
+def test_a_korean_prompt_without_an_example_is_dropped():
+    """제시문만 있고 영어 문장이 없으면 쓸 데가 없다."""
+    kept = refine.clean_expressions([expr("sum up", example_ko="그가 요약했다.")])
 
     assert kept[0].example is None
     assert kept[0].example_ko is None

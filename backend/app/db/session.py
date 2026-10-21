@@ -1,4 +1,4 @@
-"""DB 엔진과 세션. cloud 모드에서만 초기화된다."""
+"""DB 엔진과 세션. **두 모드 모두** 쓴다 — local 은 docker Postgres, cloud 는 Neon."""
 
 from collections.abc import Iterator
 from contextlib import contextmanager
@@ -12,14 +12,28 @@ _engine: Engine | None = None
 _SessionLocal: sessionmaker[Session] | None = None
 
 
-def init_engine(database_url: str, *, create_all: bool = True) -> Engine:
+def normalize_url(database_url: str) -> str:
+    """Render/Neon 이 주는 `postgres://` 를 SQLAlchemy 2.x 가 아는 형태로 바꾼다.
+
+    엔진과 Alembic 이 **같은 변환**을 써야 한다. 한쪽만 고치면 마이그레이션이
+    다른 DB 를 보게 된다.
+    """
+    for prefix in ("postgres://", "postgresql://"):
+        if database_url.startswith(prefix):
+            return database_url.replace(prefix, "postgresql+psycopg://", 1)
+    return database_url
+
+
+def init_engine(database_url: str, *, create_all: bool = False) -> Engine:
+    """엔진을 만든다.
+
+    `create_all` 은 **기본으로 꺼져 있다.** 스키마는 Alembic 이 만든다
+    (`app/db/migrate.py`). 켜 두면 마이그레이션 없이도 테이블이 생겨
+    **둘이 어긋난 것을 아무도 모르게 된다.**
+    """
     global _engine, _SessionLocal
 
-    # Render/Neon 이 주는 postgres:// 를 SQLAlchemy 2.x 가 아는 형태로 바꾼다.
-    if database_url.startswith("postgres://"):
-        database_url = database_url.replace("postgres://", "postgresql+psycopg://", 1)
-    elif database_url.startswith("postgresql://"):
-        database_url = database_url.replace("postgresql://", "postgresql+psycopg://", 1)
+    database_url = normalize_url(database_url)
 
     kwargs: dict = {"pool_pre_ping": True}
     if database_url.startswith("sqlite"):

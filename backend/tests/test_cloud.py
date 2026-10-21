@@ -161,3 +161,40 @@ def test_reading_records_does_not_require_consent_or_key(cloud):
     assert cloud.get("/api/vocabulary").status_code == 200
     # 분석은 여전히 막힌다
     assert cloud.post("/api/analyze", json={"text": "a" * 30}).status_code == 403
+
+
+# ------------------------------------------------------------------------ 탈퇴
+
+
+def test_leaving_removes_the_account_and_its_data(cloud):
+    user_id = make_user()
+    login(cloud, user_id)
+    cloud.post("/api/analyze", json={"text": "across the pond"})
+
+    deleted = cloud.delete("/api/auth/account")
+    assert deleted.status_code == 200
+    assert deleted.json()["analyses"] == 1
+
+    with session_scope() as db:
+        assert db.get(User, user_id) is None
+
+    # 쿠키까지 지워지므로 같은 클라이언트로 더 못 들어간다.
+    assert cloud.get("/api/auth/me").status_code == 401
+
+
+def test_leaving_takes_the_encrypted_key_with_it(cloud):
+    """암호화된 Gemini 키는 계정 행에 있다. 따로 지우지 않아도 함께 사라져야 한다."""
+    user_id = make_user()
+    login(cloud, user_id)
+
+    with session_scope() as db:
+        assert db.get(User, user_id).encrypted_api_key
+
+    cloud.delete("/api/auth/account")
+
+    with session_scope() as db:
+        assert db.query(User).filter(User.id == user_id).count() == 0
+
+
+def test_leaving_requires_login(cloud):
+    assert cloud.delete("/api/auth/account").status_code == 401

@@ -34,6 +34,7 @@ MATRIX = {
         "daily_practice_limit": 0,
         "has_api_key_issue_url": False,
         "has_auth_routes": False,
+        "has_account_deletion": False,  # §3.6 지울 계정이 없다
         "shares_one_provider": True,  # 3.2 앱당 하나
     },
     "cloud": {
@@ -43,6 +44,7 @@ MATRIX = {
         "daily_practice_limit": DEFAULTS["daily_practice_limit"],
         "has_api_key_issue_url": True,
         "has_auth_routes": True,
+        "has_account_deletion": True,  # §3.6
         "shares_one_provider": False,  # 3.2 요청당 하나. 공유하면 남의 키로 호출된다
     },
 }
@@ -101,6 +103,19 @@ def test_auth_routes_exist_only_in_cloud(mode_app):
     mode, _app, client = mode_app
     exists = client.get("/api/auth/me").status_code != 404
     assert exists is MATRIX[mode]["has_auth_routes"]
+
+
+def test_leaving_exists_only_where_there_is_an_account_to_delete(mode_app):
+    """탈퇴는 `auth` 라우터에 있으므로 local 에서는 **경로 자체가 없다** (§3.6).
+
+    기록 삭제는 두 모드 공통이라 여기서 갈리지 않는다.
+    """
+    mode, _app, client = mode_app
+    assert (client.delete("/api/auth/account").status_code != 404) is MATRIX[mode][
+        "has_account_deletion"
+    ]
+    # 기록 삭제는 두 모드 모두 **경로가 있다.** cloud 는 로그인 전이라 401 이지 404 가 아니다.
+    assert client.delete("/api/account/data").status_code != 404, "기록 삭제는 두 모드 공통이다"
 
 
 def test_provider_lifetime_matches_the_matrix(mode_app):

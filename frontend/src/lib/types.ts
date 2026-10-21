@@ -192,6 +192,14 @@ export interface Usage {
   practice_limit: number
 }
 
+/** 무엇이 몇 건 지워졌는지 (또는 지워질 것인지). `GET`/`DELETE /api/account/data` 공통. */
+export interface DeletionSummary {
+  analyses: number
+  practices: number
+  vocabulary: number
+  usage_counters: number
+}
+
 export interface HistoryItem {
   id: number
   source_text: string

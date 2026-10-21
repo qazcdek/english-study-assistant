@@ -173,6 +173,17 @@ def _render(text: str, markers: list[str]) -> str:
     return "\n".join(kept)
 
 
+def _block(body_text: str, indent: str, quote: str) -> list[str]:
+    """docstring 한 덩이를 줄 목록으로. **만들 때와 고칠 때가 같은 모양을 내야 한다** —
+    다르면 `--write` 가 한 번에 수렴하지 않는다 (H-020)."""
+    if not body_text.strip():
+        return [f"{indent}{quote}{quote}"]
+    first, *rest = body_text.split("\n")
+    if not rest:  # 한 줄이면 한 줄 docstring 으로 둔다
+        return [f"{indent}{quote}{first.strip()}{quote}"]
+    return [f"{indent}{quote}{first.strip()}", *rest, f"{indent}{quote}"]
+
+
 def apply_to_file(path: Path, wanted: dict[str | None, list[str]]) -> str | None:
     """이 파일에 필요한 마커를 반영한 소스를 돌려준다. 바뀔 게 없으면 None."""
     source = path.read_text(encoding="utf-8")
@@ -186,13 +197,12 @@ def apply_to_file(path: Path, wanted: dict[str | None, list[str]]) -> str | None
         doc_expr = _docstring_node(node)
 
         if doc_expr is None:
-            if not markers:
-                continue
+            # docstring 이 없으면 만들어 붙인다. 만드는 모양은 고치는 모양과 같다.
             body = getattr(node, "body", [])
-            if not body:
+            if not markers or not body:
                 continue
             indent = " " * body[0].col_offset
-            block = [f'{indent}"""', *[f"{indent}{m}" for m in markers], f'{indent}"""']
+            block = _block(_render("", [f"{indent}{m}" for m in markers]), indent, '"""')
             edits.append((body[0].lineno - 1, body[0].lineno - 1, block))
             continue
 
@@ -200,16 +210,9 @@ def apply_to_file(path: Path, wanted: dict[str | None, list[str]]) -> str | None
         raw = "\n".join(lines[start:end])
         quote = '"""' if '"""' in raw else "'''"
         indent = " " * doc_expr.col_offset
-        inner = doc_expr.value.value
-        body_text = _render(inner, [f"{indent}{m}" for m in markers])
+        body_text = _render(doc_expr.value.value, [f"{indent}{m}" for m in markers])
 
-        if body_text.strip() and "\n" not in body_text.strip() and not markers:
-            block = [f"{indent}{quote}{body_text.strip()}{quote}"]
-        else:
-            first, *rest = body_text.split("\n") if body_text else [""]
-            block = [f"{indent}{quote}{first.lstrip() if not rest else first.strip()}"]
-            block += rest
-            block.append(f"{indent}{quote}")
+        block = _block(body_text, indent, quote)
         if block != lines[start:end]:
             edits.append((start, end, block))
 

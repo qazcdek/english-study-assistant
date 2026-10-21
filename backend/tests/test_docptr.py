@@ -114,7 +114,7 @@ def test_a_symbol_without_a_docstring_gets_one(repo):
     write(repo / "documents" / "01.md", "# 1. 문서\n\n`→ pkg/m.py::bare`\n")
     write(repo / "pkg" / "m.py", "def bare() -> None:\n    return None\n")
     docptr.run(write=True)
-    assert '    """\n    [문서] 01.md §1\n    """' in (repo / "pkg" / "m.py").read_text()
+    assert '    """[문서] 01.md §1"""' in (repo / "pkg" / "m.py").read_text()
 
 
 def test_examples_inside_code_blocks_are_not_pointers(repo):
@@ -126,3 +126,16 @@ def test_examples_inside_code_blocks_are_not_pointers(repo):
     write(repo / "pkg" / "m.py", SOURCE)
     assert docptr.run(write=True) == 0
     assert docptr.MARKER not in (repo / "pkg" / "m.py").read_text()
+
+
+def test_creating_a_docstring_converges_in_one_write(repo):
+    """만드는 모양과 고치는 모양이 다르면 `--write` 가 한 번에 끝나지 않는다.
+
+    실제로 그랬다 — 없던 docstring 은 세 줄로 만들고 있던 것은 두 줄로 고쳐서,
+    쓰고 나서도 검사가 계속 빨갰다 (H-020).
+    """
+    write(repo / "documents" / "01.md", "# 1. 문서\n\n`→ pkg/m.py::bare`\n")
+    write(repo / "pkg" / "m.py", "def bare() -> None:\n    return None\n")
+
+    assert docptr.run(write=True) == 0
+    assert docptr.run(write=False) == 0, "한 번 썼는데 아직 갱신이 필요하다고 한다"

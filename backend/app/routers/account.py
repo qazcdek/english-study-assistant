@@ -7,6 +7,7 @@ from app.db import AnalysisRecord, PracticeRecord, VocabularyItem
 from app.deps import DbDep, SessionUser
 from app.errors import AppError
 from app.schemas import (
+    DeletionSummary,
     HistoryDetail,
     HistoryItem,
     PracticeHistoryItem,
@@ -14,7 +15,7 @@ from app.schemas import (
     VocabularyCreate,
     VocabularyItemOut,
 )
-from app.services import records, usage
+from app.services import account, records, usage
 
 router = APIRouter(prefix="/api", tags=["account"])
 
@@ -183,3 +184,20 @@ def list_practice(
         )
         for r in rows
     ]
+
+
+@router.get("/account/data", response_model=DeletionSummary)
+def my_data_counts(user: SessionUser, db: DbDep) -> DeletionSummary:
+    """내 데이터가 몇 건인지. 지우기 전에 무엇이 사라지는지 보여주려고 있다."""
+    return DeletionSummary(**account.count_data(db, user.id))
+
+
+@router.delete("/account/data", response_model=DeletionSummary)
+def delete_my_data(user: SessionUser, db: DbDep) -> DeletionSummary:
+    """내가 쌓은 기록을 전부 지운다. **계정은 남는다.**
+
+    두 모드 공통이다 — 로컬에는 지울 계정이 없으므로 (09-mode-matrix.md §3.6).
+    """
+    deleted = account.purge_data(db, user.id)
+    db.commit()
+    return DeletionSummary(**deleted)

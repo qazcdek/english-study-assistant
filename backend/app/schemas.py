@@ -279,6 +279,15 @@ class UsageResponse(BaseModel):
     practice_limit: int
 
 
+class DeletionSummary(BaseModel):
+    """무엇이 몇 건 지워졌는지. 화면이 "N건을 지웠습니다" 로 쓴다."""
+
+    analyses: int
+    practices: int
+    vocabulary: int
+    usage_counters: int
+
+
 # --------------------------------------------------------------------------- 저장 데이터
 
 

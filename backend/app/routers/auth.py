@@ -13,7 +13,8 @@ from app.db.models import utcnow
 from app.deps import CipherDep, DbDep, SettingsDep, UserDep
 from app.errors import AppError
 from app.providers.gemini import verify_api_key
-from app.schemas import AccountResponse, ApiKeyRequest, ConsentRequest
+from app.schemas import AccountResponse, ApiKeyRequest, ConsentRequest, DeletionSummary
+from app.services import account
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
@@ -142,3 +143,18 @@ def delete_api_key(user: UserDep, db: DbDep) -> AccountResponse:
     user.api_key_hint = ""
     db.commit()
     return _account(user)
+
+
+@router.delete("/account", response_model=DeletionSummary)
+def delete_account(user: UserDep, db: DbDep, response: Response) -> DeletionSummary:
+    """탈퇴. 기록과 계정을 지우고 세션 쿠키까지 없앤다.
+
+    **이 라우터가 cloud 에서만 등록되므로** 로컬에서는 이 경로 자체가 없다.
+    모드 분기를 코드에 쓰지 않아도 되는 자리다 (09-mode-matrix.md §3.6).
+
+    암호화된 Gemini 키도 계정 행과 함께 사라진다. 따로 지울 필요가 없다.
+    """
+    deleted = account.delete_account(db, user.id)
+    db.commit()
+    response.delete_cookie(COOKIE_NAME, path="/")
+    return DeletionSummary(**deleted)

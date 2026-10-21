@@ -1,6 +1,7 @@
 import type {
   Account,
   AppConfig,
+  DeletionSummary,
   HealthResponse,
   HistoryDetail,
   HistoryItem,
@@ -187,3 +188,16 @@ export function addVocabulary(item: {
     body: JSON.stringify(item),
   })
 }
+
+// --- 데이터 삭제와 탈퇴 (03-api-spec.md) ---
+
+/** 지우기 전에 무엇이 몇 건 사라지는지. */
+export const getMyDataCounts = () => request<DeletionSummary>('/api/account/data')
+
+/** 기록 전부 삭제. 계정은 남는다 — 두 모드 공통. */
+export const purgeMyData = () =>
+  request<DeletionSummary>('/api/account/data', { method: 'DELETE' })
+
+/** 탈퇴. cloud 에만 있는 경로다 (09-mode-matrix.md §3.6). */
+export const leaveService = () =>
+  request<DeletionSummary>('/api/auth/account', { method: 'DELETE' })
