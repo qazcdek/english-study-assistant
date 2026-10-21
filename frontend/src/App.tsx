@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 
 import { HistoryList } from './components/HistoryList'
 import { InputPanel } from './components/InputPanel'
@@ -7,8 +7,15 @@ import { StatusBar } from './components/StatusBar'
 import { MIN_CHARS } from './components/InputPanel'
 import { Toast } from './components/Toast'
 import { initialState, reduce, type AnalysisState } from './lib/analysis'
-import { ApiError, analyzeStream, health as fetchHealth } from './lib/api'
-import { addEntry, loadHistory, removeEntry, type HistoryEntry } from './lib/history'
+import {
+  ApiError,
+  analyzeStream,
+  deleteHistory,
+  getHistoryDetail,
+  health as fetchHealth,
+  listHistory,
+} from './lib/api'
+import type { HistoryEntry } from './lib/history'
 import type { Level, LlmHealth } from './lib/types'
 
 export default function App() {
@@ -17,10 +24,27 @@ export default function App() {
   const [running, setRunning] = useState(false)
   const [error, setError] = useState<ApiError | null>(null)
   const [analysis, setAnalysis] = useState<AnalysisState | null>(null)
-  const [history, setHistory] = useState<HistoryEntry[]>(() => loadHistory())
+  const [history, setHistory] = useState<HistoryEntry[]>([])
   const [activeId, setActiveId] = useState<string | null>(null)
   const [llmHealth, setLlmHealth] = useState<LlmHealth | null>(null)
   const abortRef = useRef<AbortController | null>(null)
+
+  const reloadHistory = useCallback(async () => {
+    try {
+      const rows = await listHistory()
+      setHistory(
+        rows.map((r) => ({
+          id: String(r.id),
+          text: r.source_text,
+          createdAt: Date.parse(r.created_at) || Date.now(),
+          state: null,
+          level: r.level,
+        })),
+      )
+    } catch {
+      // 목록 갱신 실패로 분석 자체를 막을 필요는 없다.
+    }
+  }, [])
   // 같은 문구를 연달아 띄워도 다시 나타나야 해서, 띄운 시각을 key 로 쓴다.
   const [toast, setToast] = useState<{ message: string; at: number } | null>(null)
 
@@ -28,8 +52,9 @@ export default function App() {
     fetchHealth()
       .then((h) => setLlmHealth(h.llm))
       .catch(() => setLlmHealth({ reachable: false, base_url: '백엔드 미응답', models: [] }))
+    void reloadHistory()
     return () => abortRef.current?.abort()
-  }, [])
+  }, [reloadHistory])
 
   async function handleSubmit() {
     const trimmed = text.trim()
@@ -56,9 +81,7 @@ export default function App() {
         controller.signal,
       )
       if (!controller.signal.aborted) {
-        const next = addEntry(history, state, level)
-        setHistory(next)
-        setActiveId(next[0]?.id ?? null)
+        await reloadHistory()
       }
     } catch (e) {
       setError(e instanceof ApiError ? e : new ApiError('unknown', '알 수 없는 오류입니다.'))
@@ -68,8 +91,14 @@ export default function App() {
     }
   }
 
-  function handleDeleteHistory(entry: HistoryEntry) {
-    setHistory(removeEntry(history, entry.id))
+  async function handleDeleteHistory(entry: HistoryEntry) {
+    try {
+      await deleteHistory(Number(entry.id))
+    } catch (e) {
+      setError(e instanceof ApiError ? e : new ApiError('unknown', '삭제하지 못했습니다.'))
+      return
+    }
+    await reloadHistory()
     // 보고 있던 항목을 지웠다면 결과 화면도 비운다.
     if (entry.id === activeId) {
       setActiveId(null)
@@ -77,13 +106,30 @@ export default function App() {
     }
   }
 
-  function handleSelectHistory(entry: HistoryEntry) {
+  async function handleSelectHistory(entry: HistoryEntry) {
     abortRef.current?.abort()
     setRunning(false)
     setText(entry.text)
-    setAnalysis(entry.state)
     setActiveId(entry.id)
     setError(null)
+
+    // 목록에는 본문이 없다. 고를 때 가져온다.
+    try {
+      const detail = await getHistoryDetail(Number(entry.id))
+      setAnalysis({
+        result: detail.result,
+        markdown: detail.markdown,
+        fullMarkdown: detail.markdown.full,
+        status: {
+          translation: { state: 'done' },
+          expressions: { state: 'done' },
+          structures: { state: 'done' },
+          overview: { state: 'done' },
+        },
+      })
+    } catch {
+      setError(new ApiError('unknown', '기록을 불러오지 못했습니다.'))
+    }
   }
 
   return (

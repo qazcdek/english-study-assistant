@@ -162,3 +162,18 @@ export interface PracticeResponse {
   model_answer: string
   meta: AnalyzeMeta
 }
+
+// --- 분석 기록 (서버 저장) ---
+
+export interface HistoryItem {
+  id: number
+  source_text: string
+  level: Level
+  created_at: string
+  failed_parts: string[]
+}
+
+export interface HistoryDetail extends HistoryItem {
+  result: AnalysisResult
+  markdown: MarkdownSections
+}

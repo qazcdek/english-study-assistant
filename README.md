@@ -11,7 +11,8 @@
 
 ```
 eng_study/
-├── dev.sh       개발 서버 실행 스크립트
+├── dev.sh        개발 서버 실행 스크립트
+├── compose.yaml  로컬 Postgres (15432)
 ├── documents/   기획·설계 문서
 ├── backend/     FastAPI + llama-server 프로바이더
 └── frontend/    React + Vite + TypeScript
@@ -25,7 +26,7 @@ llama-server 를 먼저 띄운 뒤 (아래 1절):
 ./dev.sh
 ```
 
-의존성 설치, `.env` 생성, 백엔드 + 프론트엔드 실행을 한 번에 처리한다.
+의존성 설치, `.env` 생성, **Postgres 컨테이너 기동**, 백엔드 + 프론트엔드 실행을 한 번에 처리한다.
 뜨고 나면 **http://localhost:5173** 으로 접속한다.
 
 ### 종료
@@ -47,7 +48,8 @@ llama-server 를 먼저 띄운 뒤 (아래 1절):
 | `./dev.sh` | 백엔드 + 프론트엔드 동시 실행 |
 | `./dev.sh backend` | 백엔드만 (`http://127.0.0.1:8000/docs`) |
 | `./dev.sh frontend` | 프론트엔드만 |
-| `./dev.sh stop` | 떠 있는 서버를 내린다 |
+| `./dev.sh db` | Postgres 컨테이너만 띄운다 |
+| `./dev.sh stop` | 떠 있는 서버를 내린다 (DB 컨테이너는 그대로 둔다) |
 | `./dev.sh status` | 무엇이 떠 있는지 + llama-server 연결 상태 |
 | `./dev.sh check` | llama-server 연결만 확인하고 종료 |
 
@@ -82,6 +84,22 @@ JSON 스키마 강제는 llama-server가 GBNF로 처리하므로 function callin
 > 본문이 빈 문자열로 돌아온다. 기본값 `LLM_ENABLE_THINKING=false` 가 이를 막는다
 > (프로바이더가 `chat_template_kwargs.enable_thinking` 로 전달).
 > 굳이 켜려면 `LLM_MAX_TOKENS` 를 16384 이상으로 올린다.
+
+## 1.5. 분석 기록 저장소
+
+분석 기록은 **Postgres** 에 남는다. `compose.yaml` 이 컨테이너를 띄우고 `dev.sh` 가 관리한다.
+
+```bash
+docker compose up -d     # ./dev.sh 가 알아서 한다
+docker compose down      # 컨테이너를 내린다 (데이터는 볼륨에 남는다)
+docker compose down -v   # 데이터까지 지운다
+```
+
+**포트는 15432** 다. 기본 포트(5432)를 쓰면 이미 깔려 있는 Postgres 와 부딪히므로 앞에 1 을 붙였다.
+
+전에는 브라우저 localStorage 에 두었는데, 원문 텍스트를 중복 판정 기준으로 써서
+**같은 문장을 난이도만 바꿔 다시 분석하면 이전 결과가 덮였다.** 난이도를 바꿔 가며
+같은 문단을 비교하는 것이 이 도구의 쓰임이라 그대로 둘 수 없었다.
 
 ## 2. 백엔드 (수동 실행)
 

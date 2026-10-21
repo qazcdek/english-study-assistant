@@ -20,6 +20,10 @@ class Settings(BaseSettings):
     llm_enable_thinking: bool | None = False
     llm_json_mode: Literal["json_schema", "json_object", "none"] = "json_schema"
 
+    # --- 저장소 ---
+    # compose.yaml 이 띄우는 Postgres. 기본 포트(5432)와 부딪히지 않게 15432 를 쓴다.
+    database_url: str = "postgresql+psycopg://eng:eng@127.0.0.1:15432/eng_study"
+
     # --- HTTP ---
     cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173"
 

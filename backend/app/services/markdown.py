@@ -69,7 +69,9 @@ def render_structures(structures: list[StructureNote]) -> str:
     for i, s in enumerate(structures):
         if i:
             lines.append("")
-        lines.append(f"* **{s.fragment.strip()}** — {s.name.strip()}")
+        # 구문 해설이 한 칸이던 시절의 기록에는 이름이 없다.
+        name = s.name.strip()
+        lines.append(f"* **{s.fragment.strip()}**" + (f" — {name}" if name else ""))
         lines.append(f"  * {_one_line(s.role)}")
         if s.rewrite.strip():
             lines.append(f"  * 쉽게 쓰면: `{_one_line(s.rewrite)}`")
@@ -83,14 +85,15 @@ def render_overview(overview: Overview | None) -> str:
     if overview is None:
         return f"### 총평\n\n{FAILED_NOTE}"
 
-    lines = [
-        "### 총평",
-        "",
-        f"* **분야**: {overview.domain}",
-        f"* **톤**: {overview.tone}",
-        f"* **격식 수준**: {overview.formality}",
-        f"* **문체**: {overview.style}",
-    ]
+    # 값이 비면 줄 자체를 넣지 않는다. 옛 기록에는 없는 칸이 있다.
+    rows = (
+        ("분야", overview.domain),
+        ("톤", overview.tone),
+        ("격식 수준", overview.formality),
+        ("문체", overview.style),
+    )
+    lines = ["### 총평", ""]
+    lines += [f"* **{label}**: {value.strip()}" for label, value in rows if value.strip()]
     if overview.key_expressions:
         picked = ", ".join(f"`{e}`" for e in overview.key_expressions)
         lines += ["", f"**꼭 챙길 표현**: {picked}"]

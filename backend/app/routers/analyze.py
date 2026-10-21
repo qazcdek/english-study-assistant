@@ -5,16 +5,19 @@ from fastapi import APIRouter
 from fastapi.responses import StreamingResponse
 
 from app.config import get_settings
-from app.deps import AnalyzerDep, PracticeDep, ProviderDep
+from app.db import AnalysisRecord
+from app.deps import AnalyzerDep, DbDep, PracticeDep, ProviderDep, UserDep
 from app.errors import LLMError
 from app.schemas import (
     AnalyzeRequest,
     AnalyzeResponse,
+    DoneEvent,
     HealthResponse,
     LLMHealth,
     PracticeRequest,
     PracticeResponse,
 )
+from app.services import records
 from app.services.analyzer import AnalyzerService
 
 router = APIRouter(prefix="/api", tags=["analyze"])
@@ -35,15 +38,43 @@ async def health(provider: ProviderDep) -> HealthResponse:
     )
 
 
+def _save(db, user, request: AnalyzeRequest, response: AnalyzeResponse) -> None:
+    db.add(
+        AnalysisRecord(
+            user_id=user.id,
+            source_text=request.text,
+            level=request.level,
+            result=records.stamp(response.result.model_dump()),
+            markdown=response.markdown.model_dump(),
+            failed_parts=response.meta.failed_parts,
+            elapsed_ms=response.meta.elapsed_ms,
+        )
+    )
+    db.commit()
+
+
 @router.post("/analyze", response_model=AnalyzeResponse)
-async def analyze(request: AnalyzeRequest, analyzer: AnalyzerDep) -> AnalyzeResponse:
+async def analyze(
+    request: AnalyzeRequest, analyzer: AnalyzerDep, db: DbDep, user: UserDep
+) -> AnalyzeResponse:
     """네 파트를 모두 끝낸 뒤 한 번에 돌려준다."""
-    return await analyzer.analyze(request)
+    response = await analyzer.analyze(request)
+    _save(db, user, request, response)
+    return response
 
 
-async def _sse(analyzer: AnalyzerService, request: AnalyzeRequest) -> AsyncIterator[str]:
+async def _sse(
+    analyzer: AnalyzerService, request: AnalyzeRequest, db, user
+) -> AsyncIterator[str]:
     try:
         async for event in analyzer.stream(request):
+            if isinstance(event, DoneEvent):
+                _save(
+                    db,
+                    user,
+                    request,
+                    AnalyzeResponse(result=event.result, markdown=event.markdown, meta=event.meta),
+                )
             yield f"data: {event.model_dump_json()}\n\n"
     except LLMError as exc:
         payload = {"type": "error", "code": exc.code, "message": exc.message, "detail": exc.detail}
@@ -51,7 +82,9 @@ async def _sse(analyzer: AnalyzerService, request: AnalyzeRequest) -> AsyncItera
 
 
 @router.post("/analyze/stream")
-async def analyze_stream(request: AnalyzeRequest, analyzer: AnalyzerDep) -> StreamingResponse:
+async def analyze_stream(
+    request: AnalyzeRequest, analyzer: AnalyzerDep, db: DbDep, user: UserDep
+) -> StreamingResponse:
     """파트가 완성되는 대로 SSE 로 흘려보낸다.
 
     이벤트 종류: `part` · `part_error` · `done` · `error`.
@@ -59,7 +92,7 @@ async def analyze_stream(request: AnalyzeRequest, analyzer: AnalyzerDep) -> Stre
     (연결 불가·타임아웃처럼 이어가도 소용없는 경우는 제외).
     """
     return StreamingResponse(
-        _sse(analyzer, request),
+        _sse(analyzer, request, db, user),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",
