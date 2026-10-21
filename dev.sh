@@ -135,24 +135,25 @@ setup_frontend() {
 }
 
 check_docs() {
-  # 문서 계층이 성한지 본다: 끊긴 링크 · 머리말 누락 · 색인에 없는 문서.
+  # 문서 계층이 성한지 본다: 링크 그래프 · 머리말 누락 · 색인에 없는 문서 · 태그 정합성.
   # 규약은 documents/00-index.md 4절, 꼭대기는 CLAUDE.md 다.
   local index="$ROOT/documents/00-index.md" bad=0
 
-  # 1) 끊긴 상대 링크
-  while IFS= read -r line; do
-    local src="${line%%:*}" target="${line#*:}"
-    local dir; dir="$(dirname "$src")"
-    [[ -e "$dir/$target" ]] || { warn "끊긴 링크  ${src#$ROOT/} → $target"; bad=1; }
-  done < <(
-    find "$ROOT" -name '*.md' -not -path '*/node_modules/*' -not -path '*/.venv/*' \
-         -not -path '*/.pytest_cache/*' -print0 |
-      while IFS= read -r -d '' f; do
-        grep -oE '\]\([^):]+\.md' "$f" | sed -E 's/^\]\(//' | while read -r t; do
-          printf '%s:%s\n' "$f" "$t"
-        done
-      done
-  )
+  # 1) 링크 그래프 — 끊긴 링크와, 꼭대기(CLAUDE.md)에서 걸어서 닿는지.
+  #    글자만 보는 검사로는 못 잡는다. CLAUDE.md 에서 색인으로 가는 링크를 지워도
+  #    각 문서는 여전히 `위` 를 달고 색인에도 적혀 있어 아래 2·3 은 전부 통과한다.
+  #    구현은 backend/tests/test_docs_graph.py 한 곳에만 둔다 (11 3.1).
+  if [[ -x "$BACKEND/.venv/bin/pytest" ]]; then
+    local out; out="$(cd "$BACKEND" && .venv/bin/pytest tests/test_docs_graph.py \
+                        -q -p no:cacheprovider --no-header 2>&1)" || {
+      printf '%s\n' "$out" | sed -n 's/^E *//p' | grep -v '^assert ' |
+        while IFS= read -r l; do warn "$l"; done
+      bad=1
+    }
+  else
+    warn "링크 그래프를 검사하지 못했습니다 — ./dev.sh backend 로 의존성을 먼저 설치하세요."
+    bad=1
+  fi
 
   # 2) 표준 머리말 (층 / 위) — documents/ 아래 전부
   for f in "$ROOT"/documents/*.md "$ROOT"/documents/plan/*.md; do
@@ -184,7 +185,7 @@ check_docs() {
   )
 
   if [[ $bad -eq 0 ]]; then
-    ok "문서 계층 이상 없음 ${DIM}(링크 · 머리말 · 색인 · 태그)${RESET}"
+    ok "문서 계층 이상 없음 ${DIM}(그래프 · 머리말 · 색인 · 태그)${RESET}"
   else
     die "문서 계층에 문제가 있습니다. 규약은 documents/00-index.md 4절."
   fi
