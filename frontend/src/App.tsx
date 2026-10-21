@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { AccountBar } from './components/AccountBar'
 import { ApiKeyPanel } from './components/ApiKeyPanel'
 import { ConsentPanel } from './components/ConsentPanel'
+import { DataMenu } from './components/DataMenu'
 import { HistoryList } from './components/HistoryList'
 import { InputPanel } from './components/InputPanel'
 import { LoginPanel } from './components/LoginPanel'
@@ -185,6 +186,7 @@ export default function App() {
         </p>
         <div className="ml-auto flex items-center gap-3">
           {!cloud && <StatusBar health={llmHealth} />}
+          {!cloud && ready && <DataMenu />}
           {cloud && session.account && (
             <AccountBar
               account={session.account}

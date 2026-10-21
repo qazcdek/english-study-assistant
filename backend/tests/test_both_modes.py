@@ -104,3 +104,31 @@ def test_history_entry_can_be_deleted(both_modes):
     assert api.client.get("/api/history").json() == []
     # 지워진 기록은 400 을 낸다. 404 가 맞지만 지금 동작을 그대로 고정해 둔다 (H-012).
     assert api.client.get(f"/api/history/{record_id}").status_code == 400
+
+
+def test_my_data_can_be_counted_and_purged(both_modes):
+    """모으는 기능만 있고 지우는 수단이 없으면 회원은 자기 데이터를 회수할 수 없다."""
+    api = both_modes
+    api.client.post("/api/analyze", json={"text": "across the pond"})
+    api.client.post("/api/vocabulary", json={"expression": "sum up", "meaning": "요약하다"})
+
+    before = api.client.get("/api/account/data").json()
+    assert before["analyses"] == 1 and before["vocabulary"] == 1
+    # 사용량 집계는 cloud 에서만 쌓인다 (09-mode-matrix.md §3.3).
+    assert before["usage_counters"] == (1 if api.mode == "cloud" else 0)
+
+    deleted = api.client.delete("/api/account/data").json()
+    assert deleted == before
+
+    assert api.client.get("/api/history").json() == []
+    assert api.client.get("/api/vocabulary").json() == []
+    assert api.client.get("/api/account/data").json()["analyses"] == 0
+
+
+def test_purging_data_keeps_the_account_usable(both_modes):
+    """계정은 남아야 한다. 로컬은 사용자 행을 지우면 다음 요청이 깨진다."""
+    api = both_modes
+    api.client.post("/api/analyze", json={"text": "across the pond"})
+    api.client.delete("/api/account/data")
+
+    assert api.client.post("/api/analyze", json={"text": "across the pond"}).status_code == 200

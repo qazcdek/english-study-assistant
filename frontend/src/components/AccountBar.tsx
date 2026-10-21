@@ -2,6 +2,7 @@ import { useState } from 'react'
 
 import { logout, removeApiKey } from '../lib/api'
 import type { Account, Usage } from '../lib/types'
+import { DataPanel } from './DataPanel'
 
 interface Props {
   account: Account
@@ -69,6 +70,10 @@ export function AccountBar({ account, usage, onChanged }: Props) {
             이 한도는 이 서비스가 두는 안전장치입니다. 실제 호출은 회원님 Gemini 한도에서
             차감됩니다.
           </p>
+
+          <div className="mt-3 border-t border-stone-100 pt-3 dark:border-stone-800">
+            <DataPanel cloud />
+          </div>
 
           <div className="mt-3 flex gap-2 border-t border-stone-100 pt-3 dark:border-stone-800">
             <button
