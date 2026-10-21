@@ -59,6 +59,9 @@ llama-server 를 먼저 띄운 뒤 (아래 1절):
 | `./dev.sh frontend` | 프론트엔드만 |
 | `./dev.sh stop` | 떠 있는 서버를 내린다 |
 | `./dev.sh status` | 무엇이 떠 있는지 + llama-server 연결 상태 |
+| `./dev.sh next` | 열린 작업을 모아 본다 (`./dev.sh next M2` 로 좁힌다) |
+| `./dev.sh docs` | 문서 계층 점검 (그래프 · 주소 · 머리말 · 색인 · 태그) |
+| `./dev.sh ptr` | 문서 → 코드 포인터 점검 (`--write` 로 코드 쪽 갱신) |
 | `./dev.sh check` | llama-server 연결만 확인하고 종료 |
 
 포트를 바꾸려면 `BACKEND_PORT=9000 FRONTEND_PORT=3000 ./dev.sh`.

@@ -9,7 +9,9 @@
 #   ./dev.sh stop         다른 데서 띄워 둔 서버를 내린다 (DB 컨테이너는 그대로 둔다)
 #   ./dev.sh db           Postgres 컨테이너만 띄운다
 #   ./dev.sh status       지금 뭐가 떠 있는지 본다
-#   ./dev.sh docs         문서 계층 점검 (끊긴 링크 · 머리말 · 색인)
+#   ./dev.sh next         열린 작업을 모아 본다 (./dev.sh next M2 처럼 좁힐 수 있다)
+#   ./dev.sh docs         문서 계층 점검 (그래프 · 주소 · 머리말 · 색인 · 태그)
+#   ./dev.sh ptr          문서 → 코드 포인터 점검 (--write 로 코드 쪽을 갱신)
 #   ./dev.sh check        llama-server 연결만 확인하고 종료
 #
 # 모드는 앞에 붙여도 된다: ./dev.sh cloud backend
@@ -323,6 +325,12 @@ main() {
     docs)
       check_docs
       ;;
+    next|todo)
+      # 열린 작업(ROADMAP + ISSUES)을 한 곳에 모아 본다. 인자로 태그 접두사를 좁힐 수 있다.
+      [[ -x "$BACKEND/.venv/bin/python" ]] || die "먼저 ./dev.sh backend 로 의존성을 설치하세요."
+      shift
+      (cd "$BACKEND" && .venv/bin/python tools/tasks.py "$@")
+      ;;
     ptr)
       # 문서 → 코드 포인터를 코드 docstring 에 반영한다. 인자 없이 쓰면 검사만 한다.
       [[ -x "$BACKEND/.venv/bin/python" ]] || die "먼저 ./dev.sh backend 로 의존성을 설치하세요."
@@ -368,10 +376,10 @@ main() {
       wait
       ;;
     -h|--help|help)
-      sed -n '3,18p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
+      sed -n '3,20p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
       ;;
     *)
-      die "알 수 없는 인자: $1  (cloud | backend | frontend | db | docs | ptr | stop | status | check | help)"
+      die "알 수 없는 인자: $1  (cloud | backend | frontend | db | docs | ptr | next | stop | status | check | help)"
       ;;
   esac
 }
