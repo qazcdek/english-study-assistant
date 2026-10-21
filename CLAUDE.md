@@ -14,6 +14,13 @@ LLM 으로 영어 문장을 분석해 **번역 · 표현 풀이 · 문장 구조
 **모드별로 갈리는 것은 전부 [09-mode-matrix.md](documents/09-mode-matrix.md) 에 모여 있다.
 한쪽만 고치면 다른 쪽이 조용히 어긋난다 — 모드 관련 변경 전에 먼저 읽는다.**
 
+모드를 건드렸으면 **세 가지를 함께** 한다 ([09 6절](documents/09-mode-matrix.md)):
+
+1. 공통 기능이면 테스트를 `tests/test_both_modes.py` 에 `both_modes` 픽스처로 쓴다
+   — 두 모드에서 각각 돈다. 모드 전용만 `tests/test_cloud.py` 로 간다.
+2. 09 의 표에 있는 값을 바꿨으면 **문서와 `tests/test_mode_matrix.py` 를 함께** 고친다.
+3. `./dev.sh cloud` 로 띄워서 눈으로 본다. **cloud 를 띄워 보지 않고 머지하지 않는다.**
+
 ## 작업 절차
 
 1. **시작 전** — [ROADMAP](documents/plan/ROADMAP.md) 과 [ISSUES](documents/plan/ISSUES.md) 를 읽고,
@@ -31,7 +38,8 @@ LLM 으로 영어 문장을 분석해 **번역 · 표현 풀이 · 문장 구조
 ## 명령
 
 ```bash
-./dev.sh              # 백엔드 + 프론트엔드 (llama-server 를 먼저 띄울 것)
+./dev.sh              # local 모드 — 백엔드 + 프론트엔드 (llama-server 를 먼저 띄울 것)
+./dev.sh cloud        # cloud 모드 — .env.cloud 로 웹 배포와 같은 구성
 ./dev.sh stop         # 내리기
 ./dev.sh status       # 떠 있는 것 + llama-server 연결 상태
 ./dev.sh db           # 로컬 Postgres (docker, 15432 포트)

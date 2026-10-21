@@ -1,4 +1,5 @@
 import json
+from contextlib import contextmanager
 
 import pytest
 from fastapi.testclient import TestClient
@@ -11,10 +12,17 @@ from tests.fake_provider import FakeProvider
 
 @pytest.fixture
 def make_client():
+    @contextmanager
     def _make(provider: FakeProvider | None = None):
+        fake = provider or FakeProvider()
         app = create_app()
-        app.dependency_overrides[get_provider] = lambda: provider or FakeProvider()
-        return TestClient(app)
+        app.dependency_overrides[get_provider] = lambda: fake
+        with TestClient(app) as client:
+            # /api/health 는 의존성이 아니라 app.state.provider 를 직접 읽는다. lifespan 이
+            # 진짜 프로바이더를 넣으므로 뜬 뒤에 갈아끼운다. 안 하면 테스트가 실제
+            # llama-server 를 찾아가 띄워져 있는지에 따라 결과가 갈린다 (H-013).
+            app.state.provider = fake
+            yield client
 
     return _make
 

@@ -53,7 +53,8 @@ llama-server 를 먼저 띄운 뒤 (아래 1절):
 
 | 명령 | 하는 일 |
 |---|---|
-| `./dev.sh` | 백엔드 + 프론트엔드 동시 실행 |
+| `./dev.sh` | 백엔드 + 프론트엔드 동시 실행 (local 모드) |
+| `./dev.sh cloud` | 웹 배포와 같은 cloud 모드로 띄운다 (`.env.cloud`) |
 | `./dev.sh backend` | 백엔드만 (`http://127.0.0.1:8000/docs`) |
 | `./dev.sh frontend` | 프론트엔드만 |
 | `./dev.sh stop` | 떠 있는 서버를 내린다 |

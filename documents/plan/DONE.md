@@ -17,6 +17,73 @@
 
 ---
 
+## 2026-10-21
+
+### M4-T1 · 공통 기능 테스트를 두 모드에서 돌린다
+2026-10-21 · [09-mode-matrix.md 6.1](../09-mode-matrix.md)
+
+- **무엇을** `both_modes` 픽스처를 만들어 공통 기능 테스트가 local 과 cloud 에서 각각 돈다.
+  테스트 80 → 100개, 전부 통과.
+- **왜** 한 코드베이스로 합쳤는데 **테스트는 합치기 전 구조 그대로였다.** 80개 중 64개가
+  기본값(local)으로만 돌았고, 기록 저장·단어장·옛 기록 호환·스키마 버전은 `test_cloud.py`
+  안에만 있어서 **local 이 깨져도 잡히지 않았다.** 실제로 H-002 는 두 모드 모두의
+  버그였는데 PR #10, #11 로 따로 고쳤다. 통합의 목적이 그 반복을 끝내는 것이었다.
+- **어떻게** `tests/modes.py` 에 모드별 환경 세팅과 "그 모드의 요청 주인" 준비를 모으고
+  (local 은 `id=1`, cloud 는 동의·키 등록까지 끝낸 회원 + 쿠키),
+  `tests/conftest.py` 의 `both_modes` 가 `Api(client, mode, user_id)` 로 넘긴다.
+  공통 4건을 `tests/test_both_modes.py` 로 옮기고 히스토리 삭제 테스트를 더했다.
+- **남은 것** 없음.
+
+### M4-T2 · 09-mode-matrix 의 표를 테스트로 고정한다
+2026-10-21 · [09-mode-matrix.md 6.2](../09-mode-matrix.md)
+
+- **무엇을** `tests/test_mode_matrix.py` 가 문서 2·3절의 값을 리터럴로 들고 검증한다.
+  문서 기본값 vs `Settings.model_fields[...].default`, 두 모드의 `/api/config`,
+  auth 라우트 유무, 프로바이더 수명, CORS 자격증명.
+- **왜** 문서를 **설명에서 명세로** 바꾸기 위해서다. 값을 바꾸면 테스트가 깨지고,
+  고치려면 문서를 보게 된다. 사람이 챙기는 방식은 이미 실패했다 (H-011).
+- **어떻게** 개발자의 `.env` 에 흔들리지 않도록 두 층으로 나눴다 —
+  기본값 비교는 인스턴스가 아니라 **클래스 필드의 default** 를 보고,
+  배선 검증은 문서가 규정한 값을 환경변수로 못박은 뒤 띄워서 본다.
+  FastAPI 가 라우터를 지연 등록해 `app.routes` 에 안 보이므로 라우트 유무는 **응답**으로 본다.
+- **남은 것** 없음.
+
+### M4-T3 · ./dev.sh cloud 로 cloud 를 로컬에서 띄운다
+2026-10-21 · [09-mode-matrix.md 6.3](../09-mode-matrix.md)
+
+- **무엇을** `./dev.sh cloud` (와 `./dev.sh cloud backend|status|…`) 를 더했다.
+- **왜** `dev.sh` 에 모드 개념이 없어서 **cloud 는 Render 에 올려야 확인됐다.**
+  문서가 권하던 `set -a && . ./.env.cloud` 수동 절차는 아무도 안 한다.
+- **어떻게** `uvicorn --env-file .env.cloud` 로 넘긴다. 그 값이 `os.environ` 에 올라가
+  pydantic-settings 의 `.env` 보다 우선하므로 **코드를 고치지 않아도 된다.**
+  llama-server 확인은 local 에서만, docker Postgres 는 `DATABASE_URL` 이 15432 를
+  가리킬 때만 띄운다. cloud 로 띄울 때 `.env.cloud` 의 필수 키가 비면 멈춘다.
+- **확인** 8099 포트로 양쪽을 실제로 띄워 `/api/config` 가 매트릭스와 일치함을 봤다
+  (cloud: requires_login=true, 800자, 60/200 · local: false, 2000자, 0/0, auth 404).
+- **남은 것** 없음.
+
+### H-011 · 통합 후에도 "local 은 DB 가 없다" 는 주석이 남아 있었다
+2026-10-21
+
+- **무엇을** 세 곳을 고쳤다 — `config.py` 의 모듈 docstring, `# --- 저장소 (cloud) ---`
+  섹션 머리, `db/session.py` 의 "APP_MODE=cloud 인지 확인하세요" 오류 메시지.
+- **왜** 통합 커밋에서 `main.py` 에는 "두 모드 모두 DB 에 남긴다" 고 제대로 적혔는데
+  나머지 세 곳은 안 고쳐졌다. **커밋 하나 만에 문서와 코드가 어긋난 것**이고,
+  이게 M4 가 선언이 아니라 장치여야 하는 이유다.
+- **남은 것** 없음. 재발 방지는 M4-T2 가 맡는다.
+
+### H-013 · test_health 가 실제 llama-server 를 찾아갔다
+2026-10-21
+
+- **무엇을** `tests/test_api.py` 의 픽스처가 앱이 뜬 뒤 `app.state.provider` 를
+  FakeProvider 로 갈아끼운다.
+- **왜** `/api/health` 는 의존성이 아니라 `app.state.provider` 를 직접 읽어서
+  `dependency_overrides` 가 안 먹었다. **llama-server 가 떠 있으면 통과하고 없으면
+  실패하는** 테스트였다. M4-T1 작업 중 clean 트리에서도 실패해 드러났다.
+- **어떻게** `make_client` 를 contextmanager 로 바꿔 `TestClient` 진입 뒤
+  (= lifespan 이 진짜 프로바이더를 넣은 뒤) 갈아끼운다.
+- **남은 것** `/api/health` 가 의존성을 쓰도록 고치는 쪽이 더 깔끔하다. 지금은 안 건드렸다.
+
 ## 2026-09-21
 
 ### M0-T10 · 로컬과 웹을 한 코드베이스로 통합
