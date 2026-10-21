@@ -2,13 +2,17 @@
 #
 # 개발 서버 실행 스크립트.
 #
-#   ./dev.sh              백엔드 + 프론트엔드 동시 실행
+#   ./dev.sh              백엔드 + 프론트엔드 동시 실행 (local 모드)
+#   ./dev.sh cloud        웹 배포와 같은 cloud 모드로 띄운다 (.env.cloud 사용)
 #   ./dev.sh backend      백엔드만
 #   ./dev.sh frontend     프론트엔드만
 #   ./dev.sh stop         다른 데서 띄워 둔 서버를 내린다 (DB 컨테이너는 그대로 둔다)
 #   ./dev.sh db           Postgres 컨테이너만 띄운다
 #   ./dev.sh status       지금 뭐가 떠 있는지 본다
+#   ./dev.sh docs         문서 계층 점검 (끊긴 링크 · 머리말 · 색인)
 #   ./dev.sh check        llama-server 연결만 확인하고 종료
+#
+# 모드는 앞에 붙여도 된다: ./dev.sh cloud backend
 #
 # 처음 실행하면 venv 생성, 의존성 설치, .env 복사까지 알아서 한다.
 # 터미널에 붙여 띄웠다면 Ctrl+C, 백그라운드로 돌렸다면 ./dev.sh stop 으로 내린다.
@@ -21,6 +25,15 @@ FRONTEND="$ROOT/frontend"
 BACKEND_PORT="${BACKEND_PORT:-8000}"
 FRONTEND_PORT="${FRONTEND_PORT:-5173}"
 PIDFILE="$ROOT/.dev.pid"
+
+# 어느 모드로 띄울지. cloud 는 웹 배포와 같은 구성(로그인 + 회원 Gemini 키)으로 돈다.
+# 띄워 보지 않고 머지하면 cloud 쪽 회귀를 Render 에 올려야 발견하게 된다 (09-mode-matrix.md).
+MODE="${APP_MODE:-local}"
+if [[ "${1:-}" == "cloud" || "${1:-}" == "local" ]]; then
+  MODE="$1"; shift
+fi
+ENV_FILE="$BACKEND/.env"
+[[ "$MODE" == "cloud" ]] && ENV_FILE="$BACKEND/.env.cloud"
 
 if [[ -t 1 ]]; then
   BOLD=$'\e[1m'; DIM=$'\e[2m'; RED=$'\e[31m'; GREEN=$'\e[32m'; YELLOW=$'\e[33m'; RESET=$'\e[0m'
@@ -73,7 +86,7 @@ start_db() {
 
 check_llm() {
   local url base
-  base="$(grep -E '^LLM_BASE_URL=' "$BACKEND/.env" 2>/dev/null | cut -d= -f2- || true)"
+  base="$(grep -E '^LLM_BASE_URL=' "$ENV_FILE" 2>/dev/null | cut -d= -f2- || true)"
   base="${base:-http://127.0.0.1:8080/v1}"
   url="${base%/}/models"
 
@@ -121,6 +134,78 @@ setup_frontend() {
   fi
 }
 
+check_docs() {
+  # 문서 계층이 성한지 본다: 링크 그래프 · 머리말 누락 · 색인에 없는 문서 · 태그 정합성.
+  # 규약은 documents/00-index.md 4절, 꼭대기는 CLAUDE.md 다.
+  local index="$ROOT/documents/00-index.md" bad=0
+
+  # 1) 링크 그래프와 주소 — 꼭대기에서 닿는지, 코드가 가리키는 문서 주소가 살아 있는지,
+  #    머리말이 다 있는지. 전부 글자가 아니라 구조를 보는 검사라 파이썬 쪽에 둔다.
+  #    구현은 backend/tests/test_docs_graph.py · test_doc_references.py 두 곳뿐이다.
+  if [[ -x "$BACKEND/.venv/bin/pytest" ]]; then
+    local out; out="$(cd "$BACKEND" && .venv/bin/pytest \
+                        tests/test_docs_graph.py tests/test_doc_references.py \
+                        -q -p no:cacheprovider --no-header 2>&1)" || {
+      printf '%s\n' "$out" | sed -n 's/^E *//p' | grep -v '^assert ' |
+        while IFS= read -r l; do warn "$l"; done
+      bad=1
+    }
+  else
+    warn "링크 그래프를 검사하지 못했습니다 — ./dev.sh backend 로 의존성을 먼저 설치하세요."
+    bad=1
+  fi
+
+  # 2) 색인이 모든 문서를 가리키는가
+  for f in "$ROOT"/documents/*.md "$ROOT"/documents/plan/*.md; do
+    [[ -e "$f" && "$f" != "$index" ]] || continue
+    local rel="${f#$ROOT/documents/}"
+    grep -q "(${rel%.md}.md)" "$index" || { warn "색인에 없음  documents/$rel"; bad=1; }
+  done
+
+  # 3) 체크된 태그는 DONE 에 세부가 있어야 하고, 안 된 태그는 없어야 한다
+  local plan="$ROOT/documents/plan" tag st n
+  while read -r st tag; do
+    n="$(grep -c "^### ${tag} " "$plan/DONE.md" || true)"
+    case "$st" in
+      x|'~') [[ "$n" -ge 1 ]] || { warn "DONE 에 세부 없음  ${tag} [${st}]"; bad=1; } ;;
+      *)     [[ "$n" -eq 0 ]] || { warn "안 끝났는데 DONE 에 있음  ${tag}"; bad=1; } ;;
+    esac
+  done < <(
+    grep -hoE '^- \[.\] (M[0-9]+-T[0-9]+|H-[0-9]+) ' "$plan/ROADMAP.md" "$plan/ISSUES.md" |
+      sed -E 's/^- \[(.)\] (.*) $/\1 \2/'
+  )
+
+  if [[ $bad -eq 0 ]]; then
+    ok "문서 계층 이상 없음 ${DIM}(그래프 · 주소 · 머리말 · 색인 · 태그)${RESET}"
+  else
+    die "문서 계층에 문제가 있습니다. 규약은 documents/00-index.md 4절."
+  fi
+}
+
+needs_local_db() {
+  # DATABASE_URL 이 docker Postgres 를 가리킬 때만 컨테이너를 띄운다.
+  # .env.cloud 처럼 sqlite 나 원격 DB 를 가리키면 띄울 필요가 없다.
+  local url
+  url="$(grep -E '^DATABASE_URL=' "$ENV_FILE" 2>/dev/null | cut -d= -f2- || true)"
+  [[ -z "$url" ]] && return 0          # 값이 없으면 config.py 의 기본값(= docker Postgres)
+  [[ "$url" == *":$DB_PORT/"* ]]
+}
+
+preflight() {
+  if [[ "$MODE" == "cloud" ]]; then
+    [[ -f "$ENV_FILE" ]] || die "$ENV_FILE 가 없습니다. .env.example 을 복사해 cloud 값을 채우세요."
+    local missing=()
+    for key in APP_MODE GOOGLE_CLIENT_ID GOOGLE_CLIENT_SECRET SESSION_SECRET ENCRYPTION_KEY; do
+      grep -qE "^${key}=.+" "$ENV_FILE" || missing+=("$key")
+    done
+    [[ ${#missing[@]} -eq 0 ]] || die "$ENV_FILE 에 값이 비어 있습니다: ${missing[*]}"
+    warn "${BOLD}cloud${RESET} 모드 — 로그인과 회원 Gemini 키가 필요합니다 ${DIM}($(basename "$ENV_FILE"))${RESET}"
+  fi
+
+  if needs_local_db; then start_db; fi
+  if [[ "$MODE" == "local" ]]; then check_llm; fi
+}
+
 # --------------------------------------------------------------------- 실행
 
 PIDS=()
@@ -152,7 +237,9 @@ cleanup() {
 }
 
 run_backend() {
-  spawn bash -c "cd '$BACKEND' && exec .venv/bin/uvicorn app.main:app --reload --port '$BACKEND_PORT'"
+  # --env-file 로 넣은 값은 os.environ 에 올라가 pydantic-settings 의 .env 보다 우선한다.
+  # 그래서 cloud 모드에서도 코드를 고치지 않고 .env.cloud 로 갈아끼울 수 있다.
+  spawn bash -c "cd '$BACKEND' && exec .venv/bin/uvicorn app.main:app --reload --port '$BACKEND_PORT' --env-file '$ENV_FILE'"
 }
 
 run_frontend() {
@@ -205,6 +292,7 @@ stop_servers() {
 }
 
 show_status() {
+  info "모드 ${BOLD}${MODE}${RESET} ${DIM}($(basename "$ENV_FILE"))${RESET}"
   local pid
   pid="$(running_pid)"
   if [[ -n "$pid" ]]; then
@@ -221,7 +309,7 @@ show_status() {
       info "$name  ${DIM}(꺼져 있음, 포트 $port)${RESET}"
     fi
   done
-  check_llm
+  if [[ "$MODE" == "local" ]]; then check_llm; fi
 }
 
 main() {
@@ -232,6 +320,9 @@ main() {
     db)
       start_db
       ;;
+    docs)
+      check_docs
+      ;;
     stop)
       stop_servers
       ;;
@@ -240,7 +331,7 @@ main() {
       ;;
     backend)
       require_free_port "$BACKEND_PORT" backend
-      setup_backend; start_db; check_llm
+      setup_backend; preflight
       trap cleanup INT TERM EXIT
       run_backend
       printf '%s\n' "$$" "${PIDS[@]}" > "$PIDFILE"
@@ -258,21 +349,22 @@ main() {
     all)
       require_free_port "$BACKEND_PORT" backend
       require_free_port "$FRONTEND_PORT" frontend
-      setup_backend; setup_frontend; start_db; check_llm
+      setup_backend; setup_frontend; preflight
       trap cleanup INT TERM EXIT
       run_backend
       run_frontend
       printf '%s\n' "$$" "${PIDS[@]}" > "$PIDFILE"
-      printf '\n%s\n' "  ${BOLD}웹${RESET}      http://localhost:${FRONTEND_PORT}"
+      printf '\n%s\n' "  ${BOLD}모드${RESET}    ${MODE}"
+      printf '%s\n'   "  ${BOLD}웹${RESET}      http://localhost:${FRONTEND_PORT}"
       printf '%s\n'   "  ${BOLD}API 문서${RESET} http://127.0.0.1:${BACKEND_PORT}/docs"
       printf '%s\n\n' "  ${DIM}Ctrl+C 또는 다른 터미널에서 ./dev.sh stop 으로 종료${RESET}"
       wait
       ;;
     -h|--help|help)
-      sed -n '3,14p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
+      sed -n '3,18p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
       ;;
     *)
-      die "알 수 없는 인자: $1  (backend | frontend | db | stop | status | check | help)"
+      die "알 수 없는 인자: $1  (cloud | backend | frontend | db | docs | stop | status | check | help)"
       ;;
   esac
 }

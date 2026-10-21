@@ -35,7 +35,7 @@ def init_engine(database_url: str, *, create_all: bool = True) -> Engine:
 def get_session() -> Iterator[Session]:
     """FastAPI 의존성."""
     if _SessionLocal is None:
-        raise RuntimeError("DB 가 초기화되지 않았습니다 (APP_MODE=cloud 인지 확인하세요).")
+        raise RuntimeError("DB 가 초기화되지 않았습니다. init_engine() 이 먼저 불려야 합니다.")
     session = _SessionLocal()
     try:
         yield session

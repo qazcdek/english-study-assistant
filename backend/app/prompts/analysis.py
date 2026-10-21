@@ -8,7 +8,7 @@
 
 측정 메모: 사고(thinking)를 켜면 파트를 쪼갤수록 오히려 사고가 길어진다.
 "표현만 뽑아라" 같은 열린 과제에서 모델이 후보를 끝없이 재검토하기 때문이다.
-그래서 파트 프롬프트에도 개수와 판별 기준을 구체적으로 못박는다 (documents/05-benchmark.md).
+그래서 파트 프롬프트에도 개수와 판별 기준을 구체적으로 못박는다 (05-benchmark.md).
 """
 
 from collections.abc import Callable

@@ -1,5 +1,9 @@
 # 09. 모드별 차이 한눈에 보기
 
+> **층** 규약 · **상태** 유효 · **강제** `backend/tests/test_mode_matrix.py`
+> **읽어야 할 때** **모드에 따라 갈리는 것을 추가·변경할 때 — 코드를 고치기 전에**
+> **위** [문서 지도](00-index.md) · **함께** [아키텍처](02-architecture.md) · [API 명세](03-api-spec.md) · [웹 배포](07-web-deployment.md)
+>
 > 한 코드베이스가 `APP_MODE` 로 두 가지 배포 형태를 낸다.
 > **모드에 따라 달라지는 것은 전부 여기에 적는다.** 새로 갈리는 항목을 만들면 이 표를 먼저 고친다.
 
@@ -108,20 +112,59 @@ cloud   로그인 → 이용 동의 → API 키 등록 → 분석 화면.  Accou
 | DB 테이블 | **`create_all` 은 기존 테이블을 바꾸지 않는다.** 컬럼을 더하면 이미 있는 DB 에 직접 `ALTER TABLE` 을 해야 한다. 실제로 이 통합 과정에서 `users.google_sub does not exist` 로 앱이 뜨지 않았다. Alembic 도입 전까지는 두 DB(로컬 docker, Neon) 모두 손으로 맞춰야 한다 |
 | 프론트 화면 | local 에서도 열리는가 (`cloud` 분기를 걸었는지) |
 
-## 6. 모드별로 반드시 확인하는 것
+## 6. 두 모드를 함께 개발하는 방법
 
-고치고 나면 **두 모드 다** 띄워 본다.
+"두 모드를 함께 챙기자" 는 선언만으로는 안 지켜진다. **통합한 지 커밋 하나 만에
+주석 세 곳이 이 문서와 어긋났다**(H-011). 그래서 세 가지 장치를 둔다.
 
-```bash
-# local
-./dev.sh                       # Postgres + 백엔드 + 프론트
-curl localhost:8000/api/config # mode=local, requires_login=false, max_input_chars=2000
+### 6.1 공통 기능 테스트는 두 모드에서 돈다
 
-# cloud (로컬에서)
-cd backend && set -a && . ./.env.cloud && set +a
-.venv/bin/uvicorn app.main:app --port 8000
-curl localhost:8000/api/config # mode=cloud, requires_login=true, max_input_chars=800
+```python
+def test_vocabulary_add_list_delete(both_modes):   # local, cloud 각각 한 번씩
+    api = both_modes
+    ...
 ```
 
-테스트도 두 모드를 모두 돈다. `tests/test_cloud.py` 가 cloud, 나머지가 local 이다.
-**한 모드에서만 테스트를 추가하면 다른 쪽이 조용히 깨진다.**
+`both_modes` 픽스처(`tests/conftest.py`)가 모드별 환경을 세우고, 그 모드의
+**요청 주인**까지 준비해 `Api(client, mode, user_id)` 로 넘긴다.
+local 은 `id=1`, cloud 는 동의·키 등록까지 끝난 회원 + 세션 쿠키다.
+
+- **공통 기능** → `tests/test_both_modes.py` (`both_modes` 사용)
+- **모드 전용** → `tests/test_cloud.py` (`cloud` 사용)
+
+전에는 기록 저장·단어장·옛 기록 호환이 cloud 쪽에만 있어서 **local 이 깨져도
+잡히지 않았다.** 실제로 H-002 는 두 모드 모두의 버그였는데 따로 고쳤다.
+
+### 6.2 이 문서의 표를 테스트가 고정한다
+
+`tests/test_mode_matrix.py` 가 2절·3절의 값을 리터럴로 들고 있다.
+
+- 문서에 적힌 기본값 == `Settings` 의 기본값 (`model_fields[...].default`)
+- 두 모드를 띄워 `/api/config` 가 그 값을 내는가
+- auth 라우트·프로바이더 수명·CORS 자격증명이 표대로인가
+
+**값을 바꾸면 이 테스트가 깨진다. 고치려면 이 문서를 보게 된다.**
+그래서 이 문서는 설명이 아니라 명세다. 한쪽을 고치면 반드시 다른 쪽도 고친다.
+
+### 6.3 cloud 를 로컬에서 띄운다
+
+```bash
+./dev.sh              # local  — llama-server + docker Postgres
+./dev.sh cloud        # cloud  — .env.cloud (로그인 + 회원 Gemini 키)
+./dev.sh cloud status # 어느 모드로 무엇이 떠 있는지
+```
+
+`cloud` 는 `uvicorn --env-file .env.cloud` 로 띄운다. `--env-file` 값은 `os.environ`
+에 올라가 pydantic-settings 의 `.env` 보다 우선하므로 코드를 고칠 필요가 없다.
+`.env.cloud` 는 로컬 SQLite 를 가리키므로 운영 DB 를 건드리지 않는다.
+llama-server 확인과 docker Postgres 기동은 그 모드에 필요할 때만 한다.
+
+**cloud 를 띄워 보지 않고 머지하지 않는다.** 안 그러면 cloud 쪽 회귀를
+Render 에 올려야 발견하게 된다.
+
+## 7. 아직 안 한 것
+
+- **모드 분기에 이름 붙이기** — `if settings.is_cloud:` 는 *왜* 갈리는지를 가린다.
+  `settings.counts_usage` 처럼 능력으로 부르면 이유가 이름에 남는다.
+  프론트는 이미 이렇게 한다 — 모드를 묻지 않고 `/api/config` 의 값만 본다. (M4-T4)
+- **분기 전수 조사** — `# MODE:` 마커를 달아 `grep` 으로 세어 이 문서와 대조한다. (M4-T5)

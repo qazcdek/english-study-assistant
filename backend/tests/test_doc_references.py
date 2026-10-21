@@ -1,0 +1,88 @@
+"""주소 검사 — 코드와 문서가 서로를 가리키는 포인터가 실제로 맞는지 본다.
+
+도달성(test_docs_graph.py)은 문서끼리의 길만 본다. 그런데 이 저장소에서 가장 조용히
+썩는 포인터는 **코드 주석이 들고 있는 문서 주소**다. 문서 번호는 뜻이 아니라 주소라서
+(11 3.3) 절 번호 하나만 밀려도 주석이 엉뚱한 곳을 가리키는데, 사람도 기계도 모른다.
+
+전부 규칙 기반이라 파일을 읽는 것 말고는 하는 일이 없다 — 앱을 띄우지 않는다.
+"""
+
+from __future__ import annotations
+
+import re
+
+from tests import docmap
+from tests.docmap import ROOT, ROOT_DOC, all_docs, code_refs, header_of, rel, sections_of
+
+
+def standard_docs():
+    """머리말 규약(00 §4.1)이 걸리는 문서. README 는 저장소의 얼굴이고 CLAUDE.md 는
+    꼭대기라 둘 다 머리말을 달지 않는다."""
+    return sorted(d for d in all_docs() if d.parts[-2] in ("documents", "plan"))
+
+# 상태 어휘는 셋뿐이다 (CLAUDE.md 3절).
+STATES = {"유효", "기록", "대체됨"}
+# 어디로 들어와도 머리말에 다 있어야 한다 (11 2.2). 옆길은 `함께` 또는 색인의 `아래`.
+REQUIRED = ("층", "상태", "읽어야 할 때", "위")
+
+
+def test_every_document_carries_the_standard_header():
+    missing = []
+    for doc in standard_docs():
+        header = header_of(doc)
+        gaps = [k for k in REQUIRED if k not in header]
+        if not ({"함께", "아래"} & set(header)):
+            gaps.append("함께")
+        if gaps:
+            missing.append(f"{rel(doc)} — {' · '.join(gaps)}")
+    assert not missing, "머리말에 빠진 칸:\n  " + "\n  ".join(missing)
+
+
+def test_document_states_use_the_three_declared_words():
+    wrong = [
+        f"{rel(doc)} — '{header_of(doc).get('상태')}'"
+        for doc in standard_docs()
+        if header_of(doc).get("상태") not in STATES
+    ]
+    assert not wrong, (
+        "상태 어휘는 " + " · ".join(sorted(STATES)) + " 셋뿐이다:\n  " + "\n  ".join(wrong)
+    )
+
+
+def test_code_writes_document_addresses_in_the_one_agreed_form():
+    bad = [f"{r.where()}  {r.doc} — {r.problem}" for r in code_refs() if r.problem]
+    assert not bad, "주소 표기 규약(10 7절) 위반:\n  " + "\n  ".join(bad)
+
+
+def test_every_document_address_in_the_code_resolves():
+    names = {p.name for p in all_docs()}
+    dangling = []
+    for ref in code_refs():
+        if ref.doc not in names:
+            dangling.append(f"{ref.where()}  없는 문서 {ref.doc}")
+        elif ref.section and ref.section not in sections_of(ROOT / "documents" / ref.doc):
+            dangling.append(f"{ref.where()}  {ref.doc} 에 §{ref.section} 절이 없다")
+    assert not dangling, "코드가 가리키는 문서 주소가 썩었다:\n  " + "\n  ".join(dangling)
+
+
+def test_enforcement_pointers_point_both_ways():
+    """문서가 '이 테스트가 나를 강제한다' 고 적었으면, 그 테스트도 문서를 알아야 한다."""
+    broken = []
+    for doc in sorted(all_docs()):
+        for path in re.findall(r"[\w./-]+\.py", header_of(doc).get("강제", "")):
+            test_file = ROOT / path
+            if not test_file.is_file():
+                broken.append(f"{rel(doc)} 의 강제 `{path}` 가 없는 파일이다")
+            elif doc.name not in test_file.read_text(encoding="utf-8"):
+                broken.append(f"{path} 가 {doc.name} 를 가리키지 않는다 (한쪽만 안다)")
+    assert not broken, "강제 포인터가 짝이 안 맞는다:\n  " + "\n  ".join(broken)
+
+
+def test_documents_cited_by_code_are_listed_in_the_claude_md_table():
+    """코드가 근거로 드는 문서라면, 그 코드를 고치는 사람에게 펴라고 말해 줘야 한다."""
+    table = ROOT_DOC.read_text(encoding="utf-8").split("## 4.")[1].split("## 5.")[0]
+    listed = set(docmap._DOC_NAME.findall(table))
+    cited = {ref.doc for ref in code_refs() if ref.src.parts[-2] != "tests"}
+    assert not cited - listed, (
+        "코드가 가리키는데 CLAUDE.md 4절 표에 없는 문서: " + " · ".join(sorted(cited - listed))
+    )

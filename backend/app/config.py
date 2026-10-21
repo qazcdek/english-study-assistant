@@ -11,8 +11,11 @@ class Settings(BaseSettings):
 
     `app_mode` 하나로 두 가지 배포 형태를 가른다.
 
-    - local : 내 PC 의 llama-server 에 붙는다. 로그인도 DB 도 없다.
+    - local : 내 PC 의 llama-server 에 붙는다. 로그인이 없다.
     - cloud : 웹 배포. Google 로그인 + 회원별 Gemini API 키로 호출한다.
+
+    **분석 기록은 두 모드 모두 DB 에 남긴다.** local 은 docker Postgres(15432),
+    cloud 는 Neon 을 가리킨다. 갈리는 것 전체는 09-mode-matrix.md 를 본다.
     """
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
@@ -47,14 +50,14 @@ class Settings(BaseSettings):
     # 회원 Gemini 키를 암호화하는 Fernet 키 (base64 32바이트)
     encryption_key: str = ""
 
-    # --- 저장소 (cloud) ---
+    # --- 저장소 (두 모드 공통) ---
     # local 은 compose.yaml 이 띄우는 Postgres, cloud 는 Neon 을 가리킨다.
     # 기본 포트(5432)는 이미 깔려 있는 Postgres 와 부딪히므로 15432 를 쓴다.
     database_url: str = "postgresql+psycopg://eng:eng@127.0.0.1:15432/eng_study"
 
     # --- 입력 제한 ---
     #
-    # 모드별로 다르다. 한쪽만 보고 고치면 다른 쪽이 조용히 어긋난다 (09-mode-matrix.md 3.1).
+    # 모드별로 다르다. 한쪽만 보고 고치면 다른 쪽이 조용히 어긋난다 (09-mode-matrix.md §3.1).
     #   local  넉넉히. 혼자 쓰고 llama-server 한도만 신경 쓰면 된다
     #   cloud  좁게.  회원 각자의 Gemini 한도를 소모한다
     local_max_input_chars: int = 2000

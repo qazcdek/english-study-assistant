@@ -2,7 +2,7 @@
 
 로그인은 **신원 확인에만** 쓴다. Google 로그인으로는 회원의 Gemini 사용 한도에
 접근할 수 없기 때문에, LLM 호출에 쓸 API 키는 회원이 따로 등록한다
-(documents/07-web-deployment.md 참고).
+(07-web-deployment.md 참고).
 """
 
 from typing import Any
