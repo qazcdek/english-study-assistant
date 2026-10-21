@@ -2,7 +2,7 @@
 
 로컬과 웹을 한 코드베이스로 합친 뒤에도 **테스트는 한쪽에서만 돌고 있었다.**
 80개 중 64개가 기본값(local)으로만 돌아서, 두 모드 공통 기능을 local 에서
-깨뜨려도 잡히지 않았다 (09-mode-matrix.md 6.1).
+깨뜨려도 잡히지 않았다 (09-mode-matrix.md §6.1).
 
 그래서 공통 기능 테스트는 `both_modes` 픽스처로 **두 모드에서 모두** 돈다.
 모드 전용 동작만 전용 픽스처(`test_cloud.py` 의 `cloud`)를 쓴다.
@@ -78,7 +78,7 @@ def login(client: TestClient, user_id: int) -> None:
 def owner_of(client: TestClient, mode: Mode) -> int:
     """그 모드에서 '요청의 주인'을 준비하고 id 를 돌려준다.
 
-    local 은 앱이 뜰 때 `id=1` 행을 만들어 두므로 로그인이 없다 (09-mode-matrix.md 3.4).
+    local 은 앱이 뜰 때 `id=1` 행을 만들어 두므로 로그인이 없다 (09-mode-matrix.md §3.4).
     cloud 는 동의와 키 등록까지 끝난 회원을 만들고 세션 쿠키를 심는다.
     """
     if mode == "local":

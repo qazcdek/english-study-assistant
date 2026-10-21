@@ -68,7 +68,7 @@ async def health(request: Request) -> HealthResponse:
 
 
 def _check_length(request: AnalyzeRequest) -> None:
-    """모드별 입력 상한. 스키마의 절대 상한보다 좁다 (09-mode-matrix.md 3.1)."""
+    """모드별 입력 상한. 스키마의 절대 상한보다 좁다 (09-mode-matrix.md §3.1)."""
     limit = get_settings().max_input_chars
     if len(request.text) > limit:
         raise RequestValidationError(
@@ -86,7 +86,7 @@ def _check_length(request: AnalyzeRequest) -> None:
 def _charge_analysis(db, user) -> None:
     """호출 전에 한도를 확인하고 사용량을 올린다.
 
-    회원 각자의 Gemini 한도를 쓰는 cloud 에서만 센다 (09-mode-matrix.md 3.3).
+    회원 각자의 Gemini 한도를 쓰는 cloud 에서만 센다 (09-mode-matrix.md §3.3).
     실패한 호출도 한도를 소모하므로 성공 여부와 무관하게 먼저 센다.
     분석 한 번은 LLM 호출 네 번이다.
     """

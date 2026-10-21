@@ -15,7 +15,7 @@ from app.config import Settings, get_settings
 from app.schemas import ABSOLUTE_MAX_INPUT_CHARS
 from tests.modes import build_app, setup_env
 
-# --- 09-mode-matrix.md 3.1 · 3.3 의 값 ---------------------------------------
+# --- 09-mode-matrix.md §3.1 · §3.3 의 값 ---------------------------------------
 DEFAULTS = {
     "local_max_input_chars": 2000,
     "cloud_max_input_chars": 800,
@@ -23,7 +23,7 @@ DEFAULTS = {
     "daily_practice_limit": 200,
 }
 
-# --- 09-mode-matrix.md 2절: 모드별로 켜지고 꺼지는 것 -------------------------
+# --- 09-mode-matrix.md §2: 모드별로 켜지고 꺼지는 것 -------------------------
 MATRIX = {
     "local": {
         "requires_login": False,

@@ -139,12 +139,12 @@ check_docs() {
   # 규약은 documents/00-index.md 4절, 꼭대기는 CLAUDE.md 다.
   local index="$ROOT/documents/00-index.md" bad=0
 
-  # 1) 링크 그래프 — 끊긴 링크와, 꼭대기(CLAUDE.md)에서 걸어서 닿는지.
-  #    글자만 보는 검사로는 못 잡는다. CLAUDE.md 에서 색인으로 가는 링크를 지워도
-  #    각 문서는 여전히 `위` 를 달고 색인에도 적혀 있어 아래 2·3 은 전부 통과한다.
-  #    구현은 backend/tests/test_docs_graph.py 한 곳에만 둔다 (11 3.1).
+  # 1) 링크 그래프와 주소 — 꼭대기에서 닿는지, 코드가 가리키는 문서 주소가 살아 있는지,
+  #    머리말이 다 있는지. 전부 글자가 아니라 구조를 보는 검사라 파이썬 쪽에 둔다.
+  #    구현은 backend/tests/test_docs_graph.py · test_doc_references.py 두 곳뿐이다.
   if [[ -x "$BACKEND/.venv/bin/pytest" ]]; then
-    local out; out="$(cd "$BACKEND" && .venv/bin/pytest tests/test_docs_graph.py \
+    local out; out="$(cd "$BACKEND" && .venv/bin/pytest \
+                        tests/test_docs_graph.py tests/test_doc_references.py \
                         -q -p no:cacheprovider --no-header 2>&1)" || {
       printf '%s\n' "$out" | sed -n 's/^E *//p' | grep -v '^assert ' |
         while IFS= read -r l; do warn "$l"; done
@@ -155,23 +155,14 @@ check_docs() {
     bad=1
   fi
 
-  # 2) 표준 머리말 (층 / 위) — documents/ 아래 전부
-  for f in "$ROOT"/documents/*.md "$ROOT"/documents/plan/*.md; do
-    [[ -e "$f" ]] || continue
-    grep -q '^> \*\*층\*\*' "$f" || { warn "머리말에 '층' 없음  ${f#$ROOT/}"; bad=1; }
-    if [[ "$f" != "$index" ]]; then
-      grep -q '^> \*\*위\*\*\|^> \*\*층\*\*.*색인' "$f" || { warn "머리말에 '위' 없음 (고아)  ${f#$ROOT/}"; bad=1; }
-    fi
-  done
-
-  # 3) 색인이 모든 문서를 가리키는가
+  # 2) 색인이 모든 문서를 가리키는가
   for f in "$ROOT"/documents/*.md "$ROOT"/documents/plan/*.md; do
     [[ -e "$f" && "$f" != "$index" ]] || continue
     local rel="${f#$ROOT/documents/}"
     grep -q "(${rel%.md}.md)" "$index" || { warn "색인에 없음  documents/$rel"; bad=1; }
   done
 
-  # 4) 체크된 태그는 DONE 에 세부가 있어야 하고, 안 된 태그는 없어야 한다
+  # 3) 체크된 태그는 DONE 에 세부가 있어야 하고, 안 된 태그는 없어야 한다
   local plan="$ROOT/documents/plan" tag st n
   while read -r st tag; do
     n="$(grep -c "^### ${tag} " "$plan/DONE.md" || true)"
@@ -185,7 +176,7 @@ check_docs() {
   )
 
   if [[ $bad -eq 0 ]]; then
-    ok "문서 계층 이상 없음 ${DIM}(그래프 · 머리말 · 색인 · 태그)${RESET}"
+    ok "문서 계층 이상 없음 ${DIM}(그래프 · 주소 · 머리말 · 색인 · 태그)${RESET}"
   else
     die "문서 계층에 문제가 있습니다. 규약은 documents/00-index.md 4절."
   fi

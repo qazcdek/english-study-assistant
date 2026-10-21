@@ -136,10 +136,14 @@ CLAUDE.md 에서 색인으로 가는 링크 하나만 평문으로 바꿔도 그
 | 규약 | 장치 |
 |---|---|
 | 꼭대기에서 모든 문서에 닿는다 | `backend/tests/test_docs_graph.py` |
+| 코드가 드는 근거 주소 · 머리말 다섯 칸 · 상태 어휘 | `backend/tests/test_doc_references.py` |
 | 문서 구조 (머리말 · 색인) | `./dev.sh docs` |
 | 추적 정합성 (체크된 태그는 DONE 에 세부가 있다) | `./dev.sh docs` |
 | [09 모드별 차이](09-mode-matrix.md) 의 표 | `backend/tests/test_mode_matrix.py` |
 | 두 모드 공통 동작 | `backend/tests/test_both_modes.py` |
+
+**포인터는 양쪽을 다 건다.** 문서가 "이 테스트가 나를 강제한다" 고 적으면 그 테스트도
+문서 이름을 알고 있어야 한다. 한쪽만 아는 포인터는 다른 쪽이 사라져도 모른다.
 
 **장치가 붙은 문서는 설명이 아니라 명세가 된다.** 09 의 값을 바꾸면 테스트가 깨지고,
 고치려면 문서를 보게 된다. 머리말의 `강제` 칸이 그 짝을 가리킨다.

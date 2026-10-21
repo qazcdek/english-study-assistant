@@ -6,7 +6,7 @@ llama.cpp 고유의 두 가지만 덧붙인다.
 1. `response_format` 형태가 서버 버전마다 달라 `json_mode` 로 고른다.
 2. Qwen3 같은 reasoning 모델의 사고를 `chat_template_kwargs` 로 끈다.
    켜 두면 사고가 `max_tokens` 를 전부 소진해 본문이 빈 채로 돌아온다
-   (documents/05-benchmark.md).
+   (05-benchmark.md).
 """
 
 from typing import Any

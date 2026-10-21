@@ -92,7 +92,7 @@ def test_stream_reports_a_failed_part_and_keeps_going(make_client):
 
 
 def test_local_input_limit(client):
-    """모드마다 상한이 다르다. local 은 넉넉히 (09-mode-matrix.md 3.1)."""
+    """모드마다 상한이 다르다. local 은 넉넉히 (09-mode-matrix.md §3.1)."""
     limit = get_settings().max_input_chars
 
     assert limit == 2000

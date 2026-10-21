@@ -56,7 +56,7 @@ def _upgrade_structure(item: dict[str, Any]) -> dict[str, Any]:
 def _upgrade_overview(item: dict[str, Any]) -> dict[str, Any]:
     """총평에 frequency(사용 빈도)가 있고 tone 이 없던 시절의 기록.
 
-    빈도 판단은 기준이 모호해 걷어냈다(04-prompt-design.md 7절). 값을 옮길 곳이 없으므로 버린다.
+    빈도 판단은 기준이 모호해 걷어냈다(04-prompt-design.md §7). 값을 옮길 곳이 없으므로 버린다.
     """
     upgraded = {k: v for k, v in item.items() if k != "frequency"}
     upgraded.setdefault("tone", "")

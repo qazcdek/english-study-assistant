@@ -24,7 +24,7 @@ def test_analysis_is_saved_and_readable(both_modes):
 
 
 def test_usage_is_counted_only_in_cloud(both_modes):
-    """회원 각자의 Gemini 한도를 쓰는 cloud 에서만 센다 (09-mode-matrix.md 3.3)."""
+    """회원 각자의 Gemini 한도를 쓰는 cloud 에서만 센다 (09-mode-matrix.md §3.3)."""
     api = both_modes
     api.client.post("/api/analyze", json={"text": "across the pond"})
 

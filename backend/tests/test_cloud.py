@@ -141,7 +141,7 @@ def test_spa_fallback_does_not_swallow_api_404(monkeypatch, tmp_path):
 
 
 def test_cloud_input_limit_is_narrower(cloud):
-    """회원 각자의 Gemini 한도를 소모하므로 local(2000자)보다 좁다 (09-mode-matrix.md 3.1)."""
+    """회원 각자의 Gemini 한도를 소모하므로 local(2000자)보다 좁다 (09-mode-matrix.md §3.1)."""
     from app.config import get_settings
 
     login(cloud, make_user())

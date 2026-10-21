@@ -13,7 +13,7 @@ Level = Literal["beginner", "intermediate", "advanced"]
 # 어떤 모드에서도 넘을 수 없는 절대 상한.
 #
 # 실제로 적용되는 값은 모드마다 다르다(`Settings.max_input_chars`). 여기는 그보다 넓게 두고,
-# 모드별 제한은 라우터에서 건다. 이 값을 모드별 값으로 착각하지 말 것 — 09-mode-matrix.md 3.1.
+# 모드별 제한은 라우터에서 건다. 이 값을 모드별 값으로 착각하지 말 것 — 09-mode-matrix.md §3.1.
 ABSOLUTE_MAX_INPUT_CHARS = 2000
 
 ExpressionType = Literal[

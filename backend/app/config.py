@@ -57,7 +57,7 @@ class Settings(BaseSettings):
 
     # --- 입력 제한 ---
     #
-    # 모드별로 다르다. 한쪽만 보고 고치면 다른 쪽이 조용히 어긋난다 (09-mode-matrix.md 3.1).
+    # 모드별로 다르다. 한쪽만 보고 고치면 다른 쪽이 조용히 어긋난다 (09-mode-matrix.md §3.1).
     #   local  넉넉히. 혼자 쓰고 llama-server 한도만 신경 쓰면 된다
     #   cloud  좁게.  회원 각자의 Gemini 한도를 소모한다
     local_max_input_chars: int = 2000
