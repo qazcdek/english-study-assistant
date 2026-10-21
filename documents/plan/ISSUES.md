@@ -53,6 +53,8 @@
 - [ ] H-012  없는 기록을 열면 404 가 아니라 400 을 낸다. 03-api-spec 에 규정도 없다
   `→ backend/app/services/records.py::upgrade`
 - [x] H-019  cloud 에서 작문 연습 입구가 통째로 사라졌다. 예문이 없으면 체크박스까지 없어졌다
+- [~] H-021  Gemini 가 예문을 거의 안 넣는다. 생략 조건을 좁혔으나 **실측 전** (M3-T1)
+  `→ backend/app/prompts/analysis.py`
   `→ backend/app/services/refine.py::clean_expressions`
 
 ---
