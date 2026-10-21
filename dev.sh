@@ -323,6 +323,13 @@ main() {
     docs)
       check_docs
       ;;
+    ptr)
+      # 문서 → 코드 포인터를 코드 docstring 에 반영한다. 인자 없이 쓰면 검사만 한다.
+      [[ -x "$BACKEND/.venv/bin/python" ]] || die "먼저 ./dev.sh backend 로 의존성을 설치하세요."
+      shift
+      (cd "$BACKEND" && .venv/bin/python tools/docptr.py "$@") &&
+        ok "문서 → 코드 포인터 이상 없음"
+      ;;
     stop)
       stop_servers
       ;;
@@ -364,7 +371,7 @@ main() {
       sed -n '3,18p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
       ;;
     *)
-      die "알 수 없는 인자: $1  (cloud | backend | frontend | db | docs | stop | status | check | help)"
+      die "알 수 없는 인자: $1  (cloud | backend | frontend | db | docs | ptr | stop | status | check | help)"
       ;;
   esac
 }

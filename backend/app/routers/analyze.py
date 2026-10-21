@@ -68,7 +68,10 @@ async def health(request: Request) -> HealthResponse:
 
 
 def _check_length(request: AnalyzeRequest) -> None:
-    """모드별 입력 상한. 스키마의 절대 상한보다 좁다 (09-mode-matrix.md §3.1)."""
+    """모드별 입력 상한. 스키마의 절대 상한보다 좁다.
+
+    [문서] 09-mode-matrix.md §3.1
+    """
     limit = get_settings().max_input_chars
     if len(request.text) > limit:
         raise RequestValidationError(
