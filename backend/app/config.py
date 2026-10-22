@@ -47,6 +47,11 @@ class Settings(BaseSettings):
     frontend_base_url: str = "http://localhost:5173"
     session_secret: str = ""
     session_days: int = 30
+    # 오류 수집. **비어 있으면 아무것도 보내지 않는다** — 로컬에서 켜질 일이 없어야 한다.
+    # 무엇을 지우고 보내는지는 app/observability.py 와 07-web-deployment.md §9.
+    sentry_dsn: str = ""
+    # 배포본이 어느 커밋인지. Render 가 넣어 주는 값을 그대로 받는다.
+    render_git_commit: str = ""
     # 회원 Gemini 키를 암호화하는 Fernet 키 (base64 32바이트)
     encryption_key: str = ""
 

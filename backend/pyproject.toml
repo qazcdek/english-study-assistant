@@ -16,6 +16,7 @@ dependencies = [
     "pyjwt>=2.10",                # 세션 쿠키 서명
     "cryptography>=44.0",         # 회원 Gemini 키 암호화 저장
     "itsdangerous>=2.2",          # OAuth state 서명
+    "sentry-sdk[fastapi]>=2.19",  # 오류 수집. DSN 이 비면 아무것도 안 한다
 ]
 
 [project.optional-dependencies]
