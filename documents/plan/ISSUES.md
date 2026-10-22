@@ -59,6 +59,8 @@
 - [~] H-012  없는 기록을 열면 404 가 아니라 400 을 낸다. 03-api-spec 에 규정도 없다
   `→ backend/app/services/records.py::upgrade`
 - [x] H-019  cloud 에서 작문 연습 입구가 통째로 사라졌다. 예문이 없으면 체크박스까지 없어졌다
+- [~] H-028  모바일에서 가로 스크롤이 생긴다. `truncate` 가 안 잘려 폭을 밀어냈다
+- [~] H-029  좁은 화면에서 이전 기록이 본문 위를 막는다. 들어올 때마다 지나가야 한다
 - [x] H-021  Gemini 가 예문을 거의 안 넣는다. 스키마 필수로 걸어 해결 — [13 §1](../13-gemini-benchmark.md) 에서 실측
   `→ backend/app/prompts/analysis.py`
   `→ backend/app/services/refine.py::clean_expressions`

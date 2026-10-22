@@ -86,7 +86,7 @@ function Answer({ row }: { row: PracticeHistoryItem }) {
 
   return (
     <li className="flex flex-col gap-1.5 rounded-lg bg-white/70 p-3 dark:bg-stone-900/50">
-      <p className="font-mono text-sm leading-relaxed text-stone-900 dark:text-stone-100">
+      <p className="break-words font-mono text-sm leading-relaxed text-stone-900 dark:text-stone-100">
         {row.learner_answer}
       </p>
       <div className="flex items-center gap-3">

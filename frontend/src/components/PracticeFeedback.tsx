@@ -44,7 +44,7 @@ function Sentence({ label, text, accent }: { label: string; text: string; accent
     <div className="min-w-0 flex-1">
       <p className="mb-1 text-xs text-stone-400">{label}</p>
       <p
-        className={`rounded-lg px-3 py-2 font-mono text-sm leading-relaxed ${
+        className={`break-words rounded-lg px-3 py-2 font-mono text-sm leading-relaxed ${
           accent
             ? 'bg-white text-stone-900 dark:bg-stone-900 dark:text-stone-100'
             : 'bg-white/60 text-stone-500 dark:bg-stone-900/60 dark:text-stone-400'

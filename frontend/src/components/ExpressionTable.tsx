@@ -35,7 +35,11 @@ export const REMOVE_WARNING =
 // 위험이 그것이었다 (M3-T2).
 
 function Expr({ text }: { text: string }) {
-  return <span className="font-mono font-medium text-stone-900 dark:text-stone-100">{text}</span>
+  return (
+    <span className="break-words font-mono font-medium text-stone-900 dark:text-stone-100">
+      {text}
+    </span>
+  )
 }
 
 /** 총평이 꼽은 표현. 별이 즐겨찾기를 뜻하므로 여기서는 ★ 를 쓰지 않는다. */
@@ -108,7 +112,7 @@ function ExampleSlot({
     return <span className="text-xs text-stone-300 dark:text-stone-600">—</span>
   }
   if (!masked) {
-    return <p className="font-mono text-xs italic text-stone-400">“{e.example}”</p>
+    return <p className="break-words font-mono text-xs italic text-stone-400">“{e.example}”</p>
   }
   if (canPractice(e)) {
     return <PracticeButton open={open} onClick={onToggle} />

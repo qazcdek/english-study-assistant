@@ -44,7 +44,7 @@ export function HistoryList({ entries, activeId, onSelect, onDelete }: Props) {
               title={entry.text}
             >
               <LevelDot level={entry.level} />
-              <span className="truncate">{entry.text}</span>
+              <span className="min-w-0 flex-1 truncate">{entry.text}</span>
             </button>
 
             <button
