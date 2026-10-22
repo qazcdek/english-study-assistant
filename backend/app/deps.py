@@ -18,8 +18,9 @@ from app.auth.session import COOKIE_NAME, read_token
 from app.config import Settings, get_settings
 from app.db import User, get_session
 from app.errors import ApiKeyRequiredError, AuthRequiredError, ConsentRequiredError
+from app.providers import registry
 from app.providers.base import LLMProvider
-from app.providers.gemini import GeminiProvider
+from app.services import keys
 from app.services.analyzer import AnalyzerService
 from app.services.practice import PracticeService
 
@@ -62,11 +63,16 @@ def current_user(request: Request, settings: SettingsDep, db: DbDep) -> User:
 UserDep = Annotated[User, Depends(current_user)]
 
 
-def ready_user(user: UserDep) -> User:
-    """동의와 API 키 등록까지 끝난 회원만 통과시킨다."""
+def ready_user(user: UserDep, db: DbDep, settings: SettingsDep) -> User:
+    """동의와 **활성 제공자의** 키 등록까지 끝난 회원만 통과시킨다.
+
+    키를 제공자마다 따로 두므로(M12-T2) "키가 있다" 는 더 이상 회원 단위 사실이
+    아니다. **지금 고른 제공자**의 키를 본다 — 다른 제공자 키가 있어도 지금 쓸
+    제공자의 것이 없으면 호출할 수 없다.
+    """
     if not user.has_consented:
         raise ConsentRequiredError()
-    if not user.has_api_key:
+    if not keys.has_key(db, user, keys.resolve(user, settings.app_mode)):
         raise ApiKeyRequiredError()
     return user
 
@@ -99,33 +105,61 @@ def active_user(request: Request, settings: SettingsDep, db: DbDep) -> User:
     """
     if not settings.is_cloud:
         return _local_user(db)
-    return ready_user(current_user(request, settings, db))
+    return ready_user(current_user(request, settings, db), db, settings)
 
 
 SessionUser = Annotated[User, Depends(session_user)]
 ActiveUser = Annotated[User, Depends(active_user)]
 
 
+def _build_cloud_provider(
+    choice: "keys.Choice", api_key: str, settings: Settings
+) -> LLMProvider:
+    """고른 cloud 제공자를 만든다.
+
+    **여기서 `if` 로 제공자를 또 나누지 않는다.** 레지스트리가 구현을 들고 있으므로
+    (`IMPLEMENTATIONS`) 그것을 쓴다 — 목록이 둘이 되면 한쪽만 늘어난다.
+
+    생성 인자가 제공자마다 다른 것은 어쩔 수 없다. 지금은 Gemini 하나뿐이고,
+    `M12-T3` 에서 둘이 늘면 그때 공통 모양을 찾는다 — **지금 미리 추상화하지 않는다.**
+    """
+    implementation = registry.IMPLEMENTATIONS[choice.provider.id]
+    if choice.provider.id == registry.GEMINI:
+        return implementation(
+            api_key,
+            base_url=settings.gemini_base_url,
+            model=choice.model,
+            timeout=settings.gemini_timeout,
+            temperature=settings.llm_temperature,
+            max_tokens=settings.llm_max_tokens,
+        )
+    raise RuntimeError(f"만들 방법을 모르는 제공자: {choice.provider.id}")
+
+
 async def get_provider(request: Request, settings: SettingsDep) -> AsyncIterator[LLMProvider]:
-    """로컬은 공유 프로바이더, 웹은 회원 키로 만든 일회용 프로바이더."""
-    if not settings.is_cloud:
+    """회원이 고른 제공자로 만든다.
+
+    **llama-server 만 공유한다** — 내 PC 의 서버 하나이고 키가 없다. cloud LLM 은
+    회원 키로 호출하므로 **요청마다 새로** 만든다. 공유하면 다른 회원의 키로
+    호출된다 (09 §3.2).
+    """
+    with next(get_session()) as db:  # type: ignore[arg-type]
+        user = session_user(request, settings, db)
+        if settings.is_cloud:
+            user = ready_user(user, db, settings)
+        choice = keys.resolve(user, settings.app_mode)
+        api_key = (
+            keys.decrypt(db, user.id, choice.provider.id, KeyCipher(settings.encryption_key))
+            if choice.provider.needs_key
+            else ""
+        )
+
+    if choice.provider.id == registry.LLAMA:
+        # 앱이 뜰 때 만든 것을 그대로 쓴다. 키가 없으니 회원마다 다를 것이 없다.
         yield request.app.state.provider
         return
 
-    # cloud: 회원 인증 → 키 복호화 → 요청 전용 프로바이더
-    with next(get_session()) as db:  # type: ignore[arg-type]
-        user = current_user(request, settings, db)
-        user = ready_user(user)
-        api_key = KeyCipher(settings.encryption_key).decrypt(user.encrypted_api_key or "")
-
-    provider = GeminiProvider(
-        api_key,
-        base_url=settings.gemini_base_url,
-        model=settings.gemini_model,
-        timeout=settings.gemini_timeout,
-        temperature=settings.llm_temperature,
-        max_tokens=settings.llm_max_tokens,
-    )
+    provider = _build_cloud_provider(choice, api_key, settings)
     try:
         yield provider
     finally:

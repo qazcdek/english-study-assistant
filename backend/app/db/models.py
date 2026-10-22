@@ -40,9 +40,10 @@ class User(Base):
     # 동의 없이는 분석을 시작할 수 없다.
     consented_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), default=None)
 
-    # 회원이 등록한 Gemini API 키. Fernet 으로 암호화해 저장한다.
-    encrypted_api_key: Mapped[str | None] = mapped_column(Text, default=None)
-    api_key_hint: Mapped[str] = mapped_column(String(16), default="")
+    # 어느 제공자·모델로 일하나. **회원 전역 설정**이고, 바꿔 저장하면 그 뒤의 모든
+    # 작업이 그것으로 간다 (09-mode-matrix.md §3.2). 비면 모드별 기본값을 쓴다.
+    active_provider: Mapped[str] = mapped_column(String(20), default="")
+    active_model: Mapped[str] = mapped_column(String(80), default="")
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     last_login_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
@@ -57,9 +58,9 @@ class User(Base):
         back_populates="user", cascade="all, delete-orphan"
     )
 
-    @property
-    def has_api_key(self) -> bool:
-        return bool(self.encrypted_api_key)
+    provider_keys: Mapped[list["ProviderKey"]] = relationship(
+        back_populates="user", cascade="all, delete-orphan"
+    )
 
     @property
     def has_consented(self) -> bool:
@@ -101,6 +102,34 @@ class PracticeRecord(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, index=True)
 
     user: Mapped[User] = relationship(back_populates="practices")
+
+
+class ProviderKey(Base):
+    """제공자별 회원 API 키.
+
+    전에는 `users.encrypted_api_key` 한 칸이었다 — 제공자가 하나였기 때문이다.
+    둘 이상을 고를 수 있게 되면서(M12-T1) 한 칸으로는 담을 수 없다.
+
+    **`encrypted` 는 `Text` 다.** 길이를 좁히면 안 된다 — 재 보니 **SQLite 는 길이를
+    아예 무시하고 그냥 넣고, Postgres 는 `value too long` 으로 거부한다.**
+    그래서 짧은 열은 **테스트를 통과하고 배포 때 깨진다.** 자르는 것이 아니라 터지는
+    쪽이지만, 어긋남이 배포본에서만 드러난다는 점은 14-data-layer.md §3.3 과 같다.
+
+    `ENCRYPTION_KEY` 는 절대 교체하지 않는다 — 바꾸면 기존 키를 복호화할 수 없다.
+    """
+
+    __tablename__ = "provider_keys"
+    __table_args__ = (UniqueConstraint("user_id", "provider", name="uq_key_user_provider"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    provider: Mapped[str] = mapped_column(String(20))
+    encrypted: Mapped[str] = mapped_column(Text)
+    # 화면에는 끝 네 자리만 보여준다. 평문은 서버 밖으로 나가지 않는다.
+    hint: Mapped[str] = mapped_column(String(16), default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+    user: Mapped[User] = relationship(back_populates="provider_keys")
 
 
 class VocabularyItem(Base):

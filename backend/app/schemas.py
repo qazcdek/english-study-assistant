@@ -273,16 +273,32 @@ class AccountResponse(BaseModel):
     name: str
     picture: str
     has_consented: bool
+    # **지금 고른 제공자의** 키가 있나. 키를 제공자마다 따로 두므로 회원 단위 사실이
+    # 아니다 — 다른 제공자 키가 있어도 지금 쓸 것이 없으면 호출할 수 없다 (M12-T2).
     has_api_key: bool
     api_key_hint: str = ""
+    # 제공자 → 끝 네 자리. **평문은 서버 밖으로 나가지 않는다.**
+    keys: dict[str, str] = {}
+    # 회원 전역 설정. 바꿔 저장하면 그 뒤의 모든 작업이 이것으로 간다.
+    active_provider: str = ""
+    active_model: str = ""
 
 
 class ConsentRequest(BaseModel):
     agreed: bool
 
 
+class ActiveModelRequest(BaseModel):
+    """쓸 제공자와 모델을 고른다. **저장하는 순간부터 모든 작업이 그것으로 간다.**"""
+
+    provider: str
+    model: str = ""
+
+
 class ApiKeyRequest(BaseModel):
     api_key: str = Field(min_length=10, max_length=200)
+    # 어느 제공자의 키인가. 비우면 지금 고른 제공자로 본다.
+    provider: str = ""
 
     @field_validator("api_key")
     @classmethod

@@ -154,18 +154,44 @@ def test_leaving_removes_the_account_and_its_data(cloud):
     assert cloud.get("/api/auth/me").status_code == 401
 
 
-def test_leaving_takes_the_encrypted_key_with_it(cloud):
-    """암호화된 Gemini 키는 계정 행에 있다. 따로 지우지 않아도 함께 사라져야 한다."""
+def test_leaving_takes_the_encrypted_keys_with_it(cloud):
+    """키는 이제 **따로 있는 표**에 있다. 탈퇴가 그것까지 지워야 한다 (M12-T2).
+
+    전에는 계정 행에 있어서 계정을 지우면 함께 사라졌다. 표가 갈리면서 그 보장이
+    사라졌다 — `OWNED` 에 넣지 않으면 **탈퇴한 회원의 암호화된 키가 남는다.**
+    """
+    from app.db import ProviderKey
+
     user_id = make_user()
     login(cloud, user_id)
 
     with session_scope() as db:
-        assert db.get(User, user_id).encrypted_api_key
+        assert db.query(ProviderKey).filter(ProviderKey.user_id == user_id).count() == 1
 
     cloud.delete("/api/auth/account")
 
     with session_scope() as db:
         assert db.query(User).filter(User.id == user_id).count() == 0
+        assert db.query(ProviderKey).filter(ProviderKey.user_id == user_id).count() == 0
+
+
+def test_clearing_records_keeps_the_key(cloud):
+    """**기록 삭제는 키를 건드리지 않는다.**
+
+    `OWNED` 한 상수로 두 범위를 겸하다가 실제로 틀렸다 — 기록을 비우니 키까지
+    사라져 그다음 분석이 403 이 났다 (M12-T2).
+    """
+    from app.db import ProviderKey
+
+    user_id = make_user()
+    login(cloud, user_id)
+    cloud.post("/api/analyze", json={"text": "across the pond"})
+
+    cloud.delete("/api/account/data")
+
+    with session_scope() as db:
+        assert db.query(ProviderKey).filter(ProviderKey.user_id == user_id).count() == 1
+    assert cloud.post("/api/analyze", json={"text": "across the pond"}).status_code == 200
 
 
 def test_leaving_requires_login(cloud):
