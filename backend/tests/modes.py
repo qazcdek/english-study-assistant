@@ -57,17 +57,32 @@ def build_app(provider: FakeProvider | None = None):
 
 
 def make_cloud_user(*, consented: bool = True, with_key: bool = True) -> int:
+    """cloud 모드의 회원 하나.
+
+    키는 **제공자별 표**에 넣는다 — `users` 의 한 칸이던 시절에는 회원 행에 직접
+    적었다 (M12-T2).
+    """
+    from app.db import ProviderKey
+    from app.providers import registry
+
     with session_scope() as db:
         user = User(google_sub="sub-1", email="a@b.com", name="테스터")
         if consented:
             from app.db.models import utcnow
 
             user.consented_at = utcnow()
-        if with_key:
-            user.encrypted_api_key = KeyCipher(ENCRYPTION_KEY).encrypt("AIzaSyFAKEKEY0000")
-            user.api_key_hint = "••••0000"
         db.add(user)
         db.flush()
+        if with_key:
+            db.add(
+                ProviderKey(
+                    user_id=user.id,
+                    provider=registry.GEMINI,
+                    encrypted=KeyCipher(ENCRYPTION_KEY).encrypt("AIzaSyFAKEKEY0000"),
+                    hint="••••0000",
+                )
+            )
+            db.flush()
         return user.id
 
 

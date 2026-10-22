@@ -28,7 +28,8 @@ users                       주인.  한 행이 한 회원
   ├── analyses              매달린 표. 전부 user_id 를 든다
   ├── practices
   ├── vocabulary
-  └── usage_counters
+  ├── usage_counters
+  └── provider_keys         제공자별 회원 API 키 (암호화)
 ```
 
 | 테이블 | 내용 |
@@ -38,10 +39,23 @@ users                       주인.  한 행이 한 회원
 | `practices` | 작문 연습 채점 기록 |
 | `vocabulary` | 나의 표현 (화면에서 부르는 이름만 다르다 — [03](03-api-spec.md)) |
 | `usage_counters` | 일 단위 사용량 |
+| `provider_keys` | 제공자별 회원 API 키. **암호화**해 보관하고 끝 네 자리만 보여준다 |
 
-**매달린 표의 목록은 코드에도 있다** — `app/services/account.py` 의 `OWNED`.
-그 상수가 삭제·집계·탈퇴에 쓰이므로, **목록이 불완전하면 탈퇴한 회원의 데이터가 남는다.**
+**매달린 표의 목록은 코드에도 있다** — `app/services/account.py`.
+목록이 불완전하면 **탈퇴한 회원의 데이터가 남는다.**
 `→ backend/app/services/account.py`
+
+**지우는 범위는 둘이다.** 한 상수로 겸하려다 실제로 틀렸다 — 키 표를 넣으니
+"기록 전부 삭제" 가 **등록한 키까지 지웠고**, 회원은 학습 기록을 비우려 했는데 키를
+잃고 그다음 분석이 403 으로 막혔다 (M12-T2).
+
+```
+RECORDS   기록 삭제가 지우는 것.  analyses · practices · vocabulary · usage_counters
+OWNED     탈퇴가 지우는 것.       RECORDS + provider_keys
+```
+
+`count_data` 도 **기록만 센다** — 그 숫자는 "기록 전부 삭제" 가 지울 것을 보여주는
+용도이기 때문이다.
 
 로컬 모드도 같은 표를 쓴다. 앱이 뜰 때 만드는 사용자 행 하나(`id=1`)가 주인이다.
 **두 모드가 같은 스키마를 쓰므로 리비전도 하나다** ([09 §4](09-mode-matrix.md)).

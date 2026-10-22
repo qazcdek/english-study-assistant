@@ -4,17 +4,25 @@ from datetime import UTC, datetime
 
 from fastapi import APIRouter, Query, Request, Response
 from fastapi.responses import RedirectResponse
+from sqlalchemy.orm import Session
 
-from app.auth.crypto import key_hint
 from app.auth.google import GoogleOAuth, OAuthError
 from app.auth.session import COOKIE_NAME, issue_token
+from app.config import get_settings
 from app.db import User
 from app.db.models import utcnow
 from app.deps import CipherDep, DbDep, SettingsDep, UserDep
 from app.errors import AppError
+from app.providers import registry
 from app.providers.gemini import verify_api_key
-from app.schemas import AccountResponse, ApiKeyRequest, ConsentRequest, DeletionSummary
-from app.services import account
+from app.schemas import (
+    AccountResponse,
+    ActiveModelRequest,
+    ApiKeyRequest,
+    ConsentRequest,
+    DeletionSummary,
+)
+from app.services import account, keys
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
@@ -31,14 +39,22 @@ def _oauth(settings) -> GoogleOAuth:
     )
 
 
-def _account(user: User) -> AccountResponse:
+def _account(user: User, db: Session) -> AccountResponse:
+    """화면이 그릴 수 있을 만큼. **평문 키는 담지 않는다.**"""
+    settings = get_settings()
+    choice = keys.resolve(user, settings.app_mode)
+    held = keys.providers_with_keys(db, user.id)
     return AccountResponse(
         email=user.email,
         name=user.name,
         picture=user.picture,
         has_consented=user.has_consented,
-        has_api_key=user.has_api_key,
-        api_key_hint=user.api_key_hint,
+        # **지금 고른 제공자의** 키가 있나. 회원 단위 사실이 아니다 (M12-T2).
+        has_api_key=keys.has_key(db, user, choice),
+        api_key_hint=held.get(choice.provider.id, ""),
+        keys=held,
+        active_provider=choice.provider.id,
+        active_model=choice.model,
     )
 
 
@@ -92,8 +108,8 @@ async def google_callback(
 
 
 @router.get("/me", response_model=AccountResponse)
-def me(user: UserDep) -> AccountResponse:
-    return _account(user)
+def me(user: UserDep, db: DbDep) -> AccountResponse:
+    return _account(user, db)
 
 
 @router.post("/logout")
@@ -108,7 +124,7 @@ def consent(request: ConsentRequest, user: UserDep, db: DbDep) -> AccountRespons
         raise AppError("동의해야 서비스를 이용할 수 있습니다.")
     user.consented_at = datetime.now(UTC)
     db.commit()
-    return _account(user)
+    return _account(user, db)
 
 
 @router.put("/api-key", response_model=AccountResponse)
@@ -123,26 +139,61 @@ async def set_api_key(
     if not user.has_consented:
         raise AppError("먼저 이용 동의를 해 주세요.")
 
-    ok, detail = await verify_api_key(
-        request.api_key,
-        base_url=settings.gemini_base_url,
-        model=settings.gemini_model,
-    )
-    if not ok:
-        raise AppError(f"키를 확인하지 못했습니다. {detail or ''}".strip())
+    provider_id = request.provider or keys.resolve(user, settings.app_mode).provider.id
+    provider = registry.info(provider_id)
+    if provider is None or not provider.implemented:
+        raise AppError("지금 쓸 수 없는 제공자입니다.")
+    if not provider.needs_key:
+        raise AppError(f"{provider.label} 는 키가 필요하지 않습니다.")
 
-    user.encrypted_api_key = cipher.encrypt(request.api_key)
-    user.api_key_hint = key_hint(request.api_key)
+    # 지금은 Gemini 하나뿐이다. 둘이 늘면 확인 방법도 제공자마다 갈린다 (M12-T3).
+    if provider_id == registry.GEMINI:
+        ok, detail = await verify_api_key(
+            request.api_key,
+            base_url=settings.gemini_base_url,
+            model=provider.models[0],
+        )
+        if not ok:
+            raise AppError(f"키를 확인하지 못했습니다. {detail or ''}".strip())
+
+    keys.save(db, user.id, provider_id, request.api_key, cipher)
     db.commit()
-    return _account(user)
+    return _account(user, db)
 
 
 @router.delete("/api-key", response_model=AccountResponse)
-def delete_api_key(user: UserDep, db: DbDep) -> AccountResponse:
-    user.encrypted_api_key = None
-    user.api_key_hint = ""
+def delete_api_key(
+    user: UserDep, db: DbDep, settings: SettingsDep, provider: str = ""
+) -> AccountResponse:
+    """키를 지운다. 제공자를 안 주면 지금 고른 것을 지운다."""
+    provider_id = provider or keys.resolve(user, settings.app_mode).provider.id
+    row = keys.row_for(db, user.id, provider_id)
+    if row is not None:
+        db.delete(row)
+        db.commit()
+    return _account(user, db)
+
+
+@router.put("/model", response_model=AccountResponse)
+def choose_model(
+    request: ActiveModelRequest, user: UserDep, db: DbDep, settings: SettingsDep
+) -> AccountResponse:
+    """쓸 제공자와 모델을 고른다 — **회원 전역 설정**이다.
+
+    저장하는 순간부터 분석과 채점이 그것으로 간다. 고를 수 없는 것은 거부한다 —
+    저장해 두고 나중에 기본값으로 떨어지면 회원은 자기가 고른 것으로 돌아간다고 믿는다.
+    """
+    allowed = {p.id: p for p in registry.selectable(settings.app_mode)}
+    provider = allowed.get(request.provider)
+    if provider is None:
+        raise AppError("이 모드에서 고를 수 없는 제공자입니다.")
+    if request.model and request.model not in provider.models:
+        raise AppError("그 제공자가 제공하지 않는 모델입니다.")
+
+    user.active_provider = provider.id
+    user.active_model = request.model or provider.models[0]
     db.commit()
-    return _account(user)
+    return _account(user, db)
 
 
 @router.delete("/account", response_model=DeletionSummary)
