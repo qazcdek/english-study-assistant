@@ -234,7 +234,7 @@ export default function App() {
       <div className="grid gap-6 lg:grid-cols-[1fr_200px]">
         <main className="flex flex-col gap-4">
           {view === 'mine' ? (
-            <MyExpressions vocab={vocab} />
+            <MyExpressions vocab={vocab} level={level} />
           ) : (
             <>
           <InputPanel
