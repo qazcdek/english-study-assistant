@@ -264,3 +264,105 @@ def test_every_done_entry_sits_under_a_date_heading():
 
 def _seen_date_before(line: int) -> bool:
     return any(n < line and kind == "date" for n, kind, _ in _done_outline())
+
+
+# ------------------------------------- 세부의 자리 (ONGOING ↔ DONE ↔ 체크박스)
+#
+# 세부를 둘 자리가 DONE 뿐이었고, DONE 은 끝난 뒤에 쓰는 문서다. 그래서 진행 중인
+# 세부가 한 줄 요약에 밀려 들어갔고, **짧은 줄은 틀려도 맞아 보인다** (H-027).
+# 이제 자리가 상태에 따라 갈리므로, 그 짝이 맞는지는 글자 비교로는 부족하다.
+
+PLAN = ROOT / "documents" / "plan"
+_TRACKED = re.compile(r"^- \[(.)\]\s+(M\d+-T\d+|H-\d+)\b")
+
+
+def _tracked() -> dict[str, str]:
+    """ROADMAP · ISSUES 의 모든 태그 → 체크박스 글자."""
+    states = {}
+    for name in ("ROADMAP.md", "ISSUES.md"):
+        for _, line in outside_fences((PLAN / name).read_text(encoding="utf-8")):
+            if m := _TRACKED.match(line):
+                states[m.group(2)] = m.group(1)
+    return states
+
+
+def _sections(name: str) -> set[str]:
+    """그 문서가 세부를 들고 있는 태그들."""
+    pattern = re.compile(r"^### (M\d+-T\d+|H-\d+) ·")
+    return {
+        m.group(1)
+        for _, line in outside_fences((PLAN / name).read_text(encoding="utf-8"))
+        if (m := pattern.match(line))
+    }
+
+
+def test_the_tracking_docs_were_actually_read():
+    """빈 목록을 훑으면 아래 검사들이 통과만 한다."""
+    assert len(_tracked()) >= 20
+    assert len(_sections("DONE.md")) >= 10
+
+
+def test_every_ongoing_section_has_a_tracked_tag():
+    """ONGOING 에만 있는 태그는 추적되지 않는다 — 아무도 그 일이 열린 줄 모른다."""
+    orphans = sorted(_sections("ONGOING.md") - set(_tracked()))
+
+    assert not orphans, f"ROADMAP · ISSUES 에 없는 태그가 ONGOING 에 있다: {orphans}"
+
+
+def test_everything_in_ongoing_is_open():
+    """끝난 일이 ONGOING 에 남아 있으면, 다음에 고를 때 이미 한 일을 다시 집는다."""
+    states = _tracked()
+    closed = sorted(tag for tag in _sections("ONGOING.md") if states.get(tag) != "~")
+
+    assert not closed, f"`[~]` 가 아닌데 ONGOING 에 있다: {closed}"
+
+
+def test_no_tag_has_detail_in_both_places():
+    """**옮겼으면 지운다.** 한 태그의 세부가 두 곳에 있으면 갈라지고, 갈라진 둘은
+    틀린 하나보다 나쁘다 (11 §2.1)."""
+    both = sorted(_sections("ONGOING.md") & _sections("DONE.md"))
+
+    assert not both, f"ONGOING 과 DONE 에 모두 있다 — DONE 으로 옮겼으면 지운다: {both}"
+
+
+def test_every_open_tag_has_detail_somewhere():
+    """`[~]` 는 "열려 있다" 는 뜻이고, 열린 일에는 **이어받을 수 있는 세부**가 있어야 한다.
+
+    진행 중이면 ONGOING, 끝났고 머지 대기면 DONE 이다. 둘 다 없으면 그 줄은
+    한 줄 요약만 들고 있고, 짧은 줄은 틀려도 맞아 보인다.
+    """
+    detail = _sections("ONGOING.md") | _sections("DONE.md")
+    naked = sorted(tag for tag, state in _tracked().items() if state == "~" and tag not in detail)
+
+    assert not naked, f"`[~]` 인데 ONGOING · DONE 둘 다에 세부가 없다: {naked}"
+
+
+def test_an_unstarted_tag_has_no_detail_anywhere():
+    """`[ ]` 인데 세부가 있으면 체크박스가 거짓말을 하고 있다."""
+    detail = _sections("ONGOING.md") | _sections("DONE.md")
+    lying = sorted(tag for tag, state in _tracked().items() if state == " " and tag in detail)
+
+    assert not lying, f"`[ ]` 인데 세부가 있다: {lying}"
+
+
+def test_a_finished_tag_has_its_detail_in_done():
+    detail = _sections("DONE.md")
+    missing = sorted(tag for tag, state in _tracked().items() if state == "x" and tag not in detail)
+
+    assert not missing, f"`[x]` 인데 DONE 에 세부가 없다: {missing}"
+
+
+def test_every_ongoing_section_carries_dates_and_a_next_step():
+    """날짜가 없으면 낡은 것이 안 보이고, 다음 걸음이 없으면 이어받을 수 없다."""
+    text = (PLAN / "ONGOING.md").read_text(encoding="utf-8")
+    blocks = re.split(r"^### (?=(?:M\d+-T\d+|H-\d+) ·)", text, flags=re.MULTILINE)[1:]
+    bad = []
+    for block in blocks:
+        tag = block.split(" ·")[0]
+        if not re.search(r"^시작 \d{4}-\d{2}-\d{2} · 갱신 \d{4}-\d{2}-\d{2}", block, re.MULTILINE):
+            bad.append(f"{tag} — `시작 … · 갱신 …` 줄이 없다")
+        if "**다음 걸음**" not in block:
+            bad.append(f"{tag} — **다음 걸음** 이 없다")
+        if "**전제**" not in block:
+            bad.append(f"{tag} — **전제** 가 없다")
+    assert not bad, "ONGOING 절의 형식이 어긋났다:\n  " + "\n  ".join(bad)

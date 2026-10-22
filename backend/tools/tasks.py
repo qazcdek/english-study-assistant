@@ -5,8 +5,9 @@
 
 **표시 순서는 우선순위가 아니라 규칙이다.**
 
-1. `[~]` 먼저. "끝났고 머지 대기" 라고 선언된 것이므로 **가장 싸게 닫히고 가장 쉽게 잊힌다.**
-   DONE 에 세부가 있으면 머지됐는지부터 확인하라는 뜻이다.
+1. `[~]` 먼저. **열려 있다고 선언된 것**이므로 가장 싸게 닫히고 가장 쉽게 잊힌다.
+   ONGOING 에 세부가 있으면 **다음 걸음**을 함께 찍고, DONE 에 있으면 머지됐는지
+   확인하라는 뜻이다 (H-027).
 2. 그다음 `H`. 지금 동작이 잘못된 것이 아직 안 만든 것보다 앞선다.
 3. 그다음 `M`-`T`, 마일스톤 번호 순.
 
@@ -64,6 +65,50 @@ class Task:
             return (state_rank, 0, 0, int(self.tag.split("-")[1]))
         milestone, task = (int(n) for n in self.tag[1:].split("-T"))
         return (state_rank, 1, milestone, task)
+
+
+_NEXT_STEP = re.compile(r"^- \*\*다음 걸음\*\*\s*(.+)$")
+
+
+def next_steps() -> dict[str, str]:
+    """ONGOING 의 태그별 **다음 걸음** 한 줄.
+
+    고를 때 "어디까지 했나" 가 보이지 않으면 ONGOING 은 안 읽힌다. 쓰는 사람이
+    찾아 들어가야 하는 문서는 **쓰이지 않는 문서**가 된다 (H-027).
+
+    읽는 것은 그 한 줄뿐이다. 전제와 결정까지 여기 찍으면 목록이 아니게 된다 —
+    그건 문서를 열어서 본다.
+    """
+    doc = PLAN / "ONGOING.md"
+    if not doc.is_file():
+        return {}
+    steps: dict[str, str] = {}
+    tag, in_fence, collecting = None, False, False
+    for line in doc.read_text(encoding="utf-8").splitlines():
+        if _FENCE.match(line):
+            in_fence = not in_fence
+            continue
+        if in_fence:
+            continue
+        if m := re.match(r"^### (M\d+-T\d+|H-\d+) ·", line):
+            tag, collecting = m.group(1), False
+        elif tag and (m := _NEXT_STEP.match(line)):
+            steps[tag] = m.group(1).strip()
+            collecting = True
+        elif tag and collecting:
+            # 문서는 줄을 접어 쓴다. 이어지는 들여쓴 줄까지 한 줄로 모은다 —
+            # 첫 줄만 읽으면 문장이 중간에서 끊긴다.
+            if line.startswith(("  ", "\t")) and line.strip():
+                steps[tag] += " " + line.strip()
+            else:
+                tag, collecting = None, False
+    return {tag: _one_line(step) for tag, step in steps.items()}
+
+
+def _one_line(step: str, width: int = 96) -> str:
+    """목록은 한 줄에 한 가지만 담는다. 길면 자르고 문서를 열어 보게 한다."""
+    plain = re.sub(r"\*\*|`", "", " ".join(step.split()))
+    return plain if len(plain) <= width else plain[: width - 1].rstrip() + "…"
 
 
 def scan_tasks() -> list[Task]:
@@ -239,8 +284,10 @@ def render(
     tasks: list[Task],
     prefix: str | None = None,
     reports: dict[str, str] | None = None,
+    steps: dict[str, str] | None = None,
 ) -> str:
     reports = reports or {}
+    steps = steps or {}
     open_tasks = [t for t in tasks if t.state != "x"]
     if prefix:
         open_tasks = [t for t in open_tasks if t.tag.startswith(prefix.upper())]
@@ -248,8 +295,8 @@ def render(
     out: list[str] = []
     waiting = [t for t in open_tasks if t.state == "~"]
     if waiting:
-        out.append(f"머지 대기 — 끝났다고 선언된 것부터 확인한다 ({len(waiting)})")
-        out += _block(waiting, reports)
+        out.append(f"진행 중 — 어디까지 했는지 먼저 본다 ({len(waiting)})")
+        out += _block(waiting, reports, steps)
         if any("끝을 안 담았다" in reports.get(t.tag, "") for t in waiting):
             # 기준 ref 는 마지막으로 가져온 시점의 것이다. 오래됐으면 틀릴 수 있다.
             out.append("\n  최신이 아닐 수 있다 — `git fetch` 뒤에 다시 본다")
@@ -261,14 +308,14 @@ def render(
 
     todo = [t for t in open_tasks if t.state == " "]
     out.append(f"열린 작업 ({len(todo)})")
-    out += _block(todo, reports) if todo else ["  없음"]
+    out += _block(todo, reports, steps) if todo else ["  없음"]
 
     if not open_tasks:
         return f"열린 작업이 없다{f' ({prefix})' if prefix else ''}."
     return "\n".join(out)
 
 
-def _block(tasks: list[Task], reports: dict[str, str]) -> list[str]:
+def _block(tasks: list[Task], reports: dict[str, str], steps: dict[str, str]) -> list[str]:
     out, section = [], None
     for task in tasks:
         where = f"{task.doc.removesuffix('.md')} · {task.section}"
@@ -279,9 +326,12 @@ def _block(tasks: list[Task], reports: dict[str, str]) -> list[str]:
             out.append(f"              → {target}")
         if task.state != "~":
             continue
-        if report := reports.get(task.tag):
+        if step := steps.get(task.tag):
+            out.append(f"              다음 걸음 — {step}")
+        report = reports.get(task.tag)
+        if report and not (step and "못 찾았다" in report):
             out.append(f"              {report}")
-        elif task.has_detail:
+        elif not step and task.has_detail:
             out.append("              DONE 에 세부 있음 — 머지됐는지 확인하고 [x] 로 올린다")
     return out
 
@@ -297,7 +347,7 @@ def main(argv: list[str] | None = None) -> int:
     reports = merge_reports(waiting) if waiting else {}
     if stale := behind_base():
         reports[_BASE_KEY] = stale
-    print(render(tasks, prefix, reports))
+    print(render(tasks, prefix, reports, next_steps()))
     return 0
 
 

@@ -165,18 +165,8 @@ check_docs() {
     grep -q "(${rel%.md}.md)" "$index" || { warn "색인에 없음  documents/$rel"; bad=1; }
   done
 
-  # 3) 체크된 태그는 DONE 에 세부가 있어야 하고, 안 된 태그는 없어야 한다
-  local plan="$ROOT/documents/plan" tag st n
-  while read -r st tag; do
-    n="$(grep -c "^### ${tag} " "$plan/DONE.md" || true)"
-    case "$st" in
-      x|'~') [[ "$n" -ge 1 ]] || { warn "DONE 에 세부 없음  ${tag} [${st}]"; bad=1; } ;;
-      *)     [[ "$n" -eq 0 ]] || { warn "안 끝났는데 DONE 에 있음  ${tag}"; bad=1; } ;;
-    esac
-  done < <(
-    grep -hoE '^- \[.\] (M[0-9]+-T[0-9]+|H-[0-9]+) ' "$plan/ROADMAP.md" "$plan/ISSUES.md" |
-      sed -E 's/^- \[(.)\] (.*) $/\1 \2/'
-  )
+  # 3) 추적 정합성은 pytest 쪽에서 본다 (1번에 포함) — 세부의 자리가 상태에 따라
+  #    갈리므로(ONGOING / DONE) 글자 비교로는 부족하다.
 
   if [[ $bad -eq 0 ]]; then
     ok "문서 계층 이상 없음 ${DIM}(그래프 · 주소 · 머리말 · 색인 · 태그)${RESET}"
