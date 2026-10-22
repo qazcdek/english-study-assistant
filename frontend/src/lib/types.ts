@@ -146,6 +146,10 @@ export interface PracticeRequest {
   model_answer: string
   learner_answer: string
   level: Level
+  /** 채점에는 안 쓰인다. 서버가 이 표현을 **나의 표현에 올릴 때** 쓴다. */
+  type?: string
+  /** 같은 이유로 함께 보낸다. 목록에서 "어느 글에서 만났는지"가 보인다. */
+  source_text?: string
 }
 
 export interface PracticeResult {
@@ -213,6 +217,7 @@ export interface HistoryDetail extends HistoryItem {
   markdown: MarkdownSections
 }
 
+/** 나의 표현 한 항목. 서버의 `vocabulary` 그대로다. */
 export interface VocabularyItem {
   id: number
   expression: string
@@ -221,5 +226,27 @@ export interface VocabularyItem {
   example: string
   example_ko: string
   source_text: string
+  created_at: string
+  /** 이 표현으로 직접 써본 횟수. **0 이 아니면 제외할 때 한 번 더 묻는다.** */
+  practice_count: number
+}
+
+/** 제외한 결과. 연습 기록이 몇 건 함께 사라졌는지. */
+export interface VocabularyRemoval {
+  ok: boolean
+  expression: string
+  practices_deleted: number
+}
+
+/** 직접 써본 기록 한 건. */
+export interface PracticeHistoryItem {
+  id: number
+  expression: string
+  prompt_ko: string
+  model_answer: string
+  learner_answer: string
+  verdict: Verdict
+  uses_target: boolean
+  feedback: PracticeResult
   created_at: string
 }

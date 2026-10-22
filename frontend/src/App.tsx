@@ -7,6 +7,7 @@ import { DataMenu } from './components/DataMenu'
 import { HistoryList } from './components/HistoryList'
 import { InputPanel } from './components/InputPanel'
 import { LoginPanel } from './components/LoginPanel'
+import { MyExpressions } from './components/MyExpressions'
 import { ResultView } from './components/ResultView'
 import { StatusBar } from './components/StatusBar'
 import { MIN_CHARS } from './components/InputPanel'
@@ -23,6 +24,7 @@ import {
 } from './lib/api'
 import type { HistoryEntry } from './lib/history'
 import { useSession } from './lib/useSession'
+import { useVocabulary } from './lib/useVocabulary'
 import type { Level, LlmHealth } from './lib/types'
 
 export default function App() {
@@ -37,11 +39,15 @@ export default function App() {
   const [history, setHistory] = useState<HistoryEntry[]>([])
   const [activeId, setActiveId] = useState<string | null>(null)
   const [llmHealth, setLlmHealth] = useState<LlmHealth | null>(null)
+  // 분석 화면과 나의 표현 중 어느 쪽을 보고 있나. 주소를 쓰지 않는 한 화면 앱이다.
+  const [view, setView] = useState<'analyze' | 'mine'>('analyze')
   const abortRef = useRef<AbortController | null>(null)
   // 같은 문구를 연달아 띄워도 다시 나타나야 해서, 띄운 시각을 key 로 쓴다.
   const [toast, setToast] = useState<{ message: string; at: number } | null>(null)
 
   const ready = session.stage === 'ready' || session.stage === 'local'
+  // 나의 표현은 두 화면이 함께 본다 — 분석 화면의 별과 목록이 어긋나지 않게 한 곳에서 든다.
+  const vocab = useVocabulary(ready)
 
   useEffect(() => {
     if (!ready) return
@@ -84,6 +90,8 @@ export default function App() {
     setRunning(true)
     setError(null)
     setActiveId(null)
+    // 나의 표현을 보던 중에 분석을 시작하면 결과가 안 보인다.
+    setView('analyze')
 
     let state = initialState(trimmed)
     setAnalysis(state)
@@ -131,6 +139,7 @@ export default function App() {
     setText(entry.text)
     setActiveId(entry.id)
     setError(null)
+    setView('analyze')
 
     // 목록에는 본문이 없다. 고를 때 가져온다.
     try {
@@ -185,6 +194,31 @@ export default function App() {
           영어 문장을 번역 · 표현 · 구조 · 총평으로 정리합니다
         </p>
         <div className="ml-auto flex items-center gap-3">
+          <nav className="flex items-center gap-1 rounded-lg bg-stone-100 p-0.5 text-xs dark:bg-stone-800">
+            {(
+              [
+                ['analyze', '분석'],
+                ['mine', '나의 표현'],
+              ] as const
+            ).map(([key, label]) => (
+              <button
+                key={key}
+                type="button"
+                onClick={() => setView(key)}
+                aria-current={view === key}
+                className={`rounded-md px-2.5 py-1 transition ${
+                  view === key
+                    ? 'bg-white font-medium text-stone-900 shadow-sm dark:bg-stone-950 dark:text-stone-100'
+                    : 'text-stone-500 hover:text-stone-700 dark:hover:text-stone-300'
+                }`}
+              >
+                {label}
+                {key === 'mine' && vocab.items.length > 0 && (
+                  <span className="ml-1 text-stone-400">{vocab.items.length}</span>
+                )}
+              </button>
+            ))}
+          </nav>
           {!cloud && <StatusBar health={llmHealth} />}
           {!cloud && ready && <DataMenu />}
           {cloud && session.account && (
@@ -199,6 +233,10 @@ export default function App() {
 
       <div className="grid gap-6 lg:grid-cols-[1fr_200px]">
         <main className="flex flex-col gap-4">
+          {view === 'mine' ? (
+            <MyExpressions vocab={vocab} />
+          ) : (
+            <>
           <InputPanel
             text={text}
             level={level}
@@ -224,12 +262,14 @@ export default function App() {
             </div>
           )}
 
-          {analysis && <ResultView state={analysis} level={level} />}
+          {analysis && <ResultView state={analysis} level={level} vocab={vocab} />}
 
           {!analysis && !error && (
             <div className="rounded-2xl border border-dashed border-stone-300 p-10 text-center text-sm text-stone-400 dark:border-stone-700">
               분석할 영어 문장을 위에 붙여넣고 <b>분석하기</b>를 눌러 주세요.
             </div>
+          )}
+            </>
           )}
         </main>
 

@@ -2,11 +2,20 @@ import { useState } from 'react'
 
 import { isFinished, type AnalysisState } from '../lib/analysis'
 import type { Level } from '../lib/types'
+import type { VocabularyStore } from '../lib/useVocabulary'
 import { ExpressionTable } from './ExpressionTable'
 import { OverviewCard } from './OverviewCard'
 import { Section } from './Section'
 
-export function ResultView({ state, level }: { state: AnalysisState; level: Level }) {
+export function ResultView({
+  state,
+  level,
+  vocab,
+}: {
+  state: AnalysisState
+  level: Level
+  vocab: VocabularyStore
+}) {
   const { result, status, meta } = state
   const [copied, setCopied] = useState(false)
   const done = isFinished(state)
@@ -60,6 +69,8 @@ export function ResultView({ state, level }: { state: AnalysisState; level: Leve
           expressions={result.expressions}
           keyExpressions={result.overview?.key_expressions ?? []}
           level={level}
+          sourceText={result.source_text}
+          vocab={vocab}
         />
       </Section>
 
