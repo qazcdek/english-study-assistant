@@ -12,7 +12,9 @@ vi.mock('../lib/api', () => ({
   ApiError: class ApiError extends Error {},
 }))
 
-const { MyExpressions, stamp, asExpression } = await import('../components/MyExpressions')
+const { MyExpressions, stamp, asExpression, groupByPrompt } = await import(
+  '../components/MyExpressions',
+)
 const { REMOVE_WARNING } = await import('../components/ExpressionTable')
 const { fakeStore, item } = await import('./fixtures')
 
@@ -67,19 +69,19 @@ describe('목록', () => {
 describe('나의 기록 보기', () => {
   test('접었다 폈다 한다', async () => {
     draw([item({ practice_count: 1 })])
-    expect(screen.queryByText(RECORD.learner_answer)).toBeNull()
+    expect(screen.queryByText(RECORD.prompt_ko)).toBeNull()
 
     fireEvent.click(screen.getByText(/나의 기록 보기/))
-    expect(await screen.findByText(RECORD.learner_answer)).toBeTruthy()
+    expect(await screen.findByText(RECORD.prompt_ko)).toBeTruthy()
 
-    fireEvent.click(screen.getByText(/나의 기록 보기/))
-    expect(screen.queryByText(RECORD.learner_answer)).toBeNull()
+    fireEvent.click(screen.getByText(/접기/))
+    expect(screen.queryByText(RECORD.prompt_ko)).toBeNull()
   })
 
   test('그 표현의 기록만 가져온다', async () => {
     draw([item({ practice_count: 1 })])
     fireEvent.click(screen.getByText(/나의 기록 보기/))
-    await screen.findByText(RECORD.learner_answer)
+    await screen.findByText(RECORD.prompt_ko)
 
     // 전부 가져와서 걸러내면 목록이 커질수록 느려진다.
     expect(listPracticeHistory).toHaveBeenCalledWith('refer to')
@@ -94,55 +96,107 @@ describe('나의 기록 보기', () => {
   })
 })
 
-describe('쓴 기록 한 건', () => {
+describe('제시문 묶음', () => {
+  async function open(rows = [RECORD]) {
+    listPracticeHistory.mockResolvedValue(rows)
+    draw([item({ practice_count: rows.length })])
+    fireEvent.click(screen.getByText(/나의 기록 보기/))
+    await screen.findByText(rows[0].prompt_ko)
+  }
+
+  test('제시문만 보이고 내 답안은 접혀 있다', async () => {
+    await open()
+
+    expect(screen.getByText(RECORD.prompt_ko)).toBeTruthy()
+    expect(screen.getByText(/내가 쓴 답안 보기/)).toBeTruthy()
+    // 접힌 채로 답안까지 깔면 훑을 수가 없다.
+    expect(screen.queryByText(RECORD.learner_answer)).toBeNull()
+  })
+
+  test('같은 제시문으로 쓴 답안은 한 묶음이 된다', async () => {
+    const again = { ...RECORD, id: 12, learner_answer: 'Please refer to the appendix.' }
+    await open([RECORD, again])
+
+    // 제시문이 시도마다 반복되면 정작 다른 부분인 내 문장이 묻힌다.
+    expect(screen.getAllByText(RECORD.prompt_ko)).toHaveLength(1)
+    expect(screen.getAllByText(/내가 쓴 답안 보기/)).toHaveLength(1)
+
+    fireEvent.click(screen.getByText(/내가 쓴 답안 보기/))
+    expect(screen.getByText(RECORD.learner_answer)).toBeTruthy()
+    expect(screen.getByText(again.learner_answer)).toBeTruthy()
+  })
+
+  test('제시문이 다르면 묶음도 갈린다', async () => {
+    const other = { ...RECORD, id: 13, prompt_ko: '자세한 내용은 부록에 있다.' }
+    await open([RECORD, other])
+
+    expect(screen.getAllByText(/내가 쓴 답안 보기/)).toHaveLength(2)
+    expect(screen.getByText(other.prompt_ko)).toBeTruthy()
+  })
+
+  test('묶는 순서는 서버가 준 최신순을 그대로 쓴다', () => {
+    const other = { ...RECORD, id: 13, prompt_ko: '자세한 내용은 부록에 있다.' }
+    const grouped = groupByPrompt([RECORD, other, { ...RECORD, id: 14 }])
+
+    expect(grouped.map(([prompt]) => prompt)).toEqual([RECORD.prompt_ko, other.prompt_ko])
+    expect(grouped[0][1].map((r) => r.id)).toEqual([RECORD.id, 14])
+  })
+})
+
+describe('내가 쓴 답안 한 건', () => {
   async function open() {
     draw([item({ practice_count: 1 })])
     fireEvent.click(screen.getByText(/나의 기록 보기/))
+    fireEvent.click(await screen.findByText(/내가 쓴 답안 보기/))
     const sentence = await screen.findByText(RECORD.learner_answer)
     return sentence.closest('li') as HTMLElement
   }
 
-  test('언제 썼는지 연월일 시분초로 보여준다', async () => {
-    const record = await open()
+  test('접힌 채로는 내 문장과 일시만 보여준다', async () => {
+    const answer = await open()
 
-    const time = record.querySelector('time')
+    expect(answer.textContent).toContain(RECORD.learner_answer)
+    const time = answer.querySelector('time')
     expect(time?.textContent).toBe(stamp(RECORD.created_at))
+    // 평가는 자세히 보기 안에 있다.
+    expect(answer.textContent).not.toContain(RECORD.feedback.good_point)
+    expect(answer.textContent).not.toContain(RECORD.model_answer)
+    expect(answer.textContent).not.toContain('통함')
+  })
+
+  test('일시는 연월일 시분초다', async () => {
+    const answer = await open()
+
     // 날짜만으로는 같은 날 여러 번 쓴 것이 구별되지 않는다.
-    expect(time?.textContent).toMatch(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/)
+    expect(answer.querySelector('time')?.textContent).toMatch(
+      /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/,
+    )
   })
 
-  test('접힌 채로는 판정과 내 문장만 보인다', async () => {
-    const record = await open()
+  test('자세히 보기를 누르면 모범 답안과 그때 AI 가 매긴 평가가 나온다', async () => {
+    const answer = await open()
 
-    expect(within(record).getByText(/통함/)).toBeTruthy()
-    expect(record.textContent).toContain(RECORD.learner_answer)
-    expect(record.textContent).not.toContain(RECORD.feedback.good_point)
-  })
-
-  test('자세히 보기를 누르면 그때 AI 가 매긴 평가가 그대로 나온다', async () => {
-    const record = await open()
-
-    fireEvent.click(within(record).getByText(/자세히 보기/))
+    fireEvent.click(within(answer).getByText(/자세히 보기/))
 
     for (const text of [
-      RECORD.prompt_ko,
+      RECORD.model_answer,
       RECORD.feedback.good_point,
       RECORD.feedback.target_note,
       RECORD.feedback.corrected,
       RECORD.feedback.other_notes[0],
-      RECORD.model_answer,
     ]) {
-      expect(within(record).getByText(text)).toBeTruthy()
+      expect(within(answer).getByText(text)).toBeTruthy()
     }
+    expect(within(answer).getByText(/통함/)).toBeTruthy()
   })
 
   test('다시 누르면 접힌다', async () => {
-    const record = await open()
+    const answer = await open()
 
-    fireEvent.click(within(record).getByText(/자세히 보기/))
-    fireEvent.click(within(record).getByText(/접기/))
+    fireEvent.click(within(answer).getByText(/자세히 보기/))
+    fireEvent.click(within(answer).getByText(/접기/))
 
-    expect(record.textContent).not.toContain(RECORD.feedback.good_point)
+    expect(answer.textContent).not.toContain(RECORD.feedback.good_point)
   })
 })
 
