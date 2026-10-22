@@ -265,3 +265,39 @@ def test_leaving_does_not_touch_another_member(two_members):
     login(client, owner)
     for path in LIST_PATHS:
         assert len(client.get(path).json()) == 1, f"{path} 가 비었다"
+
+
+def test_a_missing_row_and_another_members_row_answer_the_same(two_members):
+    """**구별하지 않는 것이 규약이다** (03 · 14 §3.1).
+
+    404 와 403 을 나눠 주면 "403 이 떴다 = 그 번호가 존재한다" 가 되고, 그것만으로
+    다른 회원이 몇 건을 쌓았는지 셀 수 있다. 내용을 못 봐도 그건 이미 누출이다.
+
+    상태 코드만 맞추면 메시지로 갈릴 수 있으므로 **본문까지** 같은지 본다.
+    """
+    client, _owner, stranger, mine = two_members
+    login(client, stranger)
+
+    missing = client.get("/api/history/999999")
+    other = client.get(f"/api/history/{mine['history']}")
+
+    assert missing.status_code == other.status_code == 404
+    assert missing.json() == other.json()
+
+
+@pytest.mark.parametrize(
+    ("method", "template"),
+    [
+        ("get", "/api/history/{history}"),
+        ("delete", "/api/history/{history}"),
+        ("delete", "/api/vocabulary/{vocabulary}"),
+    ],
+)
+def test_single_row_paths_answer_404(two_members, method, template):
+    """단건 경로는 모두 404 다. 하나만 400 으로 남으면 거기서 존재가 드러난다."""
+    client, _owner, stranger, mine = two_members
+    login(client, stranger)
+
+    response = getattr(client, method)(template.format(**mine))
+    assert response.status_code == 404
+    assert response.json()["error"]["code"] == "not_found"

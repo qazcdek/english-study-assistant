@@ -79,7 +79,8 @@ def test_user_cannot_read_another_users_record(cloud):
         other_id = other.id
 
     login(cloud, other_id)
-    assert cloud.get(f"/api/history/{record_id}").status_code == 400
+    # 없는 기록과 같은 답이다. 다르게 답하면 id 로 존재를 알아낼 수 있다 (03 · 14 §3.1).
+    assert cloud.get(f"/api/history/{record_id}").status_code == 404
 
 
 # --------------------------------------------------------------------- 로컬 모드

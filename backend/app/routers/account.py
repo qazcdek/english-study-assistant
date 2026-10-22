@@ -5,7 +5,7 @@ from fastapi import APIRouter, Query
 from app.config import get_settings
 from app.db import AnalysisRecord, PracticeRecord, VocabularyItem
 from app.deps import DbDep, SessionUser
-from app.errors import AppError
+from app.errors import NotFoundError
 from app.schemas import (
     DeletionSummary,
     HistoryDetail,
@@ -67,7 +67,7 @@ def list_history(user: SessionUser, db: DbDep, limit: int = Query(30, ge=1, le=1
 def get_history(record_id: int, user: SessionUser, db: DbDep) -> HistoryDetail:
     row = db.get(AnalysisRecord, record_id)
     if row is None or row.user_id != user.id:
-        raise AppError("기록을 찾을 수 없습니다.")
+        raise NotFoundError("기록을 찾을 수 없습니다.")
     return HistoryDetail(
         id=row.id,
         source_text=row.source_text,
@@ -84,7 +84,7 @@ def get_history(record_id: int, user: SessionUser, db: DbDep) -> HistoryDetail:
 def delete_history(record_id: int, user: SessionUser, db: DbDep) -> dict:
     row = db.get(AnalysisRecord, record_id)
     if row is None or row.user_id != user.id:
-        raise AppError("기록을 찾을 수 없습니다.")
+        raise NotFoundError("기록을 찾을 수 없습니다.")
     db.delete(row)
     db.commit()
     return {"ok": True}
@@ -142,7 +142,7 @@ def delete_vocabulary(item_id: int, user: SessionUser, db: DbDep) -> VocabularyR
     """
     row = db.get(VocabularyItem, item_id)
     if row is None or row.user_id != user.id:
-        raise AppError("나의 표현에서 찾을 수 없습니다.")
+        raise NotFoundError("나의 표현에서 찾을 수 없습니다.")
     expression = row.expression
     deleted = vocabulary.remove(db, row)
     db.commit()

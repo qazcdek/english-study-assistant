@@ -49,6 +49,18 @@ class AppError(Exception):
         self.detail = detail
 
 
+class NotFoundError(AppError):
+    """그 기록이 없다, **또는 내 것이 아니다.**
+
+    두 경우를 구별하지 않는다. 다르게 답하면 id 를 훑어 남의 기록이 존재하는지
+    알아낼 수 있다 — 내용을 못 봐도 그건 누출이다 (03-api-spec.md, 14-data-layer.md §3.1).
+    """
+
+    code = "not_found"
+    http_status = 404
+    message = "기록을 찾을 수 없습니다."
+
+
 class AuthRequiredError(AppError):
     code = "auth_required"
     http_status = 401
