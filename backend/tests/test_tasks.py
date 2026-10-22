@@ -92,3 +92,82 @@ def test_a_task_line_in_the_wrong_shape_is_caught(repo):
 def test_every_task_line_in_the_real_plan_docs_is_parseable():
     """가짜가 아니라 이 저장소의 ROADMAP · ISSUES 를 본다."""
     assert not tasks.malformed_task_lines()
+
+
+# --- `[~]` 가 정말 머지됐는지 ---------------------------------------------------
+#
+# 실제 저장소 상태를 단정하는 검사는 두지 않는다 — 머지하면 깨지기 때문이다.
+# 판단은 순수 함수에 몰아 두고 가짜 이력으로 본다. 저장소를 읽는 쪽은 읽히는지만 본다.
+
+HISTORY = [
+    ("a" * 40, "예문이 없다고 화면이 말하게 한다\n\nH-019"),
+    ("b" * 40, "예문을 스키마 필수로 건다\n\nH-021"),
+    ("c" * 40, "Merge pull request #18 from qazcdek/h019"),
+    ("d" * 40, "주소를 고친다\n\nH-02"),
+]
+
+
+def test_a_tag_does_not_match_a_longer_one():
+    """`H-02` 로 커밋을 찾을 때 `H-021` 이 끌려오면 머지 판정이 뒤집힌다."""
+    assert tasks.tag_commits("H-02", HISTORY) == ["d" * 40]
+    assert tasks.tag_commits("H-021", HISTORY) == ["b" * 40]
+
+
+def test_a_merge_that_left_the_tip_behind_is_reported():
+    """H-022 의 모양 그대로다 — 머지 커밋은 들어갔는데 브랜치 끝이 빠졌다."""
+    shipped = {"a" * 40, "c" * 40}
+    report = tasks.merge_report("H-021", HISTORY, "origin/main", shipped)
+    assert "끝을 안 담았다" in report and "bbbbbbbbb" in report
+
+
+def test_everything_shipped_says_to_check_it_off():
+    report = tasks.merge_report("H-019", HISTORY, "origin/main", {"a" * 40})
+    assert "전부 들어갔다" in report and "[x]" in report
+
+
+def test_a_tag_with_no_commit_is_not_silent():
+    """태그만 달고 커밋을 안 올린 경우. 조용히 '머지됨' 으로 보이면 안 된다."""
+    report = tasks.merge_report("H-999", HISTORY, "origin/main", set())
+    assert "못 찾았다" in report
+
+
+def test_the_report_is_shown_on_the_waiting_line(repo):
+    out = tasks.render(tasks.scan_tasks(), reports={"M1-T3": "origin/main 에 커밋 1/1개가 없다"})
+    assert "origin/main 에 커밋 1/1개가 없다" in out
+    assert "머지됐는지 확인" not in out  # 사람에게 묻는 옛 문구를 대체한다
+
+
+def test_this_repository_can_actually_be_read():
+    """순수 함수가 맞아도 git 을 못 읽으면 장치는 조용히 꺼진다.
+
+    **커밋 개수나 기준 ref 의 존재를 단정하지 않는다.** CI 는 얕은 클론이라
+    커밋 하나만 있고 `origin/main` 이 없다. 그걸 단정했다가 CI 가 깨졌다 (H-022).
+    """
+    history = tasks.commit_log()
+    assert history is not None
+    assert len(history) >= 1
+    assert all(len(sha) == 40 and message for sha, message in history)
+
+
+def test_a_missing_base_ref_says_so_instead_of_going_quiet(monkeypatch):
+    """잴 수 없으면 **잴 수 없다고 말한다.** 조용히 빈 칸을 주면 옛 부탁으로 떨어진다."""
+    monkeypatch.setattr(tasks, "base_ref", lambda: None)
+    reports = tasks.merge_reports(["H-021"])
+
+    assert reports["H-021"] == tasks.NO_BASE
+    assert "재지 못했다" in reports["H-021"]
+
+
+def test_the_waiting_line_never_falls_back_when_the_base_is_missing(repo, monkeypatch):
+    """기준이 없을 때도 화면에는 사람에게 묻는 옛 문구가 아니라 이유가 뜬다.
+
+    git 은 읽히는데 기준만 없는 상황이다. 그래서 `commit_log` 는 살려 둔다 —
+    `repo` 픽스처의 tmp 디렉터리는 저장소가 아니라서 그냥 두면 git 이 아예 없는
+    경우가 되고, 그건 다른 이야기다.
+    """
+    monkeypatch.setattr(tasks, "commit_log", lambda: HISTORY)
+    monkeypatch.setattr(tasks, "base_ref", lambda: None)
+    out = tasks.render(tasks.scan_tasks(), reports=tasks.merge_reports(["M1-T3"]))
+
+    assert "재지 못했다" in out
+    assert "머지됐는지 확인" not in out
