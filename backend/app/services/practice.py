@@ -35,6 +35,7 @@ class PracticeService:
                     learner_answer=request.learner_answer,
                     level=request.level,
                     retry=retry,
+                    model=self.provider.model,
                 ),
                 temperature=0.0 if retry else None,
                 json_schema=prompts.PRACTICE_JSON_SCHEMA,

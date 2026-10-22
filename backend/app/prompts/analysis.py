@@ -17,6 +17,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
+from app.prompts.models import variant_for
 from app.providers.base import ChatMessage
 from app.schemas import (
     ExpressionsPart,
@@ -55,24 +56,16 @@ LEVEL_GUIDE = {
     ),
 }
 
+# **출력 규율은 여기 없다.** 모델마다 다르게 둘 수 있어야 하므로
+# `prompts/models.py` 가 계열별로 들고 있다 (04 §9). 이 틀은 교육 내용만 든다.
 SHARED_SYSTEM = """너는 한국인 영어 학습자를 돕는 영어 분석 전문가다.
 주어진 영어 텍스트를 분석해, 지정된 JSON 스키마를 따르는 객체 하나만 출력한다.
 
-공통 규칙:
-- JSON 외의 텍스트, 인사말, 코드 펜스(```)를 절대 덧붙이지 않는다.
-- 영어는 영어로, 설명은 모두 한국어로 쓴다.
-- 설명은 "~이다 / ~한다" 체로 쓴다. "~입니다 / ~합니다" 체를 섞지 않는다.
-- 확실하지 않은 정보는 지어내지 말고, 해당 항목을 빼거나 배열을 비운다.
-- 정해진 개수 안에서 끝낸다. 후보를 끝없이 재검토하지 말고 판단이 서면 바로 출력한다.
+{output_rules}
 
 {level_guide}
 
 {task}"""
-
-RETRY_NUDGE = (
-    "직전 응답이 올바른 JSON이 아니었다. 이번에는 설명이나 코드 펜스 없이 "
-    "스키마를 따르는 JSON 객체 하나만 출력하라."
-)
 
 # --------------------------------------------------------------------- 파트별 스키마
 
@@ -518,13 +511,22 @@ def build_messages(
     state: dict[str, Any] | None = None,
     *,
     retry: bool = False,
+    model: str = "",
 ) -> list[ChatMessage]:
+    """그 파트의 메시지를 만든다.
+
+    `model` 은 **길들이기 지시를 고르는 데에만** 쓴다. 교육 내용(표현 유형 · 난이도 ·
+    칸별 명세)은 계열과 무관하게 한 벌이다. 지금은 계열별 문구가 전부 같아서 어떤
+    모델을 줘도 같은 프롬프트가 나오고, 그게 검사로 고정되어 있다 (04 §9).
+    """
+    variant = variant_for(model)
     system = SHARED_SYSTEM.format(
+        output_rules=variant.output_rules,
         level_guide=LEVEL_GUIDE.get(level, LEVEL_GUIDE["intermediate"]),
         task=spec.task_for(level),
     )
     if retry:
-        system = f"{system}\n\n{RETRY_NUDGE}"
+        system = f"{system}\n\n{variant.retry_nudge}"
     return [
         ChatMessage(role="system", content=system),
         ChatMessage(role="user", content=spec.build_user(text, state or {})),
