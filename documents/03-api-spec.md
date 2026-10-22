@@ -283,8 +283,28 @@ data: {"type":"done","result":{...},"markdown":{...},"meta":{...}}
 
 | code | HTTP | 의미 |
 |---|---|---|
+| `validation_error` | 422 | 요청 본문 검증 실패 |
+| `not_found` | 404 | 그 기록이 없다 — **또는 내 것이 아니다** (아래) |
+| `app_error` | 400 | 그 밖에 요청을 처리할 수 없는 경우 |
+| `auth_required` | 401 | 로그인이 필요하다 (cloud) |
+| `consent_required` | 403 | 이용 동의 전이다 (cloud) |
+| `api_key_required` | 403 | Gemini 키 미등록 (cloud) |
+| `usage_limit` | 429 | 오늘 사용 한도 초과 (cloud) |
 | `llm_unavailable` | 503 | llama-server 연결 실패 |
 | `llm_timeout` | 504 | 응답 시간 초과 |
 | `llm_bad_output` | 502 | 스키마에 맞는 JSON을 2회 시도 후에도 얻지 못함 |
 | `llm_truncated` | 502 | `max_tokens` 한도에서 응답이 잘림 (reasoning 모델에서 흔함) |
-| `validation_error` | 422 | 요청 본문 검증 실패 |
+
+### 없는 기록과 남의 기록을 구별하지 않는다
+
+둘 다 **`404 not_found`** 다. 메시지도 같다.
+
+**다르게 답하면 id 를 훑어 "있는지 없는지" 를 알아낼 수 있다.** 404 와 403 을 나눠 주면
+"403 이 떴다 = 그 번호의 기록이 존재한다" 가 되고, 그것만으로 다른 회원이 몇 건을
+쌓았는지 셀 수 있다. 내용은 못 봐도 그건 이미 누출이다.
+
+전에는 둘 다 **400** 이었다. 구별하지 않는다는 성질은 지켜지고 있었지만 숫자가 틀렸다 —
+클라이언트가 "내 요청이 잘못됐나" 와 "그런 것이 없나" 를 가릴 수 없었다 (H-012).
+
+적용 범위는 단건 경로 셋이다 — `GET`/`DELETE /api/history/{id}` ·
+`DELETE /api/vocabulary/{id}`. 불변식과 장치는 [14 §3.1](14-data-layer.md).

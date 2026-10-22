@@ -155,8 +155,13 @@ export default function App() {
           overview: { state: 'done' },
         },
       })
-    } catch {
-      setError(new ApiError('unknown', '기록을 불러오지 못했습니다.'))
+    } catch (e) {
+      // 서버가 무엇이 틀렸는지 말해 준다 — `not_found` 면 "찾을 수 없습니다" 다.
+      // 전부 같은 문구로 덮으면 404 를 구별해 준 의미가 없어진다 (H-012).
+      setError(e instanceof ApiError ? e : new ApiError('unknown', '기록을 불러오지 못했습니다.'))
+      // 목록에만 남은 유령 항목을 고른 경우다. 목록을 다시 읽어 치운다.
+      await reloadServerHistory()
+      setActiveId(null)
     }
   }
 

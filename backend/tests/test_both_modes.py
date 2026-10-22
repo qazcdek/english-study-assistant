@@ -102,8 +102,10 @@ def test_history_entry_can_be_deleted(both_modes):
 
     assert api.client.delete(f"/api/history/{record_id}").status_code == 200
     assert api.client.get("/api/history").json() == []
-    # 지워진 기록은 400 을 낸다. 404 가 맞지만 지금 동작을 그대로 고정해 둔다 (H-012).
-    assert api.client.get(f"/api/history/{record_id}").status_code == 400
+    # 지워진 기록은 404 다. 전에는 400 이었다 (H-012).
+    gone = api.client.get(f"/api/history/{record_id}")
+    assert gone.status_code == 404
+    assert gone.json()["error"]["code"] == "not_found"
 
 
 def test_my_data_can_be_counted_and_purged(both_modes):
