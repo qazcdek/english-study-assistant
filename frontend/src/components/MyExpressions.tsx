@@ -50,34 +50,60 @@ function canPractice(item: VocabularyItem): boolean {
   return Boolean(item.example && item.example_ko)
 }
 
-/** 쓴 기록 한 건. 접힌 채로는 판정과 일시만, 펴면 AI 평가가 그대로 나온다. */
-function Record({ row }: { row: PracticeHistoryItem }) {
+/** 접었다 펴는 버튼. 세 겹이 다 같은 모양이어야 어디를 누르면 뭐가 열리는지 익힌다. */
+function Toggle({
+  label,
+  open,
+  onClick,
+  className = '',
+}: {
+  label: string
+  open: boolean
+  onClick: () => void
+  className?: string
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-expanded={open}
+      className={`self-start rounded-md text-xs text-stone-400 transition hover:text-stone-600 dark:hover:text-stone-300 ${className}`}
+    >
+      {open ? '접기 ▴' : `${label} ▾`}
+    </button>
+  )
+}
+
+/**
+ * 내가 쓴 답안 한 건.
+ *
+ * 접힌 채로는 **내 문장과 일시만** 보여준다. 판정과 평가는 `자세히 보기` 안으로
+ * 넣었다 — 답안을 훑을 때 보고 싶은 것은 "내가 뭐라고 썼나" 이고, 잘했는지는
+ * 그다음 질문이다. 접힌 줄에 평가까지 깔면 훑을 수가 없다.
+ */
+function Answer({ row }: { row: PracticeHistoryItem }) {
   const [open, setOpen] = useState(false)
 
   return (
     <li className="flex flex-col gap-1.5 rounded-lg bg-white/70 p-3 dark:bg-stone-900/50">
-      <div className="flex flex-wrap items-center gap-2">
-        <VerdictBadge result={row.feedback} />
-        <time className="ml-auto font-mono text-xs text-stone-400">{stamp(row.created_at)}</time>
-      </div>
-
       <p className="font-mono text-sm leading-relaxed text-stone-900 dark:text-stone-100">
         {row.learner_answer}
       </p>
-
-      <button
-        type="button"
-        onClick={() => setOpen(!open)}
-        className="self-start rounded-md text-xs text-stone-400 transition hover:text-stone-600 dark:hover:text-stone-300"
-      >
-        {open ? '접기 ▴' : '자세히 보기 ▾'}
-      </button>
+      <div className="flex items-center gap-3">
+        <time className="font-mono text-xs text-stone-400">{stamp(row.created_at)}</time>
+        <Toggle
+          label="자세히 보기"
+          open={open}
+          onClick={() => setOpen(!open)}
+          className="ml-auto"
+        />
+      </div>
 
       {open && (
-        <div className="border-t border-stone-200/70 pt-3 dark:border-stone-700/60">
-          <p className="mb-3 border-l-2 border-stone-300 pl-2.5 text-xs leading-relaxed text-stone-500 dark:border-stone-600 dark:text-stone-400">
-            {row.prompt_ko}
-          </p>
+        <div className="flex flex-col gap-3 border-t border-stone-200/70 pt-3 dark:border-stone-700/60">
+          <div className="flex flex-wrap items-center gap-2">
+            <VerdictBadge result={row.feedback} />
+          </div>
           {/* 채점 직후와 같은 컴포넌트다. 그래서 "그때 본 평가 그대로" 가 보장된다. */}
           <PracticeFeedback
             result={row.feedback}
@@ -88,6 +114,48 @@ function Record({ row }: { row: PracticeHistoryItem }) {
       )}
     </li>
   )
+}
+
+/**
+ * 한 제시문과 그걸로 쓴 답안들.
+ *
+ * **기록을 제시문으로 묶는다.** 같은 표현을 여러 번 써보면 답안이 한 제시문 아래로
+ * 모여야 "몇 번째 시도에서 달라졌나" 가 보인다. 묶지 않으면 같은 한국어 문장이
+ * 시도마다 반복되어, 정작 다른 부분인 내 문장이 묻힌다.
+ *
+ * 제시문이 여럿일 수 있다 — 같은 표현이 다른 글에서 또 나오면 예문이 갱신되고,
+ * 옛 기록은 그때 받은 제시문을 그대로 들고 있다.
+ */
+function PromptGroup({ promptKo, rows }: { promptKo: string; rows: PracticeHistoryItem[] }) {
+  const [open, setOpen] = useState(false)
+
+  return (
+    <li className="flex flex-col gap-2">
+      <p className="border-l-2 border-indigo-300 pl-2.5 text-sm leading-relaxed text-stone-700 dark:border-indigo-800 dark:text-stone-200">
+        {promptKo}
+      </p>
+      <Toggle label="내가 쓴 답안 보기" open={open} onClick={() => setOpen(!open)} />
+
+      {open && (
+        <ul className="flex flex-col gap-2">
+          {rows.map((row) => (
+            <Answer key={row.id} row={row} />
+          ))}
+        </ul>
+      )}
+    </li>
+  )
+}
+
+/** 제시문별로 묶는다. 서버가 최신순으로 주므로 그 순서를 그대로 쓴다. */
+export function groupByPrompt(rows: PracticeHistoryItem[]): [string, PracticeHistoryItem[]][] {
+  const groups = new Map<string, PracticeHistoryItem[]>()
+  for (const row of rows) {
+    const found = groups.get(row.prompt_ko)
+    if (found) found.push(row)
+    else groups.set(row.prompt_ko, [row])
+  }
+  return [...groups]
 }
 
 /** 한 표현의 쓴 기록 전부. 펼칠 때 가져온다 — 목록을 열 때 전부 가져오면 느리다. */
@@ -115,9 +183,9 @@ function History({ expression, reloadKey }: { expression: string; reloadKey: num
   }
 
   return (
-    <ul className="flex flex-col gap-2">
-      {rows.map((row) => (
-        <Record key={row.id} row={row} />
+    <ul className="flex flex-col gap-3">
+      {groupByPrompt(rows).map(([promptKo, group]) => (
+        <PromptGroup key={promptKo} promptKo={promptKo} rows={group} />
       ))}
     </ul>
   )
@@ -205,10 +273,11 @@ function Row({
         <button
           type="button"
           onClick={() => setShowHistory(!showHistory)}
+          aria-expanded={showHistory}
           className="flex w-full items-center gap-2 rounded-md py-1 text-xs text-stone-500 transition hover:text-stone-700 dark:hover:text-stone-300"
         >
-          나의 기록 보기
-          {item.practice_count > 0 && (
+          {showHistory ? '접기' : '나의 기록 보기'}
+          {!showHistory && item.practice_count > 0 && (
             <span className="rounded-full bg-stone-100 px-1.5 text-[11px] text-stone-500 dark:bg-stone-800 dark:text-stone-400">
               {item.practice_count}
             </span>
