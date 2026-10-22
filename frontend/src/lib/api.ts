@@ -11,6 +11,7 @@ import type {
   PracticeRequest,
   PracticeResponse,
   StreamEvent,
+  TidySummary,
   Usage,
   VocabularyItem,
   VocabularyRemoval,
@@ -188,6 +189,12 @@ export const removeApiKey = (provider = '') =>
 // --- 저장 데이터 ---
 
 export const listHistory = () => request<HistoryItem[]>('/api/history')
+
+/** 정리하면 몇 건이 사라지나. **묻기 전에** 보여주는 데 쓴다. */
+export const countDuplicates = () => request<TidySummary>('/api/history/duplicates')
+
+/** 같은 문단의 분석 기록에서 **최신 하나만** 남긴다. 되돌릴 수 없다. */
+export const tidyHistory = () => request<TidySummary>('/api/history/tidy', { method: 'POST' })
 export const getHistoryDetail = (id: number) => request<HistoryDetail>(`/api/history/${id}`)
 export const deleteHistory = (id: number) =>
   request<{ ok: boolean }>(`/api/history/${id}`, { method: 'DELETE' })
