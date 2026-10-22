@@ -127,13 +127,17 @@ def tag_commits(tag: str, history: list[tuple[str, str]]) -> list[str]:
 
 
 def merge_report(tag: str, history: list[tuple[str, str]], base: str, shipped: set[str]) -> str:
-    """`[~]` 한 줄에 붙일 한 문장. 저장소를 안 건드리는 순수 함수라 검사하기 쉽다."""
+    """`[~]` 한 줄에 붙일 한 문장. 저장소를 안 건드리는 순수 함수라 검사하기 쉽다.
+
+    **머지됐다는 사실만 찍고 닫으라고 명령하지 않는다.** 머지됐어도 실측이 남아
+    못 닫는 줄이 있다(H-021). 닫을 때인지는 사람이 안다.
+    """
     commits = tag_commits(tag, history)
     if not commits:
         return "커밋을 못 찾았다 — 아직 안 올라갔거나 메시지에 태그가 없다"
     missing = [sha for sha in commits if sha not in shipped]
     if not missing:
-        return f"{base} 에 커밋 {len(commits)}개 전부 들어갔다 — [x] 로 올린다"
+        return f"{base} 에 커밋 {len(commits)}개 전부 들어갔다 — 남은 이유가 없으면 [x] 로"
     return (
         f"{base} 에 커밋 {len(missing)}/{len(commits)}개가 없다 — "
         f"머지가 끝을 안 담았다: " + " ".join(sha[:9] for sha in missing)
