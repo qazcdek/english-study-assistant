@@ -8,6 +8,7 @@ from fastapi.staticfiles import StaticFiles
 
 from app.config import get_settings
 from app.errors import AppError, LLMError
+from app.observability import init_sentry
 from app.providers.llama_server import LlamaServerProvider
 from app.routers import account, analyze, auth
 
@@ -57,6 +58,11 @@ async def lifespan(app: FastAPI):
 
 def create_app() -> FastAPI:
     settings = get_settings()
+
+    # **가장 먼저 켠다.** 라우터를 붙이다가, 설정을 검사하다가 터지는 것도 잡아야 한다.
+    # DSN 이 없거나 local 이면 아무것도 안 한다 (observability.py).
+    init_sentry(settings)
+
     app = FastAPI(
         title="English Study Assistant",
         description="영어 문장을 번역 · 표현 · 구조 · 총평으로 정리하는 API",
