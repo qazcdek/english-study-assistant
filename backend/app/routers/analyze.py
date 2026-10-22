@@ -19,7 +19,7 @@ from app.schemas import (
     PracticeRequest,
     PracticeResponse,
 )
-from app.services import records, usage
+from app.services import records, usage, vocabulary
 from app.services.analyzer import AnalyzerService
 
 router = APIRouter(prefix="/api", tags=["analyze"])
@@ -195,6 +195,21 @@ async def practice(
             uses_target=response.result.uses_target,
             feedback=response.result.model_dump(),
         )
+    )
+    # 연습한 표현은 자동으로 나의 표현에 올라간다. **같은 트랜잭션에서 한다** —
+    # 기록만 남고 올라가지 않으면 그 기록에 닿을 화면이 없다 (services/vocabulary.py).
+    vocabulary.upsert(
+        db,
+        user.id,
+        request.expression,
+        {
+            "type": request.type,
+            "meaning": request.meaning,
+            "example": request.model_answer,
+            "example_ko": request.prompt_ko,
+            "source_text": request.source_text,
+        },
+        overwrite=False,
     )
     db.commit()
 

@@ -6,11 +6,13 @@ import type {
   HistoryDetail,
   HistoryItem,
   Level,
+  PracticeHistoryItem,
   PracticeRequest,
   PracticeResponse,
   StreamEvent,
   Usage,
   VocabularyItem,
+  VocabularyRemoval,
 } from './types'
 
 const BASE = import.meta.env.VITE_API_BASE ?? ''
@@ -171,9 +173,13 @@ export const getHistoryDetail = (id: number) => request<HistoryDetail>(`/api/his
 export const deleteHistory = (id: number) =>
   request<{ ok: boolean }>(`/api/history/${id}`, { method: 'DELETE' })
 
+// --- 나의 표현 (서버에서는 vocabulary) ---
+
 export const listVocabulary = () => request<VocabularyItem[]>('/api/vocabulary')
+
+/** 제외. **그 표현의 직접 써본 기록도 함께 사라진다** — 확인은 화면이 먼저 받는다. */
 export const deleteVocabulary = (id: number) =>
-  request<{ ok: boolean }>(`/api/vocabulary/${id}`, { method: 'DELETE' })
+  request<VocabularyRemoval>(`/api/vocabulary/${id}`, { method: 'DELETE' })
 
 export function addVocabulary(item: {
   expression: string
@@ -187,6 +193,12 @@ export function addVocabulary(item: {
     method: 'POST',
     body: JSON.stringify(item),
   })
+}
+
+/** 직접 써본 기록. `expression` 을 주면 그 표현 것만 가져온다. */
+export function listPracticeHistory(expression?: string) {
+  const query = expression ? `?expression=${encodeURIComponent(expression)}` : ''
+  return request<PracticeHistoryItem[]>(`/api/practice/history${query}`)
 }
 
 // --- 데이터 삭제와 탈퇴 (03-api-spec.md) ---

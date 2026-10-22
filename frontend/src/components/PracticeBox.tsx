@@ -50,10 +50,14 @@ function Sentence({
 interface Props {
   expression: Expression
   level: Level
+  /** 이 표현이 나온 원문. 채점과 함께 나의 표현에 올라간다. */
+  sourceText: string
+  /** 채점이 끝난 뒤. 서버가 이 표현을 나의 표현에 올려 두었으므로 목록을 다시 읽는다. */
+  onGraded: () => void | Promise<void>
   onClose: () => void
 }
 
-export function PracticeBox({ expression, level, onClose }: Props) {
+export function PracticeBox({ expression, level, sourceText, onGraded, onClose }: Props) {
   const [answer, setAnswer] = useState('')
   const [grading, setGrading] = useState(false)
   const [result, setResult] = useState<PracticeResult | null>(null)
@@ -75,8 +79,13 @@ export function PracticeBox({ expression, level, onClose }: Props) {
         model_answer: modelAnswer,
         learner_answer: answer.trim(),
         level,
+        // 채점은 이 둘을 안 쓴다. 서버가 같은 트랜잭션에서 나의 표현에 올릴 때 쓴다.
+        type: expression.type,
+        source_text: sourceText,
       })
       setResult(response.result)
+      // 직접 써본 표현은 자동으로 나의 표현에 올라간다. 별이 그걸 반영해야 한다.
+      await onGraded()
     } catch (e) {
       setError(e instanceof ApiError ? e.message : '채점에 실패했습니다.')
     } finally {

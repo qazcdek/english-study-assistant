@@ -1,4 +1,4 @@
-"""회원별 저장 데이터: 사용량 · 히스토리 · 단어장 · 연습 기록."""
+"""회원별 저장 데이터: 사용량 · 히스토리 · 나의 표현 · 연습 기록."""
 
 from fastapi import APIRouter, Query
 
@@ -14,8 +14,9 @@ from app.schemas import (
     UsageResponse,
     VocabularyCreate,
     VocabularyItemOut,
+    VocabularyRemoval,
 )
-from app.services import account, records, usage
+from app.services import account, records, usage, vocabulary
 
 router = APIRouter(prefix="/api", tags=["account"])
 
@@ -92,48 +93,7 @@ def delete_history(record_id: int, user: SessionUser, db: DbDep) -> dict:
 # --------------------------------------------------------------------- 단어장
 
 
-@router.get("/vocabulary", response_model=list[VocabularyItemOut])
-def list_vocabulary(user: SessionUser, db: DbDep):
-    rows = (
-        db.query(VocabularyItem)
-        .filter(VocabularyItem.user_id == user.id)
-        .order_by(VocabularyItem.created_at.desc())
-        .all()
-    )
-    return [
-        VocabularyItemOut(
-            id=r.id,
-            expression=r.expression,
-            type=r.type,
-            meaning=r.meaning,
-            example=r.example,
-            example_ko=r.example_ko,
-            source_text=r.source_text,
-            created_at=_iso(r.created_at),
-        )
-        for r in rows
-    ]
-
-
-@router.post("/vocabulary", response_model=VocabularyItemOut)
-def add_vocabulary(item: VocabularyCreate, user: SessionUser, db: DbDep) -> VocabularyItemOut:
-    existing = (
-        db.query(VocabularyItem)
-        .filter(
-            VocabularyItem.user_id == user.id,
-            VocabularyItem.expression == item.expression,
-        )
-        .one_or_none()
-    )
-    row = existing or VocabularyItem(user_id=user.id, expression=item.expression)
-    row.type = item.type
-    row.meaning = item.meaning
-    row.example = item.example
-    row.example_ko = item.example_ko
-    row.source_text = item.source_text
-    if existing is None:
-        db.add(row)
-    db.commit()
+def _out(row: VocabularyItem, practice_count: int = 0) -> VocabularyItemOut:
     return VocabularyItemOut(
         id=row.id,
         expression=row.expression,
@@ -143,17 +103,50 @@ def add_vocabulary(item: VocabularyCreate, user: SessionUser, db: DbDep) -> Voca
         example_ko=row.example_ko,
         source_text=row.source_text,
         created_at=_iso(row.created_at),
+        practice_count=practice_count,
     )
 
 
-@router.delete("/vocabulary/{item_id}")
-def delete_vocabulary(item_id: int, user: SessionUser, db: DbDep) -> dict:
+@router.get("/vocabulary", response_model=list[VocabularyItemOut])
+def list_vocabulary(user: SessionUser, db: DbDep):
+    """나의 표현 전부. 분석 화면의 별도 이 목록으로 자기 상태를 안다."""
+    rows = (
+        db.query(VocabularyItem)
+        .filter(VocabularyItem.user_id == user.id)
+        .order_by(VocabularyItem.created_at.desc())
+        .all()
+    )
+    counts = vocabulary.practice_counts(db, user.id)
+    return [_out(r, counts.get(r.expression, 0)) for r in rows]
+
+
+@router.post("/vocabulary", response_model=VocabularyItemOut)
+def add_vocabulary(item: VocabularyCreate, user: SessionUser, db: DbDep) -> VocabularyItemOut:
+    """나의 표현에 올린다. 분석 화면의 별이 부른다.
+
+    여기서는 **덮어쓴다.** 별을 누르는 쪽은 방금 분석한 풍부한 값을 들고 오므로,
+    전에 연습으로 자동 등록되며 비어 있던 칸이 이 기회에 채워져야 한다.
+    """
+    row = vocabulary.upsert(db, user.id, item.expression, item.model_dump(), overwrite=True)
+    db.commit()
+    counts = vocabulary.practice_counts(db, user.id)
+    return _out(row, counts.get(row.expression, 0))
+
+
+@router.delete("/vocabulary/{item_id}", response_model=VocabularyRemoval)
+def delete_vocabulary(item_id: int, user: SessionUser, db: DbDep) -> VocabularyRemoval:
+    """나의 표현에서 제외한다. **그 표현의 연습 기록도 함께 사라진다.**
+
+    되돌릴 수 없다. 확인은 화면이 받는다 — API 는 묻지 않는다.
+    왜 함께 지우는지는 `services/vocabulary.py`.
+    """
     row = db.get(VocabularyItem, item_id)
     if row is None or row.user_id != user.id:
-        raise AppError("단어장 항목을 찾을 수 없습니다.")
-    db.delete(row)
+        raise AppError("나의 표현에서 찾을 수 없습니다.")
+    expression = row.expression
+    deleted = vocabulary.remove(db, row)
     db.commit()
-    return {"ok": True}
+    return VocabularyRemoval(expression=expression, practices_deleted=deleted)
 
 
 # --------------------------------------------------------------------- 연습 기록
@@ -165,10 +158,13 @@ def list_practice(
     db: DbDep,
     limit: int = Query(50, ge=1, le=200),
     verdict: str | None = Query(default=None, description="다시 로 걸러 오답만 볼 수 있다"),
+    expression: str | None = Query(default=None, description="한 표현의 기록만. 나의 표현이 쓴다"),
 ):
     query = db.query(PracticeRecord).filter(PracticeRecord.user_id == user.id)
     if verdict:
         query = query.filter(PracticeRecord.verdict == verdict)
+    if expression:
+        query = query.filter(PracticeRecord.expression == expression)
     rows = query.order_by(PracticeRecord.created_at.desc()).limit(limit).all()
     return [
         PracticeHistoryItem(

@@ -156,11 +156,17 @@ data: {"type":"done","result":{...},"markdown":{...},"meta":{...}}
   "prompt_ko": "그 회사는 신제품을 획기적이라고 대대적으로 선전했다.",
   "model_answer": "The company trumpeted its new product as a game-changer.",
   "learner_answer": "The firm loudly trumpeted its latest product as a breakthrough.",
-  "level": "intermediate"
+  "level": "intermediate",
+  "type": "고급 어휘",
+  "source_text": "..."
 }
 ```
 
 `prompt_ko` 와 `model_answer` 는 분석 결과의 `expressions[].example_ko` / `example` 을 그대로 넘긴다.
+
+`type` 과 `source_text` 는 **채점에 쓰이지 않는다.** 서버가 이 표현을 나의 표현에
+올릴 때 쓴다 — 채점과 등록을 두 번 호출하게 하면 뒤쪽이 실패해 **입구 없는 기록**이
+남는다. 한 트랜잭션에서 함께 한다 (아래 나의 표현).
 
 **200**
 ```json
@@ -188,6 +194,62 @@ data: {"type":"done","result":{...},"markdown":{...},"meta":{...}}
 | `other_notes` | 문자열 배열 | 부차적 지적. **최대 2개** |
 
 **모범 답안과 다른 문장도 자연스럽고 뜻이 맞으면 `정확함` 이다.** `model_answer` 는 참고용이다.
+
+---
+
+## 나의 표현
+
+담아 둔 표현과, 그 표현으로 직접 써본 기록. **두 모드 모두** 있다 — 둘 다 DB 에 쌓는다.
+경로 이름은 `vocabulary` 이고 **화면에서 부르는 이름만 "나의 표현"** 이다.
+
+| 메서드 | 경로 | 하는 일 |
+|---|---|---|
+| `GET` | `/api/vocabulary` | 담아 둔 표현 전부. 최신순 |
+| `POST` | `/api/vocabulary` | 담는다. 같은 표현이면 **덮어쓴다** |
+| `DELETE` | `/api/vocabulary/{id}` | 제외한다. **그 표현의 연습 기록도 함께 지운다** |
+| `GET` | `/api/practice/history` | 직접 써본 기록. `expression` · `verdict` · `limit` 으로 좁힌다 |
+
+**목록 응답**
+```json
+[
+  {
+    "id": 1,
+    "expression": "refer to",
+    "type": "Phrasal Verb",
+    "meaning": "참조하다, 언급하다",
+    "example": "Please refer to the appendix for the full table.",
+    "example_ko": "전체 표는 부록을 참조해 주세요.",
+    "source_text": "...",
+    "created_at": "2026-10-22T08:34:25+00:00",
+    "practice_count": 2
+  }
+]
+```
+
+`practice_count` 는 **화면이 한 번 더 묻기 위한 값**이다. 0 이 아니면 제외할 때
+사라지는 기록이 있다는 뜻이므로 확인을 받는다. 행마다 세지 않고 한 번에 모아 온다.
+
+**제외 응답**
+```json
+{ "ok": true, "expression": "refer to", "practices_deleted": 2 }
+```
+
+몇 건이 사라졌는지 돌려준다. 화면이 미리 물어봤더라도 **실제 건수는 서버만 안다** —
+그 사이에 다른 기기에서 연습했을 수 있다.
+
+### 왜 연습 기록이 함께 사라지나
+
+나의 표현이 연습 기록으로 가는 **유일한 입구**다. 제외하고 기록만 남기면 어느 화면에도
+나타나지 않는 유령 데이터가 된다. 반대로 연습하면 자동으로 담기는 것도 같은 이유다 —
+[06 3절](06-practice.md) 과 `→ backend/app/services/vocabulary.py`.
+
+둘을 잇는 열쇠는 **표현 문자열**(`practices.expression` ↔ `vocabulary.expression`)이다.
+외래키를 쓰지 않았다. 연습 기록이 먼저 쌓여 있어서 옮겨 붙이려면 짝 없는 행을 버리게 된다.
+`unique(user_id, expression)` 이 이미 걸려 있어 이 쌍은 자연키로 충분하다.
+
+- **되돌릴 수 없다.** 확인은 화면이 받는다. API 는 묻지 않는다.
+- `POST` 는 덮어쓰고, **연습을 통한 자동 등록은 빈 칸만 채운다.** 담아 둔 풍부한 행을
+  연습 요청의 빈 값으로 덮으면 목록이 가난해진다.
 
 ---
 
