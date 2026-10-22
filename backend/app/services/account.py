@@ -6,6 +6,8 @@
 **FK 의 `ON DELETE CASCADE` 에 기대지 않고 표마다 명시적으로 지운다.** SQLite 는
 `PRAGMA foreign_keys` 가 꺼져 있으면 CASCADE 가 동작하지 않는다. 테스트는 SQLite 로
 도므로, 기대면 **테스트는 통과하고 Postgres 에서만 다르게 도는** 상태가 된다.
+
+[문서] 14-data-layer.md §2
 """
 
 from sqlalchemy import delete, func, select

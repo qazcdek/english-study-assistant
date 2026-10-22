@@ -59,6 +59,7 @@ CLAUDE.md                 메타 규약. 세션마다 자동으로 읽힌다
 |---|---|
 | [02-architecture](02-architecture.md) | 모듈을 더하거나 요청 흐름을 바꿀 때 |
 | [03-api-spec](03-api-spec.md) | 라우터를 건드릴 때. 프론트가 쓰는 응답 모양을 바꿀 때 |
+| [14-data-layer](14-data-layer.md) | **표를 더하거나 저장 구조를 바꿀 때 — 코드를 고치기 전에.** 회원 데이터 격리를 의심할 때 |
 | [04-prompt-design](04-prompt-design.md) | `app/prompts/` 를 건드릴 때. LLM 출력 품질이 어긋날 때 |
 | [06-practice](06-practice.md) | 작문 연습 기능을 건드릴 때 |
 

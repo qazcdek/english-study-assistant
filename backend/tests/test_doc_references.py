@@ -12,7 +12,17 @@ from __future__ import annotations
 import re
 
 from tests import docmap
-from tests.docmap import ROOT, ROOT_DOC, all_docs, code_refs, header_of, rel, sections_of
+from tests.docmap import (
+    ROOT,
+    ROOT_DOC,
+    all_docs,
+    code_refs,
+    doc_refs,
+    header_of,
+    rel,
+    section_body,
+    sections_of,
+)
 
 
 def standard_docs():
@@ -63,6 +73,50 @@ def test_every_document_address_in_the_code_resolves():
         elif ref.section and ref.section not in sections_of(ROOT / "documents" / ref.doc):
             dangling.append(f"{ref.where()}  {ref.doc} 에 §{ref.section} 절이 없다")
     assert not dangling, "코드가 가리키는 문서 주소가 썩었다:\n  " + "\n  ".join(dangling)
+
+
+def test_the_doc_to_doc_scan_actually_found_something():
+    """빈 목록을 훑으면 아래 둘이 통과만 한다. 찾았다는 것부터 확인한다."""
+    sectioned = [r for r in doc_refs() if r.section]
+    assert len(sectioned) >= 20, f"문서→문서 절 주소를 {len(sectioned)}개만 찾았다"
+
+
+def test_every_document_address_in_a_document_resolves():
+    """문서가 가리키는 절도 실제로 있어야 한다.
+
+    전에는 **코드→문서만** 봤다. 그래서 09 와 14 가 가리키는 07 §6.5 의 번호를 바꿔도
+    "이상 없음" 이 나왔다 — 실제로 깨뜨려 확인했다 (M11-T2).
+    """
+    names = {p.name for p in all_docs()}
+    dangling = []
+    for ref in doc_refs():
+        if ref.section is None:
+            continue  # 그래프 검사가 본다
+        if ref.doc not in names:
+            dangling.append(f"{ref.where()}  없는 문서 {ref.doc}")
+        elif ref.section not in sections_of(ROOT / "documents" / ref.doc):
+            dangling.append(f"{ref.where()}  {ref.doc} 에 §{ref.section} 절이 없다")
+    assert not dangling, "문서가 가리키는 절 주소가 썩었다:\n  " + "\n  ".join(dangling)
+
+
+def test_a_referenced_section_is_not_empty():
+    """가리켜지는 절은 내용을 들고 있어야 한다.
+
+    **내용을 다른 문서로 옮기고 제목만 남기는 것**이 가장 잡기 어려운 어긋남이다.
+    주소는 멀쩡히 해석되는데 가리키는 내용이 없다. 옮긴 자리에 **길잡이 한 줄**을
+    남겼다면 통과한다 — 그게 지키려는 규약이다 (11 §3.6).
+    """
+    hollow = []
+    sectioned = [r for r in doc_refs() + code_refs() if r.section and not r.problem]
+    for ref in sectioned:
+        doc = ROOT / "documents" / ref.doc
+        if not doc.is_file() or ref.section not in sections_of(doc):
+            continue  # 위 두 검사가 본다
+        if len(section_body(doc, ref.section)) < 40:
+            hollow.append(f"{ref.where()} 가 가리키는 {ref.doc} §{ref.section} 이 비었다")
+    assert not hollow, (
+        "옮기고 길잡이를 안 남겼다:\n  " + "\n  ".join(sorted(set(hollow))) + "\n(11 §3.6)"
+    )
 
 
 def test_enforcement_pointers_point_both_ways():

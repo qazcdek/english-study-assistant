@@ -12,6 +12,7 @@
 #   ./dev.sh next         열린 작업을 모아 본다 (./dev.sh next M2 처럼 좁힐 수 있다)
 #   ./dev.sh docs         문서 계층 점검 (그래프 · 주소 · 머리말 · 색인 · 태그)
 #   ./dev.sh ptr          문서 → 코드 포인터 점검 (--write 로 코드 쪽을 갱신)
+#   ./dev.sh refs         한 문서(또는 절)로 들어오는 참조를 센다 — 옮기기 전에 본다
 #   ./dev.sh check        llama-server 연결만 확인하고 종료
 #
 # 모드는 앞에 붙여도 된다: ./dev.sh cloud backend
@@ -337,6 +338,12 @@ main() {
       shift
       (cd "$BACKEND" && .venv/bin/python tools/docptr.py "$@") &&
         ok "문서 → 코드 포인터 이상 없음"
+      ;;
+    refs)
+      # 내용을 다른 문서로 옮기기 **전에** 무엇이 딸려 오는지 본다 (11 §3.6).
+      [[ -x "$BACKEND/.venv/bin/python" ]] || die "먼저 ./dev.sh backend 로 의존성을 설치하세요."
+      shift
+      (cd "$BACKEND" && .venv/bin/python tools/refs.py "$@")
       ;;
     stop)
       stop_servers

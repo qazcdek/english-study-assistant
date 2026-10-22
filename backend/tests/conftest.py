@@ -31,3 +31,17 @@ def both_modes(request, monkeypatch, tmp_path):
     setup_env(monkeypatch, tmp_path, mode)
     with TestClient(build_app()) as client:
         yield Api(client=client, mode=mode, user_id=owner_of(client, mode))
+
+
+@pytest.fixture
+def cloud(monkeypatch, tmp_path):
+    """cloud **전용** 픽스처. 두 모드 공통 기능은 `both_modes` 로 간다.
+
+    `test_cloud.py` 안에만 있던 것을 올렸다. 회원 데이터 격리 검사도 회원이 둘인
+    상황을 세워야 하고, 같은 픽스처를 두 파일이 각자 들면 갈라진다.
+    """
+    from tests.modes import build_app, setup_env
+
+    setup_env(monkeypatch, tmp_path, "cloud")
+    with TestClient(build_app()) as client:
+        yield client

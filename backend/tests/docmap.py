@@ -40,6 +40,9 @@ _LINK = re.compile(r"\[[^\]\n]*\]\(\s*([^)\s]+)(?:\s+\"[^\"]*\")?\s*\)")
 _HEADING = re.compile(r"^#{2,6}\s+(\d+(?:\.\d+)*)\.?\s")
 _DOC_NAME = re.compile(r"\d{2}-[a-z0-9-]+\.md")
 _SECTION_AFTER = re.compile(r"^\s*§\s*(\d+(?:\.\d+)*)")
+# 문서끼리는 절 번호를 **링크 글자 안에** 넣는다 — `[07 §6.5](07-web-deployment.md)`.
+_LINK_WITH_TEXT = re.compile(r"\[([^\]\n]*)\]\(\s*([^)\s]+)(?:\s+\"[^\"]*\")?\s*\)")
+_SECTION_IN_TEXT = re.compile(r"§\s*(\d+(?:\.\d+)*)")
 # 절 번호인데 § 가 없는 것 — "3.1절", "7 절", 그냥 " 3.1" 까지 전부.
 _LEGACY_SECTION = re.compile(r"^\s+(\d+(?:\.\d+)*)\s*절?")
 
@@ -159,3 +162,48 @@ def code_refs() -> list[Ref]:
                     problem = f"절은 `§{legacy.group(1)}` 로 적는다 (`{legacy.group(0).strip()}` 아님)"
                 refs.append(Ref(src, n, m.group(0), section, problem))
     return refs
+
+
+def doc_refs() -> list[Ref]:
+    """**문서가** 다른 문서의 절을 가리키는 주소 전부.
+
+    코드 쪽은 `code_refs()` 가 본다. 문서끼리는 표기가 달라서 따로 센다 —
+    절 번호가 링크 글자 안(`[07 §6.5](...)`)이나 링크 바로 뒤에 온다.
+
+    이게 없던 동안 **문서→문서 절 주소는 아무도 보지 않았다.** 실제로 참조받는 절의
+    번호를 바꿔도, 그 절을 비워도 검사가 통과했다 (M11-T2).
+    """
+    refs = []
+    for src in sorted(all_docs() | {ROOT_DOC} | {ROOT / "README.md"}):
+        for n, line in _outside_fences(src.read_text(encoding="utf-8")):
+            for m in _LINK_WITH_TEXT.finditer(line):
+                text, target = m.group(1), m.group(2)
+                name = _DOC_NAME.search(target.rsplit("/", 1)[-1])
+                if name is None or name.group(0) == src.name:
+                    continue
+                found = _SECTION_IN_TEXT.search(text) or _SECTION_AFTER.match(line[m.end() :])
+                # 절이 없는 링크도 돌려준다 — `./dev.sh refs` 가 문서 전체로 들어오는
+                # 참조를 세려면 필요하다. 절 검사는 쓰는 쪽에서 걸러 쓴다.
+                refs.append(Ref(src, n, name.group(0), found.group(1) if found else None, None))
+    return refs
+
+
+def section_body(doc: Path, number: str) -> str:
+    """그 절의 본문. 제목 줄은 빼고 다음 제목 전까지.
+
+    **참조받는 절이 비어 있는지**를 보려고 있다. 내용을 다른 문서로 옮기고 제목만
+    남기면, 주소는 해석되는데 가리키는 내용이 없다. 옮긴 자리에 길잡이 한 줄을
+    남겼다면 비어 있지 않다 — 그게 지키려는 규약이다 (11 §3.6).
+    """
+    lines = doc.read_text(encoding="utf-8").splitlines()
+    body, inside = [], False
+    for line in lines:
+        heading = _HEADING.match(line)
+        if heading and heading.group(1) == number:
+            inside = True
+            continue
+        if inside and (heading or line.startswith("#")):
+            break
+        if inside:
+            body.append(line)
+    return "\n".join(body).strip()
