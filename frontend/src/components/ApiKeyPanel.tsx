@@ -1,6 +1,6 @@
 import { useState } from 'react'
 
-import { ApiError, saveApiKey } from '../lib/api'
+import { ApiError, getAccount, saveApiKey } from '../lib/api'
 import type { Account, AppConfig } from '../lib/types'
 
 interface Props {
@@ -18,7 +18,9 @@ export function ApiKeyPanel({ config, onSaved }: Props) {
     setBusy(true)
     setError(null)
     try {
-      onSaved(await saveApiKey(key.trim()))
+      // 응답은 설정이다. 관문 판단은 계정을 보므로 다시 읽어 넘긴다.
+      await saveApiKey(key.trim())
+      onSaved(await getAccount())
     } catch (e) {
       setError(e instanceof ApiError ? e.message : '키를 저장하지 못했습니다.')
     } finally {

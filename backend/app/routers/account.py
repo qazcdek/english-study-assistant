@@ -3,10 +3,15 @@
 from fastapi import APIRouter, Query
 
 from app.config import get_settings
-from app.db import AnalysisRecord, PracticeRecord, VocabularyItem
-from app.deps import DbDep, SessionUser
-from app.errors import NotFoundError
+from app.db import AnalysisRecord, PracticeRecord, User, VocabularyItem
+from app.deps import CipherDep, DbDep, SessionUser
+from app.errors import AppError, NotFoundError
+from app.providers import registry
+from app.providers.gemini import verify_api_key
 from app.schemas import (
+    AccountSettings,
+    ActiveModelRequest,
+    ApiKeyRequest,
     DeletionSummary,
     HistoryDetail,
     HistoryItem,
@@ -16,7 +21,7 @@ from app.schemas import (
     VocabularyItemOut,
     VocabularyRemoval,
 )
-from app.services import account, records, usage, vocabulary
+from app.services import account, keys, records, usage, vocabulary
 
 router = APIRouter(prefix="/api", tags=["account"])
 
@@ -197,3 +202,89 @@ def delete_my_data(user: SessionUser, db: DbDep) -> DeletionSummary:
     deleted = account.purge_data(db, user.id)
     db.commit()
     return DeletionSummary(**deleted)
+
+
+# ------------------------------------------- 제공자·모델 선택과 키 (두 모드)
+#
+# **cloud 전용인 `auth` 라우터에 두지 않는다.** 로컬도 제공자를 고를 수 있어야 하고
+# (local 은 llama-server 와 cloud LLM 전부), 그러려면 키도 로컬에서 넣을 수 있어야 한다.
+# 전에는 `auth` 에 있어서 **로컬에서는 Gemini 를 고를 수도 키를 넣을 수도 없었다** (M12-T4).
+
+
+def _settings_of(db: DbDep, user: User) -> AccountSettings:
+    settings = get_settings()
+    choice = keys.resolve(user, settings.app_mode)
+    return AccountSettings(
+        active_provider=choice.provider.id,
+        active_model=choice.model,
+        keys=keys.providers_with_keys(db, user.id),
+        ready=keys.has_key(db, user, choice),
+    )
+
+
+@router.get("/account/settings", response_model=AccountSettings)
+def read_settings(user: SessionUser, db: DbDep) -> AccountSettings:
+    """지금 무엇으로 일하나. 화면이 선택 UI 를 그리는 데 쓴다."""
+    return _settings_of(db, user)
+
+
+@router.put("/account/settings", response_model=AccountSettings)
+def choose_model(
+    request: ActiveModelRequest, user: SessionUser, db: DbDep
+) -> AccountSettings:
+    """쓸 제공자와 모델을 고른다 — **회원 전역 설정**이다.
+
+    저장하는 순간부터 분석과 채점이 그것으로 간다. 고를 수 없는 것은 거부한다 —
+    저장해 두고 나중에 기본값으로 떨어지면 회원은 자기가 고른 것으로 돌아간다고 믿는다.
+    """
+    mode = get_settings().app_mode
+    allowed = {p.id: p for p in registry.selectable(mode)}
+    provider = allowed.get(request.provider)
+    if provider is None:
+        raise AppError("이 모드에서 고를 수 없는 제공자입니다.")
+    if request.model and request.model not in provider.models:
+        raise AppError("그 제공자가 제공하지 않는 모델입니다.")
+
+    user.active_provider = provider.id
+    user.active_model = request.model or provider.models[0]
+    db.commit()
+    return _settings_of(db, user)
+
+
+@router.put("/account/api-key", response_model=AccountSettings)
+async def save_api_key(
+    request: ApiKeyRequest, user: SessionUser, db: DbDep, cipher: CipherDep
+) -> AccountSettings:
+    """제공자별 키를 넣는다. 넣기 전에 실제로 쓸 수 있는지 한 번 확인한다."""
+    settings = get_settings()
+    provider_id = request.provider or keys.resolve(user, settings.app_mode).provider.id
+    provider = registry.info(provider_id)
+    if provider is None or not provider.implemented:
+        raise AppError("지금 쓸 수 없는 제공자입니다.")
+    if not provider.needs_key:
+        raise AppError(f"{provider.label} 는 키가 필요하지 않습니다.")
+
+    # 지금은 Gemini 하나뿐이다. 둘이 늘면 확인 방법도 제공자마다 갈린다 (M12-T3).
+    if provider_id == registry.GEMINI:
+        ok, detail = await verify_api_key(
+            request.api_key,
+            base_url=settings.gemini_base_url,
+            model=provider.models[0],
+        )
+        if not ok:
+            raise AppError(f"키를 확인하지 못했습니다. {detail or ''}".strip())
+
+    keys.save(db, user.id, provider_id, request.api_key, cipher)
+    db.commit()
+    return _settings_of(db, user)
+
+
+@router.delete("/account/api-key", response_model=AccountSettings)
+def delete_api_key(user: SessionUser, db: DbDep, provider: str = "") -> AccountSettings:
+    """키를 지운다. 제공자를 안 주면 지금 고른 것을 지운다."""
+    provider_id = provider or keys.resolve(user, get_settings().app_mode).provider.id
+    row = keys.row_for(db, user.id, provider_id)
+    if row is not None:
+        db.delete(row)
+        db.commit()
+    return _settings_of(db, user)

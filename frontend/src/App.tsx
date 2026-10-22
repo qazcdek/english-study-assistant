@@ -289,12 +289,21 @@ export default function App() {
             ))}
           </nav>
           {!cloud && <StatusBar health={llmHealth} />}
-          {!cloud && ready && <DataMenu />}
+          {!cloud && ready && (
+            <DataMenu
+              config={session.config}
+              settings={session.settings}
+              onSettingsChanged={session.setSettings}
+            />
+          )}
           {cloud && session.account && (
             <AccountBar
               account={session.account}
               usage={session.usage}
+              config={session.config!}
+              settings={session.settings}
               onChanged={session.setAccount}
+              onSettingsChanged={session.setSettings}
             />
           )}
         </div>

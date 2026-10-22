@@ -17,7 +17,12 @@ from app.auth.crypto import KeyCipher
 from app.auth.session import COOKIE_NAME, read_token
 from app.config import Settings, get_settings
 from app.db import User, get_session
-from app.errors import ApiKeyRequiredError, AuthRequiredError, ConsentRequiredError
+from app.errors import (
+    ApiKeyRequiredError,
+    AppError,
+    AuthRequiredError,
+    ConsentRequiredError,
+)
 from app.providers import registry
 from app.providers.base import LLMProvider
 from app.services import keys
@@ -40,6 +45,22 @@ DbDep = Annotated[Session, Depends(db_session)]
 
 
 def get_cipher(settings: SettingsDep) -> KeyCipher:
+    """회원 키를 암호화하는 도구.
+
+    **로컬에도 필요해졌다.** 전에는 로컬이 키를 저장한 적이 없어서 `ENCRYPTION_KEY`
+    가 cloud 전용이었다. 이제 로컬에서도 cloud LLM 을 고를 수 있으므로(M12-T1)
+    그 키를 보관해야 하고, 보관한다면 **암호화해야 한다.**
+
+    다만 **llama-server 만 쓰는 로컬에는 여전히 필요 없다.** 그래서 설정을 항상
+    요구하지 않고, 실제로 키를 저장하려 할 때 안내한다 — 안 그러면 모델 서버만
+    쓰려는 사람이 쓸 일 없는 값을 만들어야 한다.
+    """
+    if not settings.encryption_key:
+        raise AppError(
+            "키를 암호화할 ENCRYPTION_KEY 가 없습니다. backend/.env 에 넣어 주세요 — "
+            'python -c "from cryptography.fernet import Fernet;'
+            'print(Fernet.generate_key().decode())"'
+        )
     return KeyCipher(settings.encryption_key)
 
 

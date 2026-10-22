@@ -38,14 +38,22 @@ class LLMTruncatedError(LLMError):
 
 
 class AppError(Exception):
-    """LLM 호출 밖에서 발생하는, 사용자에게 그대로 보여줄 오류."""
+    """LLM 호출 밖에서 발생하는, 사용자에게 그대로 보여줄 오류.
+
+    **넘긴 문구는 `message` 가 된다.** 전에는 `detail` 로 들어갔는데, 화면은 `message`
+    를 크게 보여주고 `detail` 은 작은 고정폭으로 덧붙인다 — 그래서
+    `AppError("먼저 이용 동의를 해 주세요.")` 같은 호출이 **"요청을 처리할 수
+    없습니다." 아래 작은 글씨로** 나왔다. 하위 클래스는 자기 `message` 를 그대로 쓴다.
+    """
 
     code = "app_error"
     http_status = 400
     message = "요청을 처리할 수 없습니다."
 
-    def __init__(self, detail: str = "") -> None:
-        super().__init__(detail or self.message)
+    def __init__(self, message: str = "", *, detail: str = "") -> None:
+        super().__init__(message or self.message)
+        if message:
+            self.message = message
         self.detail = detail
 
 

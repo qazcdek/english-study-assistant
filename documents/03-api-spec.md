@@ -197,6 +197,42 @@ data: {"type":"done","result":{...},"markdown":{...},"meta":{...}}
 
 ---
 
+## 제공자·모델 선택과 키
+
+**두 모드 공통이다.** 전에는 `/api/auth/*` 에 있었고 그 라우터는 cloud 전용이라
+**로컬에서는 제공자를 고를 수도 키를 넣을 수도 없었다** (M12-T4).
+local 은 llama-server 와 cloud LLM 전부를, cloud 는 cloud LLM 만 고를 수 있다
+([09 §3.2](09-mode-matrix.md)).
+
+| 메서드 | 경로 | 하는 일 |
+|---|---|---|
+| `GET` | `/api/account/settings` | 지금 무엇으로 일하나, 어디에 키가 있나 |
+| `PUT` | `/api/account/settings` | 제공자·모델을 고른다 — **회원 전역 설정** |
+| `PUT` | `/api/account/api-key` | 제공자별 키를 넣는다 (`{provider, api_key}`) |
+| `DELETE` | `/api/account/api-key?provider=` | 그 제공자의 키만 지운다 |
+
+**응답**
+```json
+{
+  "active_provider": "gemini",
+  "active_model": "gemini-3.5-flash-lite",
+  "keys": { "gemini": "••••0000" },
+  "ready": true
+}
+```
+
+- `keys` 는 **끝 네 자리만** 담는다. 평문 키는 서버 밖으로 나가지 않는다.
+- `ready` 는 **지금 고른 제공자**로 호출할 수 있는지다. 키가 필요 없는 제공자
+  (내 PC 의 llama-server)는 항상 참이다.
+- **고를 수 있는 목록은 여기 없다.** `GET /api/config` 의 `providers` 가 모드에 맞는
+  것만 내려준다 — 프론트가 목록을 들고 있으면 모드가 바뀔 때 어긋난다.
+- 고를 수 없는 제공자나 그 제공자가 제공하지 않는 모델은 **400** 이다. 저장해 두고
+  나중에 기본값으로 떨어지면 회원은 자기가 고른 것으로 돌아간다고 믿는다.
+- 로컬에서 cloud LLM 키를 넣으려면 `ENCRYPTION_KEY` 가 필요하다. 없으면 400 으로
+  안내한다 — **llama-server 만 쓰는 로컬에는 여전히 필요 없다.**
+
+---
+
 ## 나의 표현
 
 담아 둔 표현과, 그 표현으로 직접 써본 기록. **두 모드 모두** 있다 — 둘 다 DB 에 쌓는다.

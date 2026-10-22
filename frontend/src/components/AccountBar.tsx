@@ -1,16 +1,27 @@
 import { useState } from 'react'
 
-import { logout, removeApiKey } from '../lib/api'
-import type { Account, Usage } from '../lib/types'
+import { getAccount, logout } from '../lib/api'
+import type { Account, AccountSettings, AppConfig, Usage } from '../lib/types'
 import { DataPanel } from './DataPanel'
+import { ModelPicker } from './ModelPicker'
 
 interface Props {
   account: Account
   usage: Usage | null
+  config: AppConfig
+  settings: AccountSettings | null
   onChanged: (account: Account) => void
+  onSettingsChanged: (settings: AccountSettings) => void
 }
 
-export function AccountBar({ account, usage, onChanged }: Props) {
+export function AccountBar({
+  account,
+  usage,
+  config,
+  settings,
+  onChanged,
+  onSettingsChanged,
+}: Props) {
   const [open, setOpen] = useState(false)
 
   const nearLimit =
@@ -44,10 +55,6 @@ export function AccountBar({ account, usage, onChanged }: Props) {
           <p className="min-w-0 truncate text-xs text-stone-400">{account.email}</p>
 
           <dl className="mt-3 flex flex-col gap-1.5 border-t border-stone-100 pt-3 text-xs dark:border-stone-800">
-            <div className="flex justify-between">
-              <dt className="text-stone-400">API 키</dt>
-              <dd className="font-mono">{account.api_key_hint || '없음'}</dd>
-            </div>
             {usage && (
               <>
                 <div className="flex justify-between">
@@ -75,14 +82,21 @@ export function AccountBar({ account, usage, onChanged }: Props) {
             <DataPanel cloud />
           </div>
 
+          {settings && (
+            <div className="mt-3 border-t border-stone-100 pt-3 dark:border-stone-800">
+              <ModelPicker
+                config={config}
+                settings={settings}
+                onChanged={(next) => {
+                  onSettingsChanged(next)
+                  // 키를 넣거나 지우면 관문 판단이 바뀐다. 계정을 다시 읽는다.
+                  void getAccount().then(onChanged)
+                }}
+              />
+            </div>
+          )}
+
           <div className="mt-3 flex gap-2 border-t border-stone-100 pt-3 dark:border-stone-800">
-            <button
-              type="button"
-              onClick={async () => onChanged(await removeApiKey())}
-              className="flex-1 rounded-lg border border-stone-200 py-1.5 text-xs transition hover:bg-stone-100 dark:border-stone-700 dark:hover:bg-stone-800"
-            >
-              키 삭제
-            </button>
             <button
               type="button"
               onClick={async () => {

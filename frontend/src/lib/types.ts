@@ -169,6 +169,15 @@ export interface PracticeResponse {
 
 // --- 앱 설정 / 계정 (cloud 모드) ---
 
+/** 이 모드에서 고를 수 있는 제공자 하나. **서버가 정한 것을 그대로 그린다.** */
+export interface ProviderOption {
+  id: string
+  label: string
+  models: string[]
+  needs_key: boolean
+  key_url: string
+}
+
 export interface AppConfig {
   mode: 'local' | 'cloud'
   requires_login: boolean
@@ -177,6 +186,19 @@ export interface AppConfig {
   daily_practice_limit: number
   api_key_issue_url: string
   max_input_chars: number
+  /** 고를 수 있는 제공자. **아직 안 되는 것은 담기지 않는다.** */
+  providers: ProviderOption[]
+  default_provider: string
+}
+
+/** 지금 무엇으로 일하나, 어디에 키가 있나. 두 모드가 같은 모양을 쓴다. */
+export interface AccountSettings {
+  active_provider: string
+  active_model: string
+  /** 제공자 → 끝 네 자리. **평문은 서버에서 나오지 않는다.** */
+  keys: Record<string, string>
+  /** 지금 고른 제공자로 호출할 수 있나. */
+  ready: boolean
 }
 
 export interface Account {

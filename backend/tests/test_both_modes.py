@@ -264,3 +264,113 @@ def test_config_says_which_providers_need_a_key(both_modes):
             assert provider["key_url"], provider["id"]
     if api.mode == "local":
         assert by_id["llama"]["needs_key"] is False
+
+
+# ------------------------------- 제공자·모델 선택과 키 (M12-T4, 두 모드)
+#
+# 전에는 이 엔드포인트가 **cloud 전용인 `auth` 라우터**에 있었다. 그래서
+# **로컬에서는 Gemini 를 고를 수도 키를 넣을 수도 없었다** — 사용자가 요청한 것의
+# 절반이 동작하지 않는 상태였다. 두 모드에서 돌아야 한다.
+
+
+def test_settings_say_what_we_work_with(both_modes):
+    api = both_modes
+    settings = api.client.get("/api/account/settings").json()
+
+    expected = "llama" if api.mode == "local" else "gemini"
+    assert settings["active_provider"] == expected
+    assert settings["active_model"]
+    # local 은 llama-server 라 키가 필요 없고, cloud 픽스처는 Gemini 키를 넣어 둔다.
+    # 둘 다 바로 쓸 수 있는 상태다 — 이유가 다르다.
+    assert settings["ready"] is True
+
+
+def test_choosing_a_provider_sticks(both_modes):
+    """**회원 전역 설정이다.** 저장하면 그 뒤의 모든 작업이 그것으로 간다."""
+    api = both_modes
+    chosen = api.client.put(
+        "/api/account/settings", json={"provider": "gemini"}
+    ).json()
+
+    assert chosen["active_provider"] == "gemini"
+    assert api.client.get("/api/account/settings").json()["active_provider"] == "gemini"
+
+
+def test_local_can_choose_gemini(both_modes):
+    """사용자가 요청한 것 — *"로컬 모드에서도 gemini 모델을 사용할 수 있도록"*."""
+    api = both_modes
+    if api.mode != "local":
+        return
+
+    assert api.client.put("/api/account/settings", json={"provider": "gemini"}).status_code == 200
+
+
+def test_cloud_cannot_choose_llama_server(both_modes):
+    """내 PC 의 서버다. Render 에서 닿지 않는다."""
+    api = both_modes
+    response = api.client.put("/api/account/settings", json={"provider": "llama"})
+
+    assert response.status_code == (200 if api.mode == "local" else 400)
+
+
+def test_a_model_the_provider_does_not_offer_is_refused(both_modes):
+    api = both_modes
+    response = api.client.put(
+        "/api/account/settings", json={"provider": "gemini", "model": "없는-모델"}
+    )
+
+    assert response.status_code == 400
+
+
+def test_a_key_can_be_deleted_per_provider(both_modes):
+    """키를 지워도 **다른 제공자 키는 남는다.** 한 칸이던 시절에는 하나뿐이었다."""
+    api = both_modes
+    before = api.client.get("/api/account/settings").json()["keys"]
+
+    after = api.client.delete("/api/account/api-key", params={"provider": "gemini"}).json()
+
+    assert "gemini" not in after["keys"]
+    # cloud 픽스처는 Gemini 키를 넣어 두므로 지워진 것이 확인된다.
+    if api.mode == "cloud":
+        assert "gemini" in before
+
+
+def test_a_provider_that_needs_no_key_refuses_one(both_modes):
+    """llama-server 에 키를 넣으려는 것은 오해다. 조용히 받아 두면 오해가 굳는다."""
+    api = both_modes
+    response = api.client.put(
+        "/api/account/api-key", json={"provider": "llama", "api_key": "x" * 20}
+    )
+
+    assert response.status_code == 400
+
+
+def test_a_key_for_a_provider_that_is_not_ready_is_refused(both_modes):
+    api = both_modes
+    response = api.client.put(
+        "/api/account/api-key", json={"provider": "anthropic", "api_key": "x" * 20}
+    )
+
+    assert response.status_code == 400
+
+
+def test_storing_a_key_locally_needs_an_encryption_key(both_modes, monkeypatch):
+    """**로컬에도 ENCRYPTION_KEY 가 필요해졌다.**
+
+    전에는 로컬이 키를 저장한 적이 없어서 cloud 전용이었다. 이제 로컬에서도 cloud LLM
+    을 고를 수 있으므로 그 키를 보관해야 하고, 보관한다면 암호화해야 한다.
+    다만 **llama-server 만 쓰는 로컬에는 여전히 필요 없다** — 그래서 설정을 항상
+    요구하지 않고 저장하려 할 때 안내한다.
+    """
+    from app.config import get_settings
+
+    api = both_modes
+    monkeypatch.setenv("ENCRYPTION_KEY", "")
+    get_settings.cache_clear()
+
+    response = api.client.put(
+        "/api/account/api-key", json={"provider": "gemini", "api_key": "x" * 20}
+    )
+
+    assert response.status_code == 400
+    assert "ENCRYPTION_KEY" in response.json()["error"]["message"]
