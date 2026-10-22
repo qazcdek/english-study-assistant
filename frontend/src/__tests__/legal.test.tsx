@@ -71,19 +71,39 @@ describe('이용약관', () => {
 })
 
 describe('개인정보처리방침', () => {
-  test('밖으로 나가는 다섯 곳을 전부 이름으로 밝힌다', () => {
+  test('밖으로 나가는 곳을 전부 이름으로 밝힌다', () => {
     render(<Privacy onBack={() => {}} />)
 
     // 표의 칸 이름을 그대로 짚는다. 본문에도 같은 낱말이 나오므로 정규식으로 찾으면 겹친다.
+    //
+    // **LLM 제공자 줄이 레지스트리와 맞는지는 백엔드가 본다**
+    // (`test_provider_registry.py` — 방침 파일 글자를 직접 읽는다).
+    // 여기서 보는 것은 "표가 실제로 화면에 그려지나" 다.
     for (const name of [
       'Google (OAuth)',
       'Google (Gemini API)',
+      'OpenAI (ChatGPT API)',
+      'Anthropic (Claude API)',
       'Neon (데이터베이스)',
       'Render (호스팅)',
       'Sentry (오류 추적)',
     ]) {
       expect(screen.getByText(name)).toBeTruthy()
     }
+  })
+
+  test('몇 곳인지를 표에서 세어 말한다', () => {
+    // 전에는 "다섯 곳" 이 글로 박혀 있었다. 줄을 늘리면 본문이 거짓이 된다.
+    render(<Privacy onBack={() => {}} />)
+
+    expect(screen.getByText(/7곳에 처리를 위탁하며/)).toBeTruthy()
+  })
+
+  test('고르지 않은 제공자로는 나가지 않는다고 말한다', () => {
+    // 일곱 곳을 한꺼번에 나열하면 "내 문장이 일곱 군데로 간다" 로 읽힌다.
+    render(<Privacy onBack={() => {}} />)
+
+    expect(screen.getByText(/회원이 고른 한 곳만 호출됩니다/)).toBeTruthy()
   })
 
   test('오류 로그가 탈퇴 즉시 삭제의 예외라고 말한다', () => {

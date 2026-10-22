@@ -345,10 +345,38 @@ def test_a_provider_that_needs_no_key_refuses_one(both_modes):
     assert response.status_code == 400
 
 
-def test_a_key_for_a_provider_that_is_not_ready_is_refused(both_modes):
+def test_a_key_for_a_provider_we_do_not_know_is_refused(both_modes):
+    """모르는 제공자 이름은 거절한다.
+
+    전에는 이 검사가 `anthropic` 을 **이름으로 박아** 두고 "아직 구현 안 됐으니
+    거절된다" 를 봤다. `M12-T3` 이 그걸 구현하자 검사가 깨졌다 — 검사가 본 것은
+    규칙이 아니라 그날의 구현 상태였다. 규칙으로 바꿔 쓴다.
+    """
     api = both_modes
     response = api.client.put(
-        "/api/account/api-key", json={"provider": "anthropic", "api_key": "x" * 20}
+        "/api/account/api-key", json={"provider": "nosuch", "api_key": "x" * 20}
+    )
+
+    assert response.status_code == 400
+
+
+def test_a_key_for_a_listed_but_unimplemented_provider_is_refused(both_modes):
+    """목록에 있으나 아직 구현이 없는 제공자. 지금은 없으므로 건너뛴다.
+
+    **건너뛰는 것을 남겨 둔다.** 다음에 제공자를 목록에만 올리는 순간
+    이 검사가 저절로 깨어난다.
+    """
+    import pytest
+
+    from app.providers.registry import PROVIDERS
+
+    waiting = [p.id for p in PROVIDERS if not p.implemented]
+    if not waiting:
+        pytest.skip("목록에 있는 제공자가 전부 구현되어 있다")
+
+    api = both_modes
+    response = api.client.put(
+        "/api/account/api-key", json={"provider": waiting[0], "api_key": "x" * 20}
     )
 
     assert response.status_code == 400

@@ -5,6 +5,7 @@ import pytest
 from app.errors import LLMBadOutputError, LLMUnavailableError
 from app.prompts.analysis import PART_FIELDS
 from app.providers.base import ChatMessage, CompletionResult, LLMProvider
+from app.providers.schema import SchemaLimits
 from app.schemas import AnalyzeRequest, DoneEvent, PartErrorEvent, PartEvent
 from app.services.analyzer import AnalyzerService, extract_json
 from tests.fake_provider import PART_PAYLOADS, FakeProvider
@@ -315,3 +316,101 @@ def test_overview_markdown_skips_empty_rows():
 
     assert "**분야**: 소설" in md
     assert "**톤**" not in md
+
+
+# ------------------------------------------------- 스키마를 두 겹으로 건다 (M12-T3)
+# 왜 두 겹인지는 04-prompt-design.md §10.
+
+
+NARROW = SchemaLimits(takes_max_items=False, min_items_allowed=(0, 1))
+
+REQUEST = AnalyzeRequest(text="It's unlikely to find its way across the pond.")
+
+# 개수만 어기고 **칸은 다 채운** 응답. 칸이 비면 파이단틱이 먼저 잡아서
+# 되재기가 돌았는지 알 수 없게 된다.
+def many(count: int) -> str:
+    one = PART_PAYLOADS["expressions"]["expressions"][0]
+    return json.dumps(
+        {"expressions": [one | {"expression": f"e{i}"} for i in range(count)]},
+        ensure_ascii=False,
+    )
+
+
+def sent_for(provider: FakeProvider, field: str) -> dict:
+    """그 파트에 **실제로 보낸** 스키마."""
+    for schema in provider.schemas:
+        if schema and field in schema.get("properties", {}):
+            return schema
+    raise AssertionError(f"{field} 파트를 안 보냈다")
+
+
+def bounds(schema: dict, field: str) -> dict:
+    return schema["properties"][field]
+
+
+async def test_a_provider_that_takes_everything_is_sent_the_counts():
+    """기본 경로. **이게 안 되면 개수 강제가 애초에 없다** (04 §2.1.2)."""
+    provider = FakeProvider()
+    await AnalyzerService(provider).analyze(REQUEST)
+
+    array = bounds(sent_for(provider, "expressions"), "expressions")
+    assert array["maxItems"] == 8
+    assert array["minItems"] >= 1
+
+
+async def test_a_narrow_provider_is_not_sent_what_it_would_reject():
+    """Anthropic 은 `maxItems` 를 받으면 400 이다. 보내면 분석 자체가 죽는다."""
+    provider = FakeProvider()
+    provider.schema_limits = NARROW
+    await AnalyzerService(provider).analyze(REQUEST)
+
+    array = bounds(sent_for(provider, "expressions"), "expressions")
+    assert "maxItems" not in array
+    assert "3개" in array.get("description", "") or array.get("minItems") in (0, 1)
+
+
+async def test_a_narrow_provider_still_has_its_counts_measured():
+    """**깎았다고 풀어 주지 않는다.**
+
+    상한을 못 실어 보낸 제공자가 9개를 돌려주면, 전에는 그대로 통과했다.
+    이제 되재기가 잡고 재시도를 부른다.
+    """
+    provider = FakeProvider(overrides={"expressions": many(9)})
+    provider.schema_limits = NARROW
+
+    result = await AnalyzerService(provider).analyze(REQUEST)
+
+    assert "expressions" in result.meta.failed_parts
+    # 두 번 시도하고 포기한다.
+    assert sum(1 for f, _ in provider.calls if f == "expressions") == 2
+
+
+async def test_a_count_violation_says_how_many_came_back():
+    """재시도해도 안 되면 그 숫자가 오류에 남아야 한다 — "어긋났다" 만으로는 못 고친다.
+
+    건수는 `meta.failed_parts` 에 안 실린다(이름만 들고 있다). 스트림의
+    `part_error` 가 자세한 내용을 드는 자리다.
+    """
+    provider = FakeProvider(overrides={"expressions": many(9)})
+    provider.schema_limits = NARROW
+    service = AnalyzerService(provider)
+
+    events = [e async for e in service.stream(REQUEST)]
+    failed = next(
+        e for e in events if isinstance(e, PartErrorEvent) and e.field == "expressions"
+    )
+
+    assert "9개" in (failed.detail or "")
+
+
+async def test_a_wide_provider_has_its_counts_measured_too():
+    """되재기는 **제공자를 가리지 않는다.**
+
+    Anthropic 때문에 만들었지만, 스키마를 실어 보냈다는 사실을 지켜졌다는 뜻으로
+    읽고 있었던 것이 원래 구멍이다. Gemini 가 어겨도 이제 잡힌다.
+    """
+    provider = FakeProvider(overrides={"expressions": many(9)})
+
+    result = await AnalyzerService(provider).analyze(REQUEST)
+
+    assert "expressions" in result.meta.failed_parts

@@ -61,6 +61,7 @@ class OpenAICompatibleProvider(LLMProvider):
         if response_format is not None:
             payload["response_format"] = response_format
         payload.update(self._extra_payload())
+        payload = self._finalize_payload(payload)
 
         data = await self._post("/chat/completions", payload)
 
@@ -107,6 +108,14 @@ class OpenAICompatibleProvider(LLMProvider):
 
     def _extra_payload(self) -> dict[str, Any]:
         return {}
+
+    def _finalize_payload(self, payload: dict[str, Any]) -> dict[str, Any]:
+        """다 담은 뒤 **이름을 바꾸거나 빼야 할** 것을 손본다.
+
+        `_extra_payload` 로는 못 하는 일이다 — 그쪽은 더하는 자리이고,
+        여기는 `max_tokens` 를 `max_completion_tokens` 로 바꿔 끼우는 자리다.
+        """
+        return payload
 
     def _describe_auth_error(self, status: int, body: str) -> str | None:
         """401/403 을 사용자에게 보여줄 말로 바꾼다. 필요 없으면 None."""

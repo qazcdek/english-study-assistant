@@ -7,6 +7,8 @@
 그래서 이 검사는 목록과 나머지를 **대조한다.**
 """
 
+from pathlib import Path
+
 import pytest
 
 from app.prompts import models as families
@@ -126,3 +128,46 @@ def test_every_implementation_has_an_entry():
     orphans = sorted(set(registry.IMPLEMENTATIONS) - set(registry.BY_ID))
 
     assert not orphans, f"구현은 있는데 목록에 없다: {orphans}"
+
+
+# ------------------------------------------- 방침과 대조한다 (M12-T5)
+# 이 파일 머리말이 "다섯 곳을 대조한다" 고 적어 두었으나 **방침만 장치가 없었다.**
+# 선언은 있고 장치는 없는 자리가 바로 어긋나는 자리다 (12-tooling.md §6).
+
+PRIVACY = Path(__file__).resolve().parents[2] / "frontend/src/legal/Privacy.tsx"
+
+
+def privacy_text() -> str:
+    return PRIVACY.read_text(encoding="utf-8")
+
+
+def test_the_privacy_policy_can_actually_be_read():
+    """**먼저 이것부터.** 파일을 못 읽으면 아래 검사들이 통과만 한다."""
+    assert PRIVACY.exists(), f"{PRIVACY} 가 없다 — 아래 검사가 무의미해진다"
+    assert "받는곳" in privacy_text()
+
+
+@pytest.mark.parametrize("provider", [p for p in registry.PROVIDERS if not p.local_only])
+def test_every_cloud_provider_declares_the_name_it_appears_under(provider):
+    """밖으로 나가는 제공자는 방침에 적을 이름을 들고 있어야 한다."""
+    assert provider.transfer_name, f"{provider.id} 에 transfer_name 이 없다"
+
+
+def test_a_provider_on_my_own_machine_has_no_transfer_name():
+    """llama-server 는 내 PC 다. 나가지 않는 것을 나간다고 적으면 그것도 거짓이다."""
+    for provider in registry.PROVIDERS:
+        if provider.local_only:
+            assert not provider.transfer_name, provider.id
+
+
+@pytest.mark.parametrize("provider", [p for p in registry.PROVIDERS if not p.local_only])
+def test_every_cloud_provider_is_named_in_the_privacy_policy(provider):
+    """**고를 수 있는 제공자로 데이터가 나가는데 방침에 없으면 그게 누출이다.**
+
+    목록에만 올리고 구현하지 않은 제공자도 적어 둔다 — 적어 두는 것은 해가 없고,
+    구현한 날에 빼먹는 것이 해다.
+    """
+    assert provider.transfer_name in privacy_text(), (
+        f"{provider.id} 가 개인정보처리방침의 국외 이전 표에 없다 — "
+        f"`{provider.transfer_name}` 을 {PRIVACY.name} 의 TRANSFERS 에 더한다"
+    )
