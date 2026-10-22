@@ -193,7 +193,7 @@ export default function App() {
         <p className="hidden text-sm text-stone-400 sm:block">
           영어 문장을 번역 · 표현 · 구조 · 총평으로 정리합니다
         </p>
-        <div className="ml-auto flex items-center gap-3">
+        <div className="ml-auto flex flex-wrap items-center justify-end gap-2 sm:gap-3">
           <nav className="flex items-center gap-1 rounded-lg bg-stone-100 p-0.5 text-xs dark:bg-stone-800">
             {(
               [

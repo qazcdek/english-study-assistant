@@ -1,7 +1,8 @@
 import { Fragment, useState } from 'react'
 
-import type { VocabularyStore } from '../lib/useVocabulary'
 import type { Expression, ExpressionType, Level } from '../lib/types'
+import { useIsWide } from '../lib/useIsWide'
+import type { VocabularyStore } from '../lib/useVocabulary'
 import { ConfirmDialog } from './ConfirmDialog'
 import { FavoriteStar } from './FavoriteStar'
 import { PracticeBox } from './PracticeBox'
@@ -27,6 +28,101 @@ function canPractice(e: Expression): boolean {
 export const REMOVE_WARNING =
   '나의 표현에서 제외하면 직접 써보기 기록이 사라집니다. 계속 진행하시겠습니까?'
 
+// --- 두 배치가 공유하는 조각 -------------------------------------------------
+//
+// **배치만 갈리고 내용은 한 벌이다.** 넓은 화면은 표, 좁은 화면은 카드로 그리는데
+// 조각을 각자 쓰면 한쪽만 고쳐져 갈라진다. 실제로 세로 배치를 넣으면서 가장 큰
+// 위험이 그것이었다 (M3-T2).
+
+function Expr({ text }: { text: string }) {
+  return <span className="font-mono font-medium text-stone-900 dark:text-stone-100">{text}</span>
+}
+
+/** 총평이 꼽은 표현. 별이 즐겨찾기를 뜻하므로 여기서는 ★ 를 쓰지 않는다. */
+function KeyBadge() {
+  return (
+    <span
+      className="whitespace-nowrap rounded bg-amber-100 px-1 py-px align-middle font-sans text-[10px] font-medium text-amber-700 dark:bg-amber-950 dark:text-amber-300"
+      title="총평에서 꼽은 표현"
+    >
+      핵심
+    </span>
+  )
+}
+
+function TypeBadge({ type }: { type: ExpressionType }) {
+  return (
+    <span
+      className={`inline-block whitespace-nowrap rounded-full px-2 py-0.5 text-xs ${
+        TYPE_COLORS[type] ?? FALLBACK
+      }`}
+    >
+      {type}
+    </span>
+  )
+}
+
+function Meaning({ e }: { e: Expression }) {
+  return (
+    <>
+      {e.meaning}
+      {e.nuance && (
+        // 초급에서는 이 줄이 아예 없다.
+        <p className="mt-1 text-xs leading-relaxed text-stone-500 dark:text-stone-400">
+          {e.nuance}
+        </p>
+      )}
+    </>
+  )
+}
+
+function PracticeButton({ open, onClick }: { open: boolean; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`whitespace-nowrap rounded-lg border px-2 py-1 text-xs transition ${
+        open
+          ? 'border-indigo-300 bg-white text-indigo-700 dark:border-indigo-800 dark:bg-stone-900 dark:text-indigo-300'
+          : 'border-stone-200 text-stone-500 hover:bg-stone-100 dark:border-stone-700 dark:hover:bg-stone-800'
+      }`}
+    >
+      ✏ 직접 써보기
+    </button>
+  )
+}
+
+/** 예문 자리에 무엇이 오는가 — 예문 · 연습 버튼 · 가려짐 · 없음(—). */
+function ExampleSlot({
+  e,
+  masked,
+  open,
+  onToggle,
+}: {
+  e: Expression
+  masked: boolean
+  open: boolean
+  onToggle: () => void
+}) {
+  if (!e.example) {
+    return <span className="text-xs text-stone-300 dark:text-stone-600">—</span>
+  }
+  if (!masked) {
+    return <p className="font-mono text-xs italic text-stone-400">“{e.example}”</p>
+  }
+  if (canPractice(e)) {
+    return <PracticeButton open={open} onClick={onToggle} />
+  }
+  return (
+    <span
+      className="text-xs text-stone-300 dark:text-stone-600"
+      title="한국어 제시문이 없어 연습할 수 없습니다"
+    >
+      가려짐
+    </span>
+  )
+}
+
 interface Props {
   expressions: Expression[]
   keyExpressions?: string[]
@@ -43,6 +139,7 @@ export function ExpressionTable({
   sourceText,
   vocab,
 }: Props) {
+  const wide = useIsWide()
   const highlighted = new Set(keyExpressions)
   // 답을 먼저 보면 인출 연습이 성립하지 않으므로 기본값은 가림이다.
   const [hideExamples, setHideExamples] = useState(true)
@@ -87,6 +184,30 @@ export function ExpressionTable({
     }
   }
 
+  function star(e: Expression) {
+    return (
+      <FavoriteStar
+        active={vocab.has(e.expression)}
+        busy={pending === e.expression}
+        onClick={() => void toggle(e)}
+      />
+    )
+  }
+
+  function practice(e: Expression) {
+    return (
+      <PracticeBox
+        expression={e}
+        level={level}
+        sourceText={sourceText}
+        // 채점이 끝나면 서버가 이 표현을 나의 표현에 올려 두었다.
+        // 다시 읽어 와야 왼쪽 별이 노랗게 바뀐다.
+        onGraded={vocab.reload}
+        onClose={() => setOpenIndex(null)}
+      />
+    )
+  }
+
   return (
     <div>
       <ConfirmDialog
@@ -126,7 +247,7 @@ export function ExpressionTable({
         </label>
       )}
 
-      <div className="overflow-x-auto">
+      {wide ? (
         <table className="w-full border-collapse text-sm">
           <thead>
             <tr className="border-b border-stone-200 text-left text-xs uppercase tracking-wide text-stone-400 dark:border-stone-800">
@@ -156,70 +277,29 @@ export function ExpressionTable({
                         : 'border-b border-stone-100 last:border-0 dark:border-stone-800/60'
                     }`}
                   >
-                    <td className="py-3">
-                      <FavoriteStar
-                        active={vocab.has(e.expression)}
-                        busy={pending === e.expression}
-                        onClick={() => void toggle(e)}
-                      />
-                    </td>
-                    <td className="py-3 pr-3 font-mono font-medium text-stone-900 dark:text-stone-100">
-                      {e.expression}
+                    <td className="py-3">{star(e)}</td>
+                    <td className="py-3 pr-3">
+                      <Expr text={e.expression} />
                       {highlighted.has(e.expression) && (
-                        // 전에는 이 자리에 ★ 를 뒀는데, 왼쪽 별이 즐겨찾기를 뜻하게 되면서
-                        // **같은 글자가 두 가지 뜻**이 됐다. 글자 라벨로 바꾼다.
-                        <span
-                          className="ml-1.5 whitespace-nowrap rounded bg-amber-100 px-1 py-px align-middle font-sans text-[10px] font-medium text-amber-700 dark:bg-amber-950 dark:text-amber-300"
-                          title="총평에서 꼽은 표현"
-                        >
-                          핵심
+                        <span className="ml-1.5">
+                          <KeyBadge />
                         </span>
                       )}
                     </td>
                     <td className="py-3 pr-3">
-                      <span
-                        className={`inline-block whitespace-nowrap rounded-full px-2 py-0.5 text-xs ${
-                          TYPE_COLORS[e.type] ?? FALLBACK
-                        }`}
-                      >
-                        {e.type}
-                      </span>
+                      <TypeBadge type={e.type} />
                     </td>
                     <td className="py-3 leading-relaxed text-stone-700 dark:text-stone-300">
-                      {e.meaning}
-                      {e.nuance && (
-                        // 초급에서는 이 줄이 아예 없다.
-                        <p className="mt-1 text-xs leading-relaxed text-stone-500 dark:text-stone-400">
-                          {e.nuance}
-                        </p>
-                      )}
+                      <Meaning e={e} />
                     </td>
                     {hasExample && (
                       <td className="py-3 pl-3">
-                        {!e.example ? (
-                          <span className="text-xs text-stone-300 dark:text-stone-600">—</span>
-                        ) : !masked ? (
-                          <p className="font-mono text-xs italic text-stone-400">“{e.example}”</p>
-                        ) : canPractice(e) ? (
-                          <button
-                            type="button"
-                            onClick={() => setOpenIndex(open ? null : i)}
-                            className={`whitespace-nowrap rounded-lg border px-2 py-1 text-xs transition ${
-                              open
-                                ? 'border-indigo-300 bg-white text-indigo-700 dark:border-indigo-800 dark:bg-stone-900 dark:text-indigo-300'
-                                : 'border-stone-200 text-stone-500 hover:bg-stone-100 dark:border-stone-700 dark:hover:bg-stone-800'
-                            }`}
-                          >
-                            ✏ 직접 써보기
-                          </button>
-                        ) : (
-                          <span
-                            className="text-xs text-stone-300 dark:text-stone-600"
-                            title="한국어 제시문이 없어 연습할 수 없습니다"
-                          >
-                            가려짐
-                          </span>
-                        )}
+                        <ExampleSlot
+                          e={e}
+                          masked={masked}
+                          open={open}
+                          onToggle={() => setOpenIndex(open ? null : i)}
+                        />
                       </td>
                     )}
                   </tr>
@@ -227,16 +307,11 @@ export function ExpressionTable({
                   {open && (
                     <tr className="border-b border-stone-100 last:border-0 dark:border-stone-800/60">
                       {/* 퀴즈는 그 표현 하나에 대한 것이므로 표 전체 폭을 쓴다. */}
-                      <td colSpan={columnCount} className="bg-indigo-50/40 pb-4 dark:bg-indigo-950/20">
-                        <PracticeBox
-                          expression={e}
-                          level={level}
-                          sourceText={sourceText}
-                          // 채점이 끝나면 서버가 이 표현을 나의 표현에 올려 두었다.
-                          // 다시 읽어 와야 왼쪽 별이 노랗게 바뀐다.
-                          onGraded={vocab.reload}
-                          onClose={() => setOpenIndex(null)}
-                        />
+                      <td
+                        colSpan={columnCount}
+                        className="bg-indigo-50/40 pb-4 dark:bg-indigo-950/20"
+                      >
+                        {practice(e)}
                       </td>
                     </tr>
                   )}
@@ -245,7 +320,51 @@ export function ExpressionTable({
             })}
           </tbody>
         </table>
-      </div>
+      ) : (
+        /* 좁은 화면 — 표를 가로로 밀게 하지 않고 **한 표현씩 세로로** 쌓는다.
+           칸이 다섯이면 폰에서 어떤 열 너비를 줘도 읽히지 않는다. */
+        <ul className="flex flex-col gap-2">
+          {expressions.map((e, i) => {
+            const open = openIndex === i
+            return (
+              <li
+                key={`${e.expression}-${i}`}
+                className={`rounded-xl border p-3 ${
+                  open
+                    ? 'border-indigo-200 bg-indigo-50/40 dark:border-indigo-900/60 dark:bg-indigo-950/20'
+                    : 'border-stone-200 dark:border-stone-800'
+                }`}
+              >
+                <div className="flex items-start gap-1.5">
+                  <span className="pt-0.5">{star(e)}</span>
+                  <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-1.5 gap-y-1">
+                    <Expr text={e.expression} />
+                    {highlighted.has(e.expression) && <KeyBadge />}
+                    <TypeBadge type={e.type} />
+                  </div>
+                </div>
+
+                <p className="mt-2 text-sm leading-relaxed text-stone-700 dark:text-stone-300">
+                  <Meaning e={e} />
+                </p>
+
+                {hasExample && (
+                  <div className="mt-2 border-t border-stone-100 pt-2 dark:border-stone-800/60">
+                    <ExampleSlot
+                      e={e}
+                      masked={masked}
+                      open={open}
+                      onToggle={() => setOpenIndex(open ? null : i)}
+                    />
+                  </div>
+                )}
+
+                {open && <div className="mt-2">{practice(e)}</div>}
+              </li>
+            )
+          })}
+        </ul>
+      )}
     </div>
   )
 }

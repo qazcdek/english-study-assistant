@@ -150,7 +150,8 @@ API 는 묻지 않는다.
 틀린 결과가 안 나오는데, 그건 **호출하는 쪽이 미리 걸러 줬다는 사실에 정확성을 맡기는
 것**이다. 표현을 가로질러 모으는 화면(오답 다시 풀기, M2-T3)이 생기는 순간 조용히 섞인다
 (H-023). 묶음의 정체성은 "어떤 표현을 어떤 제시문으로 썼나" 다.
-`→ frontend/src/components/MyExpressions.tsx`
+묶는 코드는 `frontend/src/components/MyExpressions.tsx` 의 `groupByPrompt` 다 —
+그쪽이 이 절을 근거로 가리킨다.
 
 일시는 **연월일 시분초**다. 날짜만으로는 같은 날 여러 번 쓴 것이 구별되지 않는다.
 
