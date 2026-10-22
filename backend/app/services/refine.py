@@ -72,7 +72,7 @@ def _dedupe(items: list[T], text_of) -> list[T]:
 
 
 def clean_expressions(items: list[Expression]) -> list[Expression]:
-    """[문서] plan/ISSUES.md H-019"""
+    """[문서] plan/ISSUES.md H-021"""
     for e in items:
         e.expression = _strip(e.expression)
         e.meaning = _strip(e.meaning)

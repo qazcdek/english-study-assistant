@@ -9,6 +9,8 @@
 측정 메모: 사고(thinking)를 켜면 파트를 쪼갤수록 오히려 사고가 길어진다.
 "표현만 뽑아라" 같은 열린 과제에서 모델이 후보를 끝없이 재검토하기 때문이다.
 그래서 파트 프롬프트에도 개수와 판별 기준을 구체적으로 못박는다 (05-benchmark.md).
+
+[문서] plan/ISSUES.md H-021
 """
 
 from collections.abc import Callable
@@ -90,12 +92,17 @@ def expression_item(level: str) -> dict:
     초급 스키마에는 `nuance` 속성이 **아예 없다**. `additionalProperties: False` 이므로
     모델이 설명을 쓰고 싶어도 쓸 자리가 없다. 프롬프트로 "대역어만 쓰라"고 부탁하는 것보다
     확실하다.
+
+    **`example` 과 `example_ko` 도 필수다.** 전에는 선택이었고 프롬프트로만 부탁했는데,
+    작은 모델이 생략을 기본값으로 삼아 **작문 연습 기능이 통째로 비었다** (H-019 · H-021).
+    모든 표현에서 연습할 수 있어야 한다는 것이 제품 결정이다 (04-prompt-design.md §1).
+    어순을 틀릴 위험은 프롬프트의 정오 예시로 다룬다 — 빠져나갈 구멍이 아니라 쓰는 법으로.
     """
     beginner = level == "beginner"
     return {
         "type": "object",
         "properties": _EXPRESSION_BASE if beginner else {**_EXPRESSION_BASE, **_NUANCE},
-        "required": ["expression", "type", "meaning"]
+        "required": ["expression", "type", "meaning", "example", "example_ko"]
         + ([] if beginner else ["nuance"]),
         "additionalProperties": False,
     }
@@ -341,18 +348,21 @@ _MEANING_WITH_NUANCE = """
     예: pass muster 는 meet the standard 보다 "심사자가 있다"는 함의가 강하다
   · 격식/비격식처럼 쓸 자리가 제한된다면 그 점"""
 
+# 생략 조항이 없다. 스키마가 둘 다 필수로 걸고, 프롬프트는 **어떻게 쓰는지**만 말한다.
+# 전에는 "조금이라도 헷갈리면 아예 생략" 을 먼저 적어 두었고, 작은 모델이 그것을
+# 언제나 안전한 선택지로 삼았다 (H-019 · H-021).
 _EXAMPLE_RULE = """
-[example] / [example_ko] — 예문과 그 한국어 뜻
+[example] / [example_ko] — 예문과 그 한국어 뜻 (**모든 표현에 반드시 넣는다**)
+- 학습자가 한국어 뜻만 보고 영어 문장을 복원하는 연습에 쓰인다.
+  예문이 없는 표현은 연습할 수 없으므로, 어떤 표현이든 비워 두지 않는다.
 - example 은 원문과 다른 맥락에서 그 표현을 쓴 5~12 단어의 짧은 영어 문장.
 - 원문 문장을 그대로 다시 쓰지 않는다.
-- 어순이나 전치사가 조금이라도 헷갈리면 예문을 아예 생략한다. 틀린 예문은 없는 것만 못하다.
-- 특히 목적어를 사이에 넣을 수 있는 구동사는 어순을 확신할 때만 쓴다.
-  "throw many reviews at the film" 은 맞지만 "throw at the film many reviews" 는 틀렸다.
 - 원어민이 실제로 쓸 법한 자연스러운 문장만 넣는다.
-- example 을 넣었다면 example_ko 에 그 문장의 한국어 뜻을 반드시 함께 넣는다.
-  학습자가 이 한국어만 보고 영어 문장을 복원하는 연습에 쓰이므로,
-  영어 문장의 정보가 빠짐없이 담긴 자연스러운 한국어여야 한다.
-- example 을 생략하면 example_ko 도 넣지 않는다."""
+- **목적어를 사이에 넣을 수 있는 구동사는 어순에 주의한다.**
+  "throw many reviews at the film" 은 맞지만 "throw at the film many reviews" 는 틀렸다.
+  어순이 헷갈리면 **생략하지 말고**, 목적어를 사이에 넣지 않는 더 단순한 문장으로 쓴다.
+- example_ko 는 그 문장의 한국어 뜻이다.
+  영어 문장의 정보가 빠짐없이 담긴 자연스러운 한국어여야 한다."""
 
 
 def expressions_task(level: str) -> str:

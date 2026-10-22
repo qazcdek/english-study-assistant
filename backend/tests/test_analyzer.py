@@ -249,11 +249,32 @@ def test_intermediate_and_advanced_require_nuance():
         assert "nuance" in item["required"], level
 
 
-def test_example_is_available_at_every_level():
-    """초급도 예문은 남긴다. 작문 연습이 예문에 딸려 있어 빼면 연습도 사라진다."""
+def test_every_level_requires_an_example():
+    """초급도 예문은 남긴다. 작문 연습이 예문에 딸려 있어 빼면 연습도 사라진다.
+
+    **선택이 아니라 필수다.** 선택으로 두고 프롬프트로 부탁했더니 작은 모델이
+    생략을 기본값으로 삼아 연습 기능이 통째로 비었다 (H-019 · H-021).
+    """
     for level in ("beginner", "intermediate", "advanced"):
         item = expressions_spec().schema_for(level, 400)["properties"]["expressions"]["items"]
         assert {"example", "example_ko"} <= set(item["properties"]), level
+        assert {"example", "example_ko"} <= set(item["required"]), level
+
+
+def test_the_example_rule_offers_no_way_out():
+    """생략할 길을 적어 두면 작은 모델은 그 길로 간다 (H-021).
+
+    규칙 덩이를 직접 본다. 과제 전문에서 잘라 내려다 **빈 문자열을 검사하는**
+    통과만 하는 테스트를 한 번 만들었다.
+    """
+    from app.prompts.analysis import _EXAMPLE_RULE
+
+    assert "[example]" in _EXAMPLE_RULE, "규칙 덩이를 잘못 집었다"
+    assert "모든 표현에 반드시 넣는다" in _EXAMPLE_RULE
+    # "생략" 은 `생략하지 말고` 한 군데에만 나와야 한다. 생략해도 된다는 말이 끼면 늘어난다.
+    assert _EXAMPLE_RULE.count("생략") == _EXAMPLE_RULE.count("생략하지 말고"), (
+        "예문 규칙에 생략 조항이 다시 들어왔다"
+    )
 
 
 def test_beginner_prompt_never_mentions_nuance():
