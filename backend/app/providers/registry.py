@@ -15,13 +15,17 @@ cloud    cloud LLM 만 — llama-server 는 내 PC 에 있어서 Render 에서 �
 그중 하나를 빼먹고, 빼먹은 것이 방침이면 **적지 않은 곳으로 데이터가 나간다.**
 
 그래서 여기가 유일한 목록이고, 검사가 이 표와 실제 구현을 대조한다.
+
+[문서] 07-web-deployment.md §10.6
 """
 
 from dataclasses import dataclass
 
+from app.providers.anthropic import AnthropicProvider
 from app.providers.base import LLMProvider
 from app.providers.gemini import GeminiProvider
 from app.providers.llama_server import LlamaServerProvider
+from app.providers.openai import OpenAIProvider
 
 GEMINI = "gemini"
 OPENAI = "openai"
@@ -48,6 +52,15 @@ class ProviderInfo:
     """서버가 내 PC 에 있나. 그러면 cloud 에서 고를 수 없다."""
     key_url: str = ""
     note: str = ""
+    # 개인정보처리방침의 **국외 이전 표에 적혀야 하는 이름.** 글자 그대로 거기에
+    # 있어야 하고, 검사가 그걸 본다 (`test_provider_registry.py`).
+    #
+    # `label` 로 맞추지 않는다 — 화면에 보일 이름("OpenAI ChatGPT")과 방침에 적을
+    # 이름("OpenAI (ChatGPT API)")은 쓰임이 달라서 따로 움직인다. 하나로 묶으면
+    # 화면 문구를 다듬다가 방침이 조용히 어긋난다.
+    #
+    # 내 PC 의 llama-server 는 밖으로 나가지 않으므로 비어 있다.
+    transfer_name: str = ""
     """아직 안 되는 것은 **왜 안 되는지** 적는다. 비워 두면 다음 사람이 다시 조사한다."""
 
     @property
@@ -76,6 +89,7 @@ PROVIDERS: tuple[ProviderInfo, ...] = (
         needs_key=True,
         local_only=False,
         key_url="https://aistudio.google.com/apikey",
+        transfer_name="Google (Gemini API)",
     ),
     ProviderInfo(
         id=OPENAI,
@@ -84,10 +98,13 @@ PROVIDERS: tuple[ProviderInfo, ...] = (
         needs_key=True,
         local_only=False,
         key_url="https://platform.openai.com/api-keys",
-        # 공통 구현이 `strict: true` 로 json_schema 를 보내는데, OpenAI 의 strict 모드는
-        # `minItems`/`maxItems` 를 **거부한다.** 이 앱은 표현 개수를 바로 그것으로
-        # 강제하므로(04 §2.1.2) 그대로는 못 쓴다. 재 보고 고쳐야 한다 (M12-T3).
-        note="strict 모드가 minItems/maxItems 를 거부한다 — 개수 강제 방식을 다시 정해야 한다",
+        transfer_name="OpenAI (ChatGPT API)",
+        # **전에 여기 적어 둔 막힘은 사실이 아니었다.** "strict 모드가
+        # minItems/maxItems 를 거부한다" 고 적었는데, 문서를 열어 보니 둘 다
+        # 지원 목록에 있다. 읽지 않고 적은 것이 한 마일스톤을 막고 있었다.
+        #
+        # 실제로 갈리는 것은 추론 모델의 파라미터 둘이다 — `providers/openai.py`.
+        note="gpt-5 계열은 temperature 를 못 바꾸고, 재시도에서 온도 손잡이를 잃는다",
     ),
     ProviderInfo(
         id=ANTHROPIC,
@@ -96,9 +113,13 @@ PROVIDERS: tuple[ProviderInfo, ...] = (
         needs_key=True,
         local_only=False,
         key_url="https://console.anthropic.com/settings/keys",
-        # OpenAI 호환이 아니다. Messages API 는 `response_format` 대신 도구 호출로
-        # 구조를 강제하므로 공통 구현을 그대로 쓸 수 없다.
-        note="OpenAI 호환이 아니다 — Messages API 용 구현이 따로 필요하다",
+        transfer_name="Anthropic (Claude API)",
+        # OpenAI 호환이 아니라는 것은 맞았다. 다만 **구조 강제 방식을 틀리게 적었다** —
+        # 도구 호출이 아니라 `output_config.format` 이다.
+        #
+        # 그리고 적어 두지 않은 쪽이 더 컸다. `minItems` 는 0·1 만, `maxItems` 는
+        # 아예 안 받는다 — 표현 개수 강제가 그대로는 400 이 된다 (04 §10).
+        note="개수 제약을 와이어 스키마에 못 싣는다 — 응답을 받아서 다시 잰다",
     ),
 )
 
@@ -109,6 +130,8 @@ BY_ID: dict[str, ProviderInfo] = {p.id: p for p in PROVIDERS}
 IMPLEMENTATIONS: dict[str, type[LLMProvider]] = {
     LLAMA: LlamaServerProvider,
     GEMINI: GeminiProvider,
+    OPENAI: OpenAIProvider,
+    ANTHROPIC: AnthropicProvider,
 }
 
 

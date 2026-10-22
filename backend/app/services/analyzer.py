@@ -22,6 +22,7 @@ from pydantic import ValidationError
 from app.errors import LLMBadOutputError, LLMError, LLMTruncatedError
 from app.prompts.analysis import PART_SPECS, PartSpec, build_messages
 from app.providers.base import LLMProvider
+from app.providers.schema import adapt, violations
 from app.schemas import (
     AnalysisResult,
     AnalyzeMeta,
@@ -63,10 +64,15 @@ class AnalyzerService:
 
         형식이 어긋나면 temperature 0 으로 한 번 더 시도한다.
         `max_tokens` 에서 잘린 경우는 재시도해도 같은 결과이므로 곧장 올려보낸다.
+
+        **스키마는 두 겹으로 건다.** 보낼 때는 프로바이더가 받는 것만 남겨 깎고
+        (`adapt`), 돌아온 응답은 **깎기 전 원본**으로 다시 잰다 (`violations`).
+        깎인 제약을 아무도 안 지키는 일을 막는다 — `providers/schema.py`.
         """
         last_error: Exception | None = None
         last_raw = ""
         model = ""
+        wanted = spec.schema_for(request.level, len(request.text))
 
         for attempt in range(2):
             retry = attempt > 0
@@ -80,13 +86,17 @@ class AnalyzerService:
                     model=self.provider.model,
                 ),
                 temperature=0.0 if retry else None,
-                json_schema=spec.schema_for(request.level, len(request.text)),
+                json_schema=adapt(wanted, self.provider.schema_limits),
             )
             model = completion.model
             last_raw = completion.text
 
             try:
-                part = spec.model.model_validate(extract_json(completion.text))
+                data = extract_json(completion.text)
+                broken = violations(wanted, data)
+                if broken:
+                    raise ValueError(" / ".join(broken))
+                part = spec.model.model_validate(data)
             except (ValueError, ValidationError) as exc:
                 last_error = exc
                 continue
