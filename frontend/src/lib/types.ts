@@ -226,6 +226,11 @@ export interface DeletionSummary {
   usage_counters: number
 }
 
+/** 정리하면(또는 정리해서) 몇 건이 사라지나. */
+export interface TidySummary {
+  removed: number
+}
+
 export interface HistoryItem {
   id: number
   source_text: string

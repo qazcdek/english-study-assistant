@@ -16,12 +16,13 @@ from app.schemas import (
     HistoryDetail,
     HistoryItem,
     PracticeHistoryItem,
+    TidySummary,
     UsageResponse,
     VocabularyCreate,
     VocabularyItemOut,
     VocabularyRemoval,
 )
-from app.services import account, keys, records, usage, vocabulary
+from app.services import account, history, keys, records, usage, vocabulary
 
 router = APIRouter(prefix="/api", tags=["account"])
 
@@ -66,6 +67,26 @@ def list_history(user: SessionUser, db: DbDep, limit: int = Query(30, ge=1, le=1
         )
         for r in rows
     ]
+
+
+# **고정 경로를 `{record_id}` 보다 먼저 선언한다.** 순서가 뒤면 `duplicates` 와
+# `tidy` 가 기록 id 로 읽혀서 "기록을 찾을 수 없습니다" 가 된다 — 실제로 그랬다 (M2-T7).
+@router.get("/history/duplicates", response_model=TidySummary)
+def count_duplicates(user: SessionUser, db: DbDep) -> TidySummary:
+    """정리하면 몇 건이 사라지나. **묻기 전에** 보여주는 데 쓴다."""
+    return TidySummary(removed=len(history.duplicate_ids(db, user.id)))
+
+
+@router.post("/history/tidy", response_model=TidySummary)
+def tidy_history(user: SessionUser, db: DbDep) -> TidySummary:
+    """같은 문단의 분석 기록에서 **최신 하나만** 남긴다.
+
+    되돌릴 수 없다. 확인은 화면이 받는다 — API 는 묻지 않는다
+    (03-api-spec.md 의 다른 삭제와 같은 규칙이다).
+    """
+    removed = history.tidy(db, user.id)
+    db.commit()
+    return TidySummary(removed=removed)
 
 
 @router.get("/history/{record_id}", response_model=HistoryDetail)

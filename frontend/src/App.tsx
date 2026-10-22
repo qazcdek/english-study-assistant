@@ -10,6 +10,7 @@ import { LoginPanel } from './components/LoginPanel'
 import { MyExpressions } from './components/MyExpressions'
 import { ResultView } from './components/ResultView'
 import { StatusBar } from './components/StatusBar'
+import { TidyButton } from './components/TidyButton'
 import { MIN_CHARS } from './components/InputPanel'
 import { Toast } from './components/Toast'
 import { legalReady } from './legal/operator'
@@ -242,6 +243,24 @@ export default function App() {
     )
   }
 
+  // 기록이 하나뿐이면 정리할 것이 없다. 버튼을 보여 줄 이유도 없다.
+  const tidyButton = (
+    <TidyButton
+      onTidied={async (removed) => {
+        if (removed > 0) await reloadServerHistory()
+        setToast({
+          message:
+            removed > 0
+              ? `중복 기록 ${removed}건을 정리했습니다`
+              : removed === 0
+                ? '정리할 중복 기록이 없습니다'
+                : '정리하지 못했습니다',
+          at: Date.now(),
+        })
+      }}
+    />
+  )
+
   // 좁은 화면과 넓은 화면이 **같은 목록**을 쓴다. 두 벌을 쓰면 갈라진다.
   const historyList = (
     <HistoryList
@@ -357,9 +376,12 @@ export default function App() {
         <aside className="order-first min-w-0 lg:order-none">
           {wide ? (
             <>
-              <h2 className="mb-2 px-2 text-xs font-medium uppercase tracking-wide text-stone-400">
-                최근 분석
-              </h2>
+              <div className="mb-2 flex items-center gap-2 px-2">
+                <h2 className="text-xs font-medium uppercase tracking-wide text-stone-400">
+                  최근 분석
+                </h2>
+                {history.length > 1 && <span className="ml-auto">{tidyButton}</span>}
+              </div>
               {historyList}
             </>
           ) : (
@@ -378,7 +400,12 @@ export default function App() {
                 )}
                 <span className="ml-auto">{historyOpen ? '▴' : '▾'}</span>
               </button>
-              {historyOpen && <div className="mt-2">{historyList}</div>}
+              {historyOpen && (
+                <div className="mt-2 flex flex-col gap-2">
+                  {history.length > 1 && <div className="self-end">{tidyButton}</div>}
+                  {historyList}
+                </div>
+              )}
             </>
           )}
         </aside>

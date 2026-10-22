@@ -353,6 +353,16 @@ class HistoryItem(BaseModel):
     failed_parts: list[str] = Field(default_factory=list)
 
 
+class TidySummary(BaseModel):
+    """정리 결과. **몇 건이 사라졌는지**를 돌려준다.
+
+    화면이 미리 셌더라도 실제 건수는 서버만 안다 — 그 사이에 다른 기기에서
+    분석했을 수 있다.
+    """
+
+    removed: int
+
+
 class HistoryDetail(HistoryItem):
     result: AnalysisResult
     markdown: MarkdownSections
