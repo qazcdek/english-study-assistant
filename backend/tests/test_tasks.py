@@ -138,9 +138,36 @@ def test_the_report_is_shown_on_the_waiting_line(repo):
 
 
 def test_this_repository_can_actually_be_read():
-    """순수 함수가 맞아도 git 을 못 읽으면 장치는 조용히 꺼진다."""
-    found = tasks.repo_history()
-    assert found is not None
-    history, base, shipped = found
-    assert base in tasks.BASE_REFS
-    assert len(history) > 10 and len(shipped) > 10
+    """순수 함수가 맞아도 git 을 못 읽으면 장치는 조용히 꺼진다.
+
+    **커밋 개수나 기준 ref 의 존재를 단정하지 않는다.** CI 는 얕은 클론이라
+    커밋 하나만 있고 `origin/main` 이 없다. 그걸 단정했다가 CI 가 깨졌다 (H-022).
+    """
+    history = tasks.commit_log()
+    assert history is not None
+    assert len(history) >= 1
+    assert all(len(sha) == 40 and message for sha, message in history)
+
+
+def test_a_missing_base_ref_says_so_instead_of_going_quiet(monkeypatch):
+    """잴 수 없으면 **잴 수 없다고 말한다.** 조용히 빈 칸을 주면 옛 부탁으로 떨어진다."""
+    monkeypatch.setattr(tasks, "base_ref", lambda: None)
+    reports = tasks.merge_reports(["H-021"])
+
+    assert reports["H-021"] == tasks.NO_BASE
+    assert "재지 못했다" in reports["H-021"]
+
+
+def test_the_waiting_line_never_falls_back_when_the_base_is_missing(repo, monkeypatch):
+    """기준이 없을 때도 화면에는 사람에게 묻는 옛 문구가 아니라 이유가 뜬다.
+
+    git 은 읽히는데 기준만 없는 상황이다. 그래서 `commit_log` 는 살려 둔다 —
+    `repo` 픽스처의 tmp 디렉터리는 저장소가 아니라서 그냥 두면 git 이 아예 없는
+    경우가 되고, 그건 다른 이야기다.
+    """
+    monkeypatch.setattr(tasks, "commit_log", lambda: HISTORY)
+    monkeypatch.setattr(tasks, "base_ref", lambda: None)
+    out = tasks.render(tasks.scan_tasks(), reports=tasks.merge_reports(["M1-T3"]))
+
+    assert "재지 못했다" in out
+    assert "머지됐는지 확인" not in out

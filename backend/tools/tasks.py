@@ -30,6 +30,8 @@ from tools.docptr import DOCS, scan_docs
 PLAN = DOCS / "plan"
 # `[~]` 가 머지됐는지 재는 기준. 배포는 여기서 나간다.
 BASE_REFS = ("origin/main", "main")
+# 기준 ref 가 없을 때. 얕은 클론(CI)에는 origin/main 이 없다.
+NO_BASE = "기준 ref 가 없어 재지 못했다 — `git fetch origin main` 뒤에 다시 본다"
 _SEP, _REC = "\x1f", "\x1e"
 # `- [x] M1-T5  요약` / `- [ ] H-018  요약`
 _TASK = re.compile(r"^- \[( |~|x)\]\s+(M\d+-T\d+|H-\d+)\s+(.*)$")
@@ -159,30 +161,42 @@ def _git(*args: str) -> str | None:
     return done.stdout if done.returncode == 0 else None
 
 
-def repo_history() -> tuple[list[tuple[str, str]], str, set[str]] | None:
-    """(모든 커밋의 해시·메시지, 기준 ref 이름, 그 ref 에 들어간 해시들)."""
-    base = next((ref for ref in BASE_REFS if _git("rev-parse", "--verify", ref) is not None), None)
-    if base is None:
-        return None
+def commit_log() -> list[tuple[str, str]] | None:
+    """모든 커밋의 (해시, 메시지). git 을 못 읽으면 `None`."""
     log = _git("log", "--all", f"--format=%H{_SEP}%B{_REC}")
-    shipped = _git("rev-list", base)
-    if log is None or shipped is None:
+    if log is None:
         return None
     history = []
     for record in log.split(_REC):
         if sha_message := record.strip("\n"):
             sha, _, message = sha_message.partition(_SEP)
             history.append((sha, message))
-    return history, base, set(shipped.split())
+    return history
+
+
+def base_ref() -> str | None:
+    """머지됐는지 재는 기준. 없을 수 있다 — 얕은 클론에는 `origin/main` 이 없다."""
+    return next((ref for ref in BASE_REFS if _git("rev-parse", "--verify", ref) is not None), None)
 
 
 def merge_reports(tags: list[str]) -> dict[str, str]:
-    """git 을 못 읽으면 빈 칸을 돌려준다 — 그 경우 화면은 사람에게 묻는 옛 문구로 떨어진다."""
-    found = repo_history()
-    if found is None:
+    """`[~]` 태그마다 한 문장. **빈 칸을 돌려주는 경우는 git 자체가 없을 때뿐이다.**
+
+    기준 ref 가 없을 때 빈 칸을 돌려주면 화면이 "머지됐는지 확인하라" 는 옛 문구로
+    떨어진다. 그건 장치가 아니라 부탁이고, 이 도구는 그 부탁을 없애려고 만들었다.
+    **잴 수 없으면 잴 수 없다고 말한다.** 실제로 CI 의 얕은 클론에서 이렇게 조용히
+    꺼졌다 (H-022).
+    """
+    history = commit_log()
+    if history is None:
         return {}
-    history, base, shipped = found
-    return {tag: merge_report(tag, history, base, shipped) for tag in tags}
+    base = base_ref()
+    if base is None:
+        return dict.fromkeys(tags, NO_BASE)
+    shipped = _git("rev-list", base)
+    if shipped is None:
+        return {}
+    return {tag: merge_report(tag, history, base, set(shipped.split())) for tag in tags}
 
 
 def render(
