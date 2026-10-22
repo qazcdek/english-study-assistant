@@ -288,6 +288,22 @@ class ConsentRequest(BaseModel):
     agreed: bool
 
 
+class AccountSettings(BaseModel):
+    """지금 어느 제공자·모델로 일하나, 어디에 키가 있나.
+
+    **두 모드가 같은 모양을 쓴다.** 로컬에도 제공자 선택이 필요하므로(local 은
+    llama-server 와 cloud LLM 전부를 고를 수 있다) 이 엔드포인트는 `account` 라우터에
+    있고, cloud 전용인 `auth` 에 두지 않는다 (09 §3.2).
+    """
+
+    active_provider: str
+    active_model: str
+    # 제공자 → 끝 네 자리. **평문은 서버 밖으로 나가지 않는다.**
+    keys: dict[str, str] = {}
+    # 지금 고른 제공자로 호출할 수 있나 (키가 필요 없는 제공자는 항상 참).
+    ready: bool = False
+
+
 class ActiveModelRequest(BaseModel):
     """쓸 제공자와 모델을 고른다. **저장하는 순간부터 모든 작업이 그것으로 간다.**"""
 

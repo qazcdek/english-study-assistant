@@ -1,5 +1,6 @@
 import type {
   Account,
+  AccountSettings,
   AppConfig,
   DeletionSummary,
   HealthResponse,
@@ -158,13 +159,31 @@ export const giveConsent = () =>
     body: JSON.stringify({ agreed: true }),
   })
 
-export const saveApiKey = (apiKey: string) =>
-  request<Account>('/api/auth/api-key', {
+// --- 제공자·모델 선택과 키 (두 모드) ---
+//
+// **`/api/auth/*` 가 아니다.** 그 라우터는 cloud 전용이라 로컬에서는 404 였다 —
+// 로컬에서도 cloud LLM 을 고를 수 있어야 하므로 두 모드가 쓰는 자리로 옮겼다 (M12-T4).
+
+export const getSettings = () => request<AccountSettings>('/api/account/settings')
+
+/** 쓸 제공자와 모델을 고른다. **저장하는 순간부터 모든 작업이 그것으로 간다.** */
+export const chooseModel = (provider: string, model = '') =>
+  request<AccountSettings>('/api/account/settings', {
     method: 'PUT',
-    body: JSON.stringify({ api_key: apiKey }),
+    body: JSON.stringify({ provider, model }),
   })
 
-export const removeApiKey = () => request<Account>('/api/auth/api-key', { method: 'DELETE' })
+export const saveApiKey = (apiKey: string, provider = '') =>
+  request<AccountSettings>('/api/account/api-key', {
+    method: 'PUT',
+    body: JSON.stringify({ api_key: apiKey, provider }),
+  })
+
+export const removeApiKey = (provider = '') =>
+  request<AccountSettings>(
+    `/api/account/api-key${provider ? `?provider=${encodeURIComponent(provider)}` : ''}`,
+    { method: 'DELETE' },
+  )
 
 // --- 저장 데이터 ---
 

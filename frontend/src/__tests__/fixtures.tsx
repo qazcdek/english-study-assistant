@@ -1,4 +1,9 @@
-import type { Expression, VocabularyItem } from '../lib/types'
+import type {
+  AccountSettings,
+  AppConfig,
+  Expression,
+  VocabularyItem,
+} from '../lib/types'
 import type { VocabularyStore } from '../lib/useVocabulary'
 
 export const SOURCE = 'We enlist a set of principles and refer to them during training.'
@@ -86,4 +91,42 @@ export function setViewport(kind: 'wide' | 'narrow') {
       dispatchEvent: () => false,
     }),
   })
+}
+
+
+/**
+ * 서버가 주는 설정의 모형. **한 곳에만 둔다** — 검사 파일마다 적으면 칸이 늘 때
+ * 세 곳을 고쳐야 하고, 실제로 `providers` 를 더했을 때 세 곳이 깨졌다 (M12-T4).
+ */
+export function appConfig(overrides: Partial<AppConfig> = {}): AppConfig {
+  return {
+    mode: 'cloud',
+    requires_login: true,
+    model: 'gemini-3.5-flash-lite',
+    daily_analysis_limit: 60,
+    daily_practice_limit: 200,
+    api_key_issue_url: '',
+    max_input_chars: 800,
+    providers: [
+      {
+        id: 'gemini',
+        label: 'Google Gemini',
+        models: ['gemini-3.5-flash-lite'],
+        needs_key: true,
+        key_url: 'https://aistudio.google.com/apikey',
+      },
+    ],
+    default_provider: 'gemini',
+    ...overrides,
+  }
+}
+
+export function accountSettings(overrides: Partial<AccountSettings> = {}): AccountSettings {
+  return {
+    active_provider: 'gemini',
+    active_model: 'gemini-3.5-flash-lite',
+    keys: {},
+    ready: false,
+    ...overrides,
+  }
 }

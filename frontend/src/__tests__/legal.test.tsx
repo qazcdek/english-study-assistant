@@ -6,6 +6,7 @@ import { Legal } from '../legal/Legal'
 import { Privacy } from '../legal/Privacy'
 import { Terms } from '../legal/Terms'
 import { OPERATOR, legalReady, unfilled } from '../legal/operator'
+import { appConfig } from './fixtures'
 
 /**
  * 법적 문서는 **빈칸이 남은 채 사용자에게 보이면 안 된다.**
@@ -139,15 +140,7 @@ test('빈칸이 남아 있으면 화면이 그렇다고 말한다', () => {
 
 
 describe('동의의 대상', () => {
-  const config = {
-    mode: 'cloud' as const,
-    requires_login: true,
-    model: 'gemini-3.5-flash-lite',
-    daily_analysis_limit: 60,
-    daily_practice_limit: 200,
-    api_key_issue_url: '',
-    max_input_chars: 800,
-  }
+  const config = appConfig()
 
   /**
    * 전에는 동의의 대상이 **안내 화면**이었다. `users.consented_at` 이 가리키는 것이

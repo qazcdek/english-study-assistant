@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 
-import { ApiError, getAccount, getConfig, getUsage } from './api'
-import type { Account, AppConfig, Usage } from './types'
+import { ApiError, getAccount, getConfig, getSettings, getUsage } from './api'
+import type { Account, AccountSettings, AppConfig, Usage } from './types'
 
 export type SessionStage =
   | 'loading'
@@ -16,8 +16,11 @@ export interface Session {
   config: AppConfig | null
   account: Account | null
   usage: Usage | null
+  /** 지금 무엇으로 일하나. **두 모드 모두 있다** — 로컬도 제공자를 고른다. */
+  settings: AccountSettings | null
   error: string | null
   setAccount: (account: Account) => void
+  setSettings: (settings: AccountSettings) => void
   refreshUsage: () => Promise<void>
 }
 
@@ -34,6 +37,7 @@ export function useSession(): Session {
   const [config, setConfig] = useState<AppConfig | null>(null)
   const [account, setAccountState] = useState<Account | null>(null)
   const [usage, setUsage] = useState<Usage | null>(null)
+  const [settings, setSettings] = useState<AccountSettings | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [loaded, setLoaded] = useState(false)
 
@@ -66,11 +70,24 @@ export function useSession(): Session {
       try {
         const cfg = await getConfig()
         setConfig(cfg)
+        if (!cfg.requires_login) {
+          // 로컬은 로그인이 없으니 바로 읽는다.
+          try {
+            setSettings(await getSettings())
+          } catch {
+            // 설정을 못 읽어도 분석은 돌아간다. 선택 UI 만 안 나온다.
+          }
+        }
         if (cfg.requires_login) {
           try {
             const me = await getAccount()
             setAccountState(me)
             if (me.has_api_key) void refreshUsage()
+            try {
+              setSettings(await getSettings())
+            } catch {
+              // 위와 같다 — 부가 정보다.
+            }
           } catch (e) {
             // 401 은 그냥 비로그인 상태다.
             if (!(e instanceof ApiError) || e.code !== 'auth_required') {
@@ -91,8 +108,10 @@ export function useSession(): Session {
     config,
     account,
     usage,
+    settings,
     error,
     setAccount,
+    setSettings,
     refreshUsage,
   }
 }
