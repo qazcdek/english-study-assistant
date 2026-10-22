@@ -60,6 +60,11 @@ jobs:
         working-directory: frontend
         run: npm ci
 
+      - name: 렌더링 테스트
+        working-directory: frontend
+        # 컴포넌트를 실제로 그려서 DOM 을 본다. 브라우저도 백엔드도 안 띄운다.
+        run: npm test
+
       - name: 타입 검사와 빌드
         working-directory: frontend
         # build 가 `tsc -b && vite build` 라 타입 오류도 여기서 잡힌다.

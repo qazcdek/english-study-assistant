@@ -112,7 +112,13 @@ cp .env.example .env          # LLM_MODEL 을 --alias 값과 맞춘다
 cd frontend
 npm install
 npm run dev     # http://localhost:5173
+npm test        # 렌더링 테스트 (vitest + jsdom — 브라우저를 안 띄운다)
 ```
+
+- `npm test` 는 컴포넌트를 실제로 그려서 **DOM 에 뭐가 들어갔는지** 본다 —
+  별이 `☆`/`★` 로 갈리는지, 확인 상자가 뜰 때와 안 뜰 때가 규칙대로인지.
+  **보이는 모양(색·여백·다크 모드)은 안 본다.** 그건 사람이 본다.
+- `npm run typecheck` 는 테스트 파일까지 함께 본다 (`tsc -b`).
 
 dev 서버가 `/api` 를 `127.0.0.1:8000` 으로 프록시하므로 별도 CORS 설정 없이 동작한다.
 백엔드를 다른 주소에 띄웠다면 `.env.local` 에 `VITE_API_TARGET` 을 지정한다.
