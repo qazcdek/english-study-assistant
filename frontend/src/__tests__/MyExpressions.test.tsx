@@ -138,8 +138,28 @@ describe('제시문 묶음', () => {
     const other = { ...RECORD, id: 13, prompt_ko: '자세한 내용은 부록에 있다.' }
     const grouped = groupByPrompt([RECORD, other, { ...RECORD, id: 14 }])
 
-    expect(grouped.map(([prompt]) => prompt)).toEqual([RECORD.prompt_ko, other.prompt_ko])
-    expect(grouped[0][1].map((r) => r.id)).toEqual([RECORD.id, 14])
+    expect(grouped.map((g) => g.promptKo)).toEqual([RECORD.prompt_ko, other.prompt_ko])
+    expect(grouped[0].rows.map((r) => r.id)).toEqual([RECORD.id, 14])
+  })
+
+  test('표현이 다르면 제시문이 같아도 섞이지 않는다', () => {
+    // 묶음의 정체성은 "어떤 표현을 어떤 제시문으로 썼나" 다. 제시문만으로 묶으면
+    // 표현을 가로질러 모으는 화면이 생기는 순간 조용히 섞인다 (M2-T3).
+    const sameSentence = { ...RECORD, id: 13, expression: 'allude to' }
+    const grouped = groupByPrompt([RECORD, sameSentence])
+
+    expect(grouped).toHaveLength(2)
+    expect(grouped.map((g) => g.expression)).toEqual(['refer to', 'allude to'])
+    expect(grouped.map((g) => g.rows.length)).toEqual([1, 1])
+  })
+
+  test('키는 두 값을 붙여 만들지 않는다', () => {
+    // 구분자를 직접 끼우면 표현이나 제시문에 그 글자가 들어 있을 때 엉뚱한 둘이
+    // 같은 키가 된다.
+    const a = { ...RECORD, expression: 'a', prompt_ko: 'b#c' }
+    const b = { ...RECORD, id: 13, expression: 'a#b', prompt_ko: 'c' }
+
+    expect(groupByPrompt([a, b])).toHaveLength(2)
   })
 })
 
