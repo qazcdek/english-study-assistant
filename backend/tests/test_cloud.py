@@ -72,27 +72,7 @@ def test_daily_limit_blocks_further_analysis(cloud, monkeypatch):
     assert resp.json()["error"]["code"] == "usage_limit"
 
 
-def test_practice_is_saved(cloud):
-    login(cloud, make_user())
-    resp = cloud.post(
-        "/api/practice",
-        json={
-            "expression": "across the pond",
-            "meaning": "대서양을 건너",
-            "prompt_ko": "그녀의 소설은 대서양을 건너갔다.",
-            "model_answer": "Her novel made it across the pond.",
-            "learner_answer": "Her novel went across the pond",
-        },
-    )
-    assert resp.status_code == 200
-
-    rows = cloud.get("/api/practice/history").json()
-    assert len(rows) == 1
-    assert rows[0]["expression"] == "across the pond"
-    assert rows[0]["verdict"] == "통함"
-
-
-# --------------------------------------------------------------------- 단어장
+# --------------------------------------------------------------------- 남의 기록
 
 
 def test_user_cannot_read_another_users_record(cloud):

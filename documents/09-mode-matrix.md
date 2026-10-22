@@ -122,6 +122,9 @@ cloud   로그인 → 이용 동의 → API 키 등록 → 분석 화면.  Accou
 - 저장 기록 형식 올리기 (`app/services/records.py`, `RESULT_VERSION`)
 - DB 테이블 구조 (`app/db/models.py`) — 두 모드가 **같은 스키마**를 쓴다
 - 분석 화면 전체 (`ResultView`, `ExpressionTable`, `PracticeBox`, `HistoryList`)
+- 나의 표현 (`MyExpressions`, `/api/vocabulary`, `/api/practice/history`) —
+  담아 두기와 연습 기록은 두 모드가 똑같다. **모드 분기를 쓰지 않았다**
+  ([03 나의 표현](03-api-spec.md))
 
 ## 5. 무엇을 고칠 때 무엇을 함께 봐야 하나
 

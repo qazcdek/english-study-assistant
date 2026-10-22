@@ -199,6 +199,10 @@ class PracticeRequest(BaseModel):
 
     expression: str = Field(min_length=1, max_length=100, description="연습 대상 표현")
     meaning: str = Field(default="", max_length=1000, description="표 풀이의 의미 설명")
+    # 채점은 이 둘을 쓰지 않는다. **연습한 표현을 나의 표현에 올릴 때** 쓴다 —
+    # 채점과 등록을 두 번 호출하게 하면 뒤쪽이 실패해 입구 없는 기록이 남는다.
+    type: str = Field(default="", max_length=40, description="표현 유형. 나의 표현에 그대로 올린다")
+    source_text: str = Field(default="", max_length=2000, description="이 표현이 나온 원문")
     prompt_ko: str = Field(min_length=1, max_length=500, description="학습자에게 보여준 한국어 제시문")
     model_answer: str = Field(min_length=1, max_length=500, description="가려 둔 모범 답안")
     learner_answer: str = Field(min_length=1, max_length=500, description="학습자가 쓴 영어 문장")
@@ -316,6 +320,20 @@ class VocabularyCreate(BaseModel):
 class VocabularyItemOut(VocabularyCreate):
     id: int
     created_at: str
+    # 제외하면 이만큼의 연습 기록이 함께 사라진다. 화면이 이 값을 보고 한 번 더 묻는다.
+    practice_count: int = 0
+
+
+class VocabularyRemoval(BaseModel):
+    """제외한 결과. **연습 기록이 몇 건 함께 사라졌는지**를 돌려준다.
+
+    화면이 미리 물어봤더라도 실제로 몇 건이 사라졌는지는 서버만 안다.
+    그 사이에 다른 기기에서 연습했을 수 있다.
+    """
+
+    ok: bool = True
+    expression: str
+    practices_deleted: int
 
 
 class PracticeHistoryItem(BaseModel):
