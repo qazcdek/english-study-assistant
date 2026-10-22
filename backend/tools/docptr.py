@@ -45,6 +45,9 @@ SELF = {"backend/tools/docptr.py", "backend/tests/test_docptr.py"}
 
 # 문서가 코드를 가리키는 표기: 인라인 코드 안의 `→ 경로::qualname`
 _POINTER = re.compile(r"`\s*→\s*([\w./-]+\.py)(?:::([\w.]+))?\s*`")
+# 파이썬이 아닌 대상을 가리킨 포인터. **조용히 넘기면 안 된다** — 쓴 사람은
+# 역참조가 생겼다고 믿는데 아무 일도 일어나지 않는다 (H-025).
+_FOREIGN = re.compile(r"`\s*→\s*([\w./-]+\.\w+)(?:::[\w.]+)?\s*`")
 _HEADING = re.compile(r"^#{1,6}\s+(.*)$")
 _FENCE = re.compile(r"^\s*(?:```|~~~)")
 _NUMBERED = re.compile(r"^(\d+(?:\.\d+)*)\.?\s")
@@ -226,10 +229,40 @@ def apply_to_file(path: Path, wanted: dict[str | None, list[str]]) -> str | None
 # ------------------------------------------------------------------------ 실행
 
 
+def foreign_pointers() -> list[str]:
+    """파이썬이 아닌 대상을 가리킨 포인터.
+
+    **조용히 넘기면 안 된다.** 이 도구는 `.py` 만 AST 로 푸는데, 다른 확장자를 적으면
+    아무 일도 일어나지 않는다 — 쓴 사람은 역참조가 생겼다고 믿는다. 실제로 10 §9 에
+    `→ ...useIsWide.ts` 를 적었고 `ptr` 은 "이상 없음" 을 찍었다 (H-025).
+
+    프론트엔드 쪽은 **반대 방향**으로 잇는다 — 코드가 문서 주소를 들고, 그건
+    `test_doc_references.py` 가 본다 (10 §7).
+    """
+    found = []
+    for doc in sorted(DOCS.rglob("*.md")):
+        in_fence = False
+        for n, line in enumerate(doc.read_text(encoding="utf-8").splitlines(), 1):
+            if _FENCE.match(line):
+                in_fence = not in_fence
+                continue
+            if in_fence:
+                continue
+            for hit in _FOREIGN.finditer(line):
+                if hit.group(1).endswith(".py"):
+                    continue
+                found.append(
+                    f"documents/{doc.relative_to(DOCS)}:{n}  "
+                    f"`→ {hit.group(1)}` — 이 도구는 .py 만 푼다. 코드가 문서를 "
+                    f"가리키게 하거나(10 §7) 화살표를 빼고 글로 적는다"
+                )
+    return found
+
+
 def collect() -> tuple[dict[Path, dict[str | None, list[str]]], list[str]]:
     """포인터를 파일별로 모으고, 풀리지 않는 주소를 함께 돌려준다."""
     wanted: dict[Path, dict[str | None, list[str]]] = {}
-    problems: list[str] = []
+    problems: list[str] = foreign_pointers()
     for ptr in scan_docs():
         path = ROOT / ptr.path
         where = f"documents/{ptr.doc}:{ptr.doc_line}"

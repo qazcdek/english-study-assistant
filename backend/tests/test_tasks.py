@@ -171,3 +171,36 @@ def test_the_waiting_line_never_falls_back_when_the_base_is_missing(repo, monkey
 
     assert "재지 못했다" in out
     assert "머지됐는지 확인" not in out
+
+
+# ------------------------------------------- base 가 낡았다고 미리 말해 주는지
+
+
+def test_a_fresh_base_says_nothing():
+    """앞서 있지 않으면 아무 말도 안 한다. 늘 뜨는 경고는 안 읽힌다."""
+    assert tasks.stale_message("origin/main", 0) is None
+    assert tasks.stale_message("origin/main", -1) is None
+
+
+def test_a_stale_base_says_how_far_and_what_to_do():
+    """충돌을 본 **뒤**가 아니라 일을 시작하기 **전**에 말해 줘야 쓸모가 있다."""
+    message = tasks.stale_message("origin/main", 3)
+
+    assert message is not None
+    assert "3커밋" in message
+    assert "git merge origin/main" in message
+    # 왜 합쳐야 하는지까지 말한다. 이유를 모르면 그냥 넘긴다.
+    assert "충돌" in message
+
+
+def test_the_stale_warning_is_shown_above_the_open_list(repo):
+    out = tasks.render(tasks.scan_tasks(), reports={tasks._BASE_KEY: "base 가 낡았다"})
+
+    assert "base 가 낡았다" in out
+    assert out.index("base 가 낡았다") < out.index("열린 작업")
+
+
+def test_this_repository_can_be_asked_how_far_behind_it_is():
+    """순수 함수가 맞아도 git 을 못 읽으면 장치는 조용히 꺼진다."""
+    # 앞서 있든 아니든 예외 없이 답해야 한다. 값 자체는 저장소 상태에 따라 달라진다.
+    assert tasks.behind_base() is None or isinstance(tasks.behind_base(), str)

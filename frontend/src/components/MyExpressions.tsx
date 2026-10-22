@@ -125,6 +125,8 @@ function Answer({ row }: { row: PracticeHistoryItem }) {
  *
  * 제시문이 여럿일 수 있다 — 같은 표현이 다른 글에서 또 나오면 예문이 갱신되고,
  * 옛 기록은 그때 받은 제시문을 그대로 들고 있다.
+ *
+ * 근거: 06-practice.md §3.2
  */
 function PromptGroup({ promptKo, rows }: { promptKo: string; rows: PracticeHistoryItem[] }) {
   const [open, setOpen] = useState(false)

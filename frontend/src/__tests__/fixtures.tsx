@@ -65,3 +65,25 @@ export function fakeStore(items: VocabularyItem[] = []): VocabularyStore & {
     reload: async () => {},
   }
 }
+
+
+/**
+ * 화면 너비를 가장한다. jsdom 에는 `matchMedia` 가 없어서 기본값은 **넓은 쪽**이다.
+ *
+ * 좁은 쪽을 보려면 일부러 꽂아야 한다 — 그래야 "좁은 화면에서 뭐가 보이나" 를
+ * 검사가 물을 수 있다. 창을 끌어 늘리는 경우(`change` 이벤트)는 여기서 다루지 않는다.
+ */
+export function setViewport(kind: 'wide' | 'narrow') {
+  Object.defineProperty(window, 'matchMedia', {
+    configurable: true,
+    writable: true,
+    value: (media: string) => ({
+      media,
+      matches: kind === 'wide',
+      onchange: null,
+      addEventListener: () => {},
+      removeEventListener: () => {},
+      dispatchEvent: () => false,
+    }),
+  })
+}

@@ -41,6 +41,8 @@
 - [x] H-020  `./dev.sh ptr --write` 가 한 번에 수렴하지 않았다. docstring 을 만드는 모양과 고치는 모양이 달랐다
 - [x] H-022  머지가 브랜치 끝을 안 담아도 아무것도 모른다. 배포본이 반쪽이 돼 기능이 비었다 (H-019/H-021)
 - [x] H-024  DONE 이 브랜치마다 같은 자리를 건드려 머지 충돌이 세 번 났다
+- [~] H-025  문서→코드 포인터가 `.py` 가 아니면 조용히 무시됐다. 쓴 사람은 생겼다고 믿는다
+- [~] H-026  낡은 base 에서 갈라져 ROADMAP · ISSUES 가 충돌했다. 네 번째다
 
 ## 모드 · 개발 환경
 
@@ -59,7 +61,6 @@
   `→ backend/app/prompts/analysis.py`
   `→ backend/app/services/refine.py::clean_expressions`
 - [x] H-023  기록 묶음을 제시문만으로 걸었다. 안 섞이는 이유가 호출하는 쪽이 걸러 준다는 것뿐이었다
-  `→ frontend/src/components/MyExpressions.tsx`
 
 ---
 

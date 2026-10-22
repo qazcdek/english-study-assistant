@@ -39,7 +39,7 @@ export function AccountBar({ account, usage, onChanged }: Props) {
       </button>
 
       {open && (
-        <div className="absolute right-0 z-10 mt-2 w-72 rounded-xl border border-stone-200 bg-white p-4 shadow-lg dark:border-stone-700 dark:bg-stone-900">
+        <div className="absolute right-0 z-10 mt-2 w-[min(18rem,calc(100vw-2rem))] rounded-xl border border-stone-200 bg-white p-4 shadow-lg dark:border-stone-700 dark:bg-stone-900">
           <p className="truncate text-sm font-medium">{account.name}</p>
           <p className="truncate text-xs text-stone-400">{account.email}</p>
 
