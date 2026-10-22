@@ -32,6 +32,8 @@ PLAN = DOCS / "plan"
 BASE_REFS = ("origin/main", "main")
 # 기준 ref 가 없을 때. 얕은 클론(CI)에는 origin/main 이 없다.
 NO_BASE = "기준 ref 가 없어 재지 못했다 — `git fetch origin main` 뒤에 다시 본다"
+# 태그가 아닌 자리. base 가 낡았다는 알림을 `reports` 에 같이 실어 보낸다.
+_BASE_KEY = "__base__"
 _SEP, _REC = "\x1f", "\x1e"
 # `- [x] M1-T5  요약` / `- [ ] H-018  요약`
 _TASK = re.compile(r"^- \[( |~|x)\]\s+(M\d+-T\d+|H-\d+)\s+(.*)$")
@@ -179,6 +181,40 @@ def base_ref() -> str | None:
     return next((ref for ref in BASE_REFS if _git("rev-parse", "--verify", ref) is not None), None)
 
 
+def stale_message(base: str, count: int) -> str | None:
+    """base 가 몇 커밋 앞서 있는지를 한 문장으로. 앞서 있지 않으면 아무 말도 안 한다.
+
+    저장소를 안 건드리는 순수 함수라 검사하기 쉽다.
+    """
+    if count <= 0:
+        return None
+    return (
+        f"  {base} 가 {count}커밋 앞서 있다 — 합치고 시작한다 "
+        f"(`git fetch && git merge {base}`).\n"
+        "  낡은 base 에서 갈라지면 ROADMAP · ISSUES 가 충돌한다"
+    )
+
+
+def behind_base() -> str | None:
+    """기준 ref 가 내 브랜치보다 앞서 있으면 몇 커밋인지.
+
+    **낡은 base 에서 갈라져 나온 것이 충돌의 진짜 원인이다.** 추적 문서는 같은 줄의
+    체크박스가 바뀌는 파일이라, main 이 어떤 태그를 `[x]` 로 올린 뒤에 내가 그 옆에
+    줄을 더하면 git 은 겹친 변경으로 본다. 네 번 났다 (H-026).
+
+    `./dev.sh next` 는 **일을 시작하기 전에** 부르는 명령이다. 그 자리가 "base 가
+    낡았다" 고 말해 줄 유일하게 맞는 자리다 — 충돌을 본 뒤가 아니라 그 전이다.
+    네트워크는 몰래 치지 않는다. 마지막으로 가져온 ref 를 그대로 본다.
+    """
+    base = base_ref()
+    if base is None:
+        return None
+    out = _git("rev-list", "--count", f"HEAD..{base}")
+    if out is None or not out.strip().isdigit():
+        return None
+    return stale_message(base, int(out.strip()))
+
+
 def merge_reports(tags: list[str]) -> dict[str, str]:
     """`[~]` 태그마다 한 문장. **빈 칸을 돌려주는 경우는 git 자체가 없을 때뿐이다.**
 
@@ -219,6 +255,10 @@ def render(
             out.append("\n  최신이 아닐 수 있다 — `git fetch` 뒤에 다시 본다")
         out.append("")
 
+    if stale := reports.get(_BASE_KEY):
+        out.append(stale)
+        out.append("")
+
     todo = [t for t in open_tasks if t.state == " "]
     out.append(f"열린 작업 ({len(todo)})")
     out += _block(todo, reports) if todo else ["  없음"]
@@ -254,7 +294,10 @@ def main(argv: list[str] | None = None) -> int:
         return 1
     tasks = scan_tasks()
     waiting = [t.tag for t in tasks if t.state == "~"]
-    print(render(tasks, prefix, merge_reports(waiting) if waiting else {}))
+    reports = merge_reports(waiting) if waiting else {}
+    if stale := behind_base():
+        reports[_BASE_KEY] = stale
+    print(render(tasks, prefix, reports))
     return 0
 
 
