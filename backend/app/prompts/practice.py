@@ -11,6 +11,7 @@
 - 고쳐 쓰기만 하지 않고 왜 그런지 설명한다(메타언어적 피드백).
 """
 
+from app.prompts.models import variant_for
 from app.providers.base import ChatMessage
 
 VERDICTS = ["정확함", "통함", "다시"]
@@ -46,9 +47,7 @@ SYSTEM_PROMPT = """너는 한국인 영어 학습자의 영작문을 봐 주는 
 - 이 연습의 목적은 목표 표현을 직접 써 보는 것이다. 목표 표현을 쓰지 않았거나
   용법이 틀렸다면 그것이 핵심 지적 사항이다.
 
-공통 규칙:
-- JSON 외의 텍스트, 인사말, 코드 펜스(```)를 절대 덧붙이지 않는다.
-- 설명은 한국어로, "~이다 / ~한다" 체로 쓴다. "~입니다 / ~합니다" 체를 섞지 않는다.
+{practice_rules}
 
 각 칸에 들어갈 내용:
 
@@ -94,13 +93,6 @@ USER_PROMPT = """목표 표현: {expression}
 
 학습자가 쓴 문장:
 {learner_answer}"""
-
-RETRY_NUDGE = (
-    "직전 응답이 올바른 JSON이 아니었다. 이번에는 설명이나 코드 펜스 없이 "
-    "스키마를 따르는 JSON 객체 하나만 출력하라."
-)
-
-
 def build_messages(
     *,
     expression: str,
@@ -110,12 +102,15 @@ def build_messages(
     learner_answer: str,
     level: str = "intermediate",
     retry: bool = False,
+    model: str = "",
 ) -> list[ChatMessage]:
+    variant = variant_for(model)
     system = SYSTEM_PROMPT.format(
-        level_guide=LEVEL_GUIDE.get(level, LEVEL_GUIDE["intermediate"])
+        practice_rules=variant.practice_rules,
+        level_guide=LEVEL_GUIDE.get(level, LEVEL_GUIDE["intermediate"]),
     )
     if retry:
-        system = f"{system}\n\n{RETRY_NUDGE}"
+        system = f"{system}\n\n{variant.retry_nudge}"
     return [
         ChatMessage(role="system", content=system),
         ChatMessage(

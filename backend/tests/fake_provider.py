@@ -79,9 +79,16 @@ class FakeProvider(LLMProvider):
     값이 리스트면 그 파트의 호출 순서대로 하나씩 쓴다 (재시도 테스트용).
     """
 
-    def __init__(self, overrides: dict[str, str | list[str]] | None = None) -> None:
+    def __init__(
+        self,
+        overrides: dict[str, str | list[str]] | None = None,
+        model: str = "local-model",
+    ) -> None:
         self.overrides = overrides or {}
         self.calls: list[tuple[str, list[ChatMessage]]] = []
+        # 프로토콜이 요구하는 칸이다. 가짜가 안 들고 있어서 모델별 프롬프트를
+        # 붙이는 순간 35개가 깨졌다 — 가짜가 진짜보다 좁았다 (M3-T5).
+        self.model = model
 
     async def complete(
         self,

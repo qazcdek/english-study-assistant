@@ -28,6 +28,12 @@ class CompletionResult:
 class LLMProvider(ABC):
     """채팅 방식 LLM에 대한 최소 인터페이스."""
 
+    # 프롬프트를 고르는 데 쓴다 (`prompts/models.py`). **기본값을 둔다** —
+    # 구현이 안 채워도 돌아야 하고, 빈 값이면 모델별 덧붙임 없이 base 를 쓴다.
+    # 전에는 선언만 있어서 인스턴스에 없었고, 모델별 프롬프트를 붙이는 순간
+    # 테스트 가짜 전부가 깨졌다 (M3-T5).
+    model: str = ""
+
     @abstractmethod
     async def complete(
         self,

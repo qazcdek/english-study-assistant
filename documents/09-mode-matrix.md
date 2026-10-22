@@ -128,7 +128,9 @@ cloud   Sentry.  SENTRY_DSN 이 있을 때만 켠다
 
 여기 있는 것은 두 모드가 똑같이 쓴다. 한쪽만 고치면 그 자체로 버그다.
 
-- 프롬프트 전부 (`app/prompts/`) — 분석 4파트, 작문 연습 채점
+- 프롬프트의 **교육 내용** (`app/prompts/analysis.py`) — 표현 유형 · 난이도 · 칸별 명세.
+  **길들이기 지시는 모델 계열로 갈린다**(`app/prompts/models.py`) — 모드가 아니라 모델이
+  기준이고, 지금은 네 계열이 같은 문구를 쓴다 ([04 §9](04-prompt-design.md))
 - 결과 스키마와 난이도별 분기 (`app/schemas.py`, `PartSpec.schema_for`)
 - 응답 정제 (`app/services/refine.py`)
 - 마크다운 렌더링 (`app/services/markdown.py`)

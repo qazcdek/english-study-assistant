@@ -71,7 +71,14 @@ class AnalyzerService:
         for attempt in range(2):
             retry = attempt > 0
             completion = await self.provider.complete(
-                build_messages(spec, request.text, request.level, state, retry=retry),
+                build_messages(
+                    spec,
+                    request.text,
+                    request.level,
+                    state,
+                    retry=retry,
+                    model=self.provider.model,
+                ),
                 temperature=0.0 if retry else None,
                 json_schema=spec.schema_for(request.level, len(request.text)),
             )
