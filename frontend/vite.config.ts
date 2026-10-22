@@ -1,6 +1,6 @@
 import tailwindcss from '@tailwindcss/vite'
 import react from '@vitejs/plugin-react'
-import { defineConfig } from 'vite'
+import { defineConfig } from 'vitest/config'
 
 export default defineConfig({
   plugins: [react(), tailwindcss()],
@@ -13,5 +13,13 @@ export default defineConfig({
         changeOrigin: true,
       },
     },
+  },
+  test: {
+    // 화면에 뭐가 그려졌는지 보려면 DOM 이 필요하다. 브라우저는 안 띄운다.
+    environment: 'jsdom',
+    setupFiles: ['./src/__tests__/setup.ts'],
+    include: ['src/**/*.test.{ts,tsx}'],
+    // Tailwind 를 테스트에서 돌릴 이유가 없다. 보이는 모양이 아니라 구조를 본다.
+    css: false,
   },
 })

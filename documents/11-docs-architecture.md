@@ -144,6 +144,7 @@ CLAUDE.md 에서 색인으로 가는 링크 하나만 평문으로 바꿔도 그
 | 추적 정합성 (체크된 태그는 DONE 에 세부가 있다) | `./dev.sh docs` |
 | [09 모드별 차이](09-mode-matrix.md) 의 표 | `backend/tests/test_mode_matrix.py` |
 | 두 모드 공통 동작 | `backend/tests/test_both_modes.py` |
+| 화면에 그려진 것 (요소 · 토글 · 확인 상자) | `frontend/src/__tests__/` (`npm test`) |
 
 **포인터는 양쪽을 다 건다.** 문서가 "이 테스트가 나를 강제한다" 고 적으면 그 테스트도
 문서 이름을 알고 있어야 한다. 한쪽만 아는 포인터는 다른 쪽이 사라져도 모른다.
