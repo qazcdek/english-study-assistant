@@ -9,6 +9,7 @@ from app.config import get_settings
 from app.db import AnalysisRecord, PracticeRecord
 from app.deps import ActiveUser, AnalyzerDep, DbDep, PracticeDep
 from app.errors import LLMError
+from app.providers import registry
 from app.schemas import (
     AnalyzeRequest,
     AnalyzeResponse,
@@ -18,6 +19,7 @@ from app.schemas import (
     LLMHealth,
     PracticeRequest,
     PracticeResponse,
+    ProviderOption,
 )
 from app.services import records, usage, vocabulary
 from app.services.analyzer import AnalyzerService
@@ -40,6 +42,17 @@ def app_config() -> AppConfigResponse:
         daily_practice_limit=settings.daily_practice_limit if settings.is_cloud else 0,
         api_key_issue_url=API_KEY_ISSUE_URL if settings.is_cloud else "",
         max_input_chars=settings.max_input_chars,
+        providers=[
+            ProviderOption(
+                id=p.id,
+                label=p.label,
+                models=list(p.models),
+                needs_key=p.needs_key,
+                key_url=p.key_url,
+            )
+            for p in registry.selectable(settings.app_mode)
+        ],
+        default_provider=registry.default_for(settings.app_mode).id,
     )
 
 

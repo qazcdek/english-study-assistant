@@ -231,3 +231,36 @@ def test_practice_history_can_be_narrowed_to_one_expression(both_modes):
 
     rows = api.client.get("/api/practice/history", params={"expression": "sum up"}).json()
     assert [r["expression"] for r in rows] == ["sum up"]
+
+
+# --------------------------------------------- 고를 수 있는 제공자 (M12-T1)
+
+
+def test_config_tells_which_providers_this_mode_can_choose(both_modes):
+    """**프론트가 목록을 들고 있지 않다.** 서버가 정한 것을 그대로 그린다 —
+    프론트에 적으면 모드가 바뀔 때 어긋난다 (09 §3.2)."""
+    api = both_modes
+    config = api.client.get("/api/config").json()
+
+    ids = [p["id"] for p in config["providers"]]
+    assert ids, "고를 수 있는 제공자가 비었다"
+    assert config["default_provider"] in ids
+
+    if api.mode == "cloud":
+        # llama-server 는 내 PC 에 있어서 Render 에서 닿지 않는다.
+        assert "llama" not in ids
+    else:
+        # 사용자가 정한 규칙 — local 은 llama-server 와 cloud LLM 전부.
+        assert "llama" in ids and "gemini" in ids
+
+
+def test_config_says_which_providers_need_a_key(both_modes):
+    """키가 필요한지 모르면 화면이 등록 칸을 그릴지 정할 수 없다."""
+    api = both_modes
+    by_id = {p["id"]: p for p in api.client.get("/api/config").json()["providers"]}
+
+    for provider in by_id.values():
+        if provider["needs_key"]:
+            assert provider["key_url"], provider["id"]
+    if api.mode == "local":
+        assert by_id["llama"]["needs_key"] is False

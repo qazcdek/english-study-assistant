@@ -235,6 +235,20 @@ class PracticeResponse(BaseModel):
 # --------------------------------------------------------------------------- 앱 설정
 
 
+class ProviderOption(BaseModel):
+    """화면이 모델 선택을 그리는 데 필요한 것.
+
+    **프론트가 목록을 들고 있지 않다.** 고를 수 있는 범위가 모드로 갈리므로
+    (09 §3.2), 서버가 정한 것을 그대로 그린다 — 프론트에 적으면 모드가 바뀔 때 어긋난다.
+    """
+
+    id: str
+    label: str
+    models: list[str]
+    needs_key: bool
+    key_url: str = ""
+
+
 class AppConfigResponse(BaseModel):
     """프론트가 어떤 화면을 그릴지 정하는 데 필요한 최소 정보."""
 
@@ -245,6 +259,10 @@ class AppConfigResponse(BaseModel):
     daily_practice_limit: int = 0
     api_key_issue_url: str = ""
     max_input_chars: int = ABSOLUTE_MAX_INPUT_CHARS
+    # 이 모드에서 고를 수 있는 제공자. 아직 안 되는 것은 **담기지 않는다**
+    # (고를 수 있는데 안 되는 것은 목록에 없는 것보다 나쁘다).
+    providers: list[ProviderOption] = []
+    default_provider: str = ""
 
 
 # --------------------------------------------------------------------------- 계정 (cloud)

@@ -60,6 +60,21 @@ Settings.cloud_max_input_chars   =  800   ← 실제 적용
 
 ### 3.2 LLM 프로바이더
 
+**전에는 모드가 제공자를 정했다** — local 은 llama-server, cloud 는 Gemini.
+이제 **회원이 고르고, 고를 수 있는 범위만 모드로 갈린다.**
+
+```
+local    llama-server + cloud LLM 전부
+cloud    cloud LLM 만 — llama-server 는 내 PC 에 있어서 Render 에서 닿지 않는다
+```
+
+목록은 `app/providers/registry.py` 한 곳에 있고, 프론트는 그것을 `/api/config` 로 받는다.
+**프론트에 적지 않는다** — 적으면 모드가 바뀔 때 어긋난다.
+
+**아직 안 되는 제공자는 목록에 안 나온다.** 고를 수 있는데 안 되는 것은 목록에 없는 것보다
+나쁘다. `implemented` 는 선언이 아니라 **구현 표에서 끌어온다** — 손으로 적었더니
+거짓으로 적어도 아무것도 안 잡혔다.
+
 | | local | cloud |
 |---|---|---|
 | 만드는 곳 | `main.lifespan` — 앱당 하나 | `deps.get_provider` — 요청당 하나 |
@@ -67,6 +82,11 @@ Settings.cloud_max_input_chars   =  800   ← 실제 적용
 | 정리 | 앱 종료 시 | 요청 끝날 때 |
 
 cloud 에서 프로바이더를 공유하면 **다른 회원의 키로 호출된다.** 절대 캐시하지 않는다.
+
+**제공자가 늘면 다섯 곳이 함께 늘어난다** — 구현 · 키 저장 · 프롬프트 계열([04 §9](04-prompt-design.md)) ·
+선택 UI · **개인정보처리방침의 국외 이전 수탁자**([07 §10](07-web-deployment.md)).
+빼먹은 것이 방침이면 **적지 않은 곳으로 데이터가 나간다.** `test_provider_registry.py` 가
+목록과 나머지를 대조한다.
 
 ### 3.3 사용량 한도
 
