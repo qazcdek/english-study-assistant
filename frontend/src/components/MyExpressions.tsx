@@ -147,15 +147,33 @@ function PromptGroup({ promptKo, rows }: { promptKo: string; rows: PracticeHisto
   )
 }
 
-/** 제시문별로 묶는다. 서버가 최신순으로 주므로 그 순서를 그대로 쓴다. */
-export function groupByPrompt(rows: PracticeHistoryItem[]): [string, PracticeHistoryItem[]][] {
-  const groups = new Map<string, PracticeHistoryItem[]>()
+export interface PromptGroupData {
+  key: string
+  expression: string
+  promptKo: string
+  rows: PracticeHistoryItem[]
+}
+
+/**
+ * **표현과 제시문 쌍**으로 묶는다. 서버가 최신순으로 주므로 그 순서를 그대로 쓴다.
+ *
+ * 제시문만으로 묶으면 **다른 표현의 기록이 한 묶음에 섞인다.** 지금 이 화면은
+ * 표현별로 가져오니 티가 안 나지만, 그건 **호출하는 쪽이 미리 걸러 줬다는 사실에
+ * 정확성을 맡기는 것**이다. 표현을 가로질러 모으는 화면(오답 다시 풀기, M2-T3)이
+ * 생기는 순간 조용히 깨진다. 묶음의 정체성은 "어떤 표현을 어떤 제시문으로 썼나" 다.
+ *
+ * 키는 `JSON.stringify` 로 만든다. 구분자를 직접 끼우면 표현이나 제시문에 그 글자가
+ * 들어 있을 때 엉뚱한 둘이 같은 키가 된다.
+ */
+export function groupByPrompt(rows: PracticeHistoryItem[]): PromptGroupData[] {
+  const groups = new Map<string, PromptGroupData>()
   for (const row of rows) {
-    const found = groups.get(row.prompt_ko)
-    if (found) found.push(row)
-    else groups.set(row.prompt_ko, [row])
+    const key = JSON.stringify([row.expression, row.prompt_ko])
+    const found = groups.get(key)
+    if (found) found.rows.push(row)
+    else groups.set(key, { key, expression: row.expression, promptKo: row.prompt_ko, rows: [row] })
   }
-  return [...groups]
+  return [...groups.values()]
 }
 
 /** 한 표현의 쓴 기록 전부. 펼칠 때 가져온다 — 목록을 열 때 전부 가져오면 느리다. */
@@ -184,8 +202,8 @@ function History({ expression, reloadKey }: { expression: string; reloadKey: num
 
   return (
     <ul className="flex flex-col gap-3">
-      {groupByPrompt(rows).map(([promptKo, group]) => (
-        <PromptGroup key={promptKo} promptKo={promptKo} rows={group} />
+      {groupByPrompt(rows).map((group) => (
+        <PromptGroup key={group.key} promptKo={group.promptKo} rows={group.rows} />
       ))}
     </ul>
   )
