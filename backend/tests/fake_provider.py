@@ -86,6 +86,8 @@ class FakeProvider(LLMProvider):
     ) -> None:
         self.overrides = overrides or {}
         self.calls: list[tuple[str, list[ChatMessage]]] = []
+        # 실제로 **보낸** 스키마. 깎여 나갔는지 확인하는 데 쓴다 (M12-T3).
+        self.schemas: list[dict[str, Any] | None] = []
         # 프로토콜이 요구하는 칸이다. 가짜가 안 들고 있어서 모델별 프롬프트를
         # 붙이는 순간 35개가 깨졌다 — 가짜가 진짜보다 좁았다 (M3-T5).
         self.model = model
@@ -101,6 +103,7 @@ class FakeProvider(LLMProvider):
         field = field_of(json_schema)
         seen = sum(1 for f, _ in self.calls if f == field)
         self.calls.append((field, messages))
+        self.schemas.append(json_schema)
 
         override = self.overrides.get(field)
         if isinstance(override, list):

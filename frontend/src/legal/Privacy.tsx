@@ -1,7 +1,17 @@
 import { Clause, Items, Legal } from './Legal'
 import { OPERATOR } from './operator'
 
-/** 밖으로 나가는 곳 다섯. 사용자가 **전부 이름·국가·항목까지** 밝히기로 정했다. */
+/**
+ * 밖으로 나가는 곳 전부. 사용자가 **이름·국가·항목까지** 밝히기로 정했다.
+ *
+ * **LLM 제공자 줄은 레지스트리를 따라간다.** 고를 수 있는 제공자가 늘면 데이터가
+ * 나가는 곳이 늘어나므로 이 표도 함께 늘어야 한다. 빼먹으면 **적지 않은 곳으로
+ * 데이터가 나간다** — 그래서 `ProviderInfo.transfer_name` 의 글자가 이 표에 있는지
+ * 검사가 본다 (`backend/tests/test_provider_registry.py`).
+ *
+ * 개수는 세지 않고 `TRANSFERS.length` 로 쓴다. 숫자를 글로 적어 두면 줄을 늘릴 때
+ * 한쪽만 고치고 끝난다 (M12-T5).
+ */
 const TRANSFERS = [
   {
     받는곳: 'Google (OAuth)',
@@ -11,6 +21,18 @@ const TRANSFERS = [
   },
   {
     받는곳: 'Google (Gemini API)',
+    국가: '미국 등',
+    항목: '회원이 입력한 영어 원문, 회원이 쓴 영작 문장',
+    목적: '문장 분석과 작문 연습 채점 — 회원 본인 API 키로 호출',
+  },
+  {
+    받는곳: 'OpenAI (ChatGPT API)',
+    국가: '미국 등',
+    항목: '회원이 입력한 영어 원문, 회원이 쓴 영작 문장',
+    목적: '문장 분석과 작문 연습 채점 — 회원 본인 API 키로 호출',
+  },
+  {
+    받는곳: 'Anthropic (Claude API)',
     국가: '미국 등',
     항목: '회원이 입력한 영어 원문, 회원이 쓴 영작 문장',
     목적: '문장 분석과 작문 연습 채점 — 회원 본인 API 키로 호출',
@@ -64,7 +86,7 @@ export function Privacy({ onBack }: { onBack: () => void }) {
               비밀번호는 받지 않습니다.
             </>,
             <>
-              <b>회원이 직접 등록하는 것</b> — Google Gemini API 키.{' '}
+              <b>회원이 직접 등록하는 것</b> — 회원이 고른 LLM 제공자의 API 키.{' '}
               <b>암호화해 보관</b>하며 화면에는 끝 네 자리만 보입니다.
             </>,
             <>
@@ -113,7 +135,9 @@ export function Privacy({ onBack }: { onBack: () => void }) {
 
       <Clause n={4} title="처리위탁과 국외 이전">
         <p>
-          서비스는 아래 다섯 곳에 처리를 위탁하며, 이들의 서버는 국외에 있습니다.
+          서비스는 아래 {TRANSFERS.length}곳에 처리를 위탁하며, 이들의 서버는 국외에
+          있습니다. <b>LLM 제공자는 회원이 고른 한 곳만 호출됩니다</b> — 고르지 않은
+          곳으로는 아무것도 나가지 않습니다.
         </p>
         <div className="overflow-x-auto">
           <table className="w-full border-collapse text-xs">
@@ -144,7 +168,8 @@ export function Privacy({ onBack }: { onBack: () => void }) {
         </div>
         <p>
           <b>Gemini 무료 등급은 Google 의 서비스 개선에 입력 데이터가 쓰일 수 있습니다.</b>{' '}
-          그래서 민감한 내용을 입력하지 않도록 가입 시 안내합니다.
+          그래서 민감한 내용을 입력하지 않도록 가입 시 안내합니다. 다른 제공자의 처리
+          방침은 각 제공자가 정하며, 회원 본인 계정의 약관이 적용됩니다.
         </p>
       </Clause>
 

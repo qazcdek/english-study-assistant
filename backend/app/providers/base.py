@@ -8,6 +8,8 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import Any
 
+from app.providers.schema import SchemaLimits
+
 
 @dataclass
 class ChatMessage:
@@ -34,6 +36,10 @@ class LLMProvider(ABC):
     # 테스트 가짜 전부가 깨졌다 (M3-T5).
     model: str = ""
 
+    # 와이어 스키마가 실을 수 있는 범위. **기본값은 "전부 받는다"** 이고,
+    # 좁은 쪽만 덮어쓴다. 왜 이것이 필요한지는 `providers/schema.py`.
+    schema_limits: SchemaLimits = SchemaLimits()
+
     @abstractmethod
     async def complete(
         self,
@@ -47,6 +53,9 @@ class LLMProvider(ABC):
 
         `json_schema` 가 주어지면 응답이 해당 스키마를 따르도록 모델에 강제한다.
         강제 수단이 없는 구현이라면 최소한 JSON 객체만 나오도록 유도해야 한다.
+
+        **부르는 쪽이 `schema_limits` 로 미리 깎아서 넘긴다** — 구현이 다시
+        깎지 않는다. 깎은 자리를 모르면 돌아온 응답을 다시 잴 수 없다.
         """
 
     @abstractmethod
