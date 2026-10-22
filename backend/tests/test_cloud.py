@@ -1,22 +1,13 @@
 """웹 배포(cloud) 모드: 로그인 · 동의 · 회원 키 · 사용량 · 저장."""
 
-import pytest
 from fastapi.testclient import TestClient
 
 from app.config import get_settings
 from app.db import User, session_scope
-from tests.modes import SESSION_SECRET, build_app, login, setup_env
+from tests.modes import SESSION_SECRET, build_app, login
 from tests.modes import make_cloud_user as make_user
 
 __all__ = ["SESSION_SECRET"]
-
-
-@pytest.fixture
-def cloud(monkeypatch, tmp_path):
-    """cloud **전용** 픽스처. 두 모드 공통 기능은 `test_both_modes.py` 로 간다."""
-    setup_env(monkeypatch, tmp_path, "cloud")
-    with TestClient(build_app()) as client:
-        yield client
 
 
 # --------------------------------------------------------------------- 인증 문턱

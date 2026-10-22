@@ -12,7 +12,18 @@ from __future__ import annotations
 import re
 
 from tests import docmap
-from tests.docmap import ROOT, ROOT_DOC, all_docs, code_refs, header_of, rel, sections_of
+from tests.docmap import (
+    ROOT,
+    ROOT_DOC,
+    all_docs,
+    code_refs,
+    doc_refs,
+    header_of,
+    outside_fences,
+    rel,
+    section_body,
+    sections_of,
+)
 
 
 def standard_docs():
@@ -65,6 +76,50 @@ def test_every_document_address_in_the_code_resolves():
     assert not dangling, "코드가 가리키는 문서 주소가 썩었다:\n  " + "\n  ".join(dangling)
 
 
+def test_the_doc_to_doc_scan_actually_found_something():
+    """빈 목록을 훑으면 아래 둘이 통과만 한다. 찾았다는 것부터 확인한다."""
+    sectioned = [r for r in doc_refs() if r.section]
+    assert len(sectioned) >= 20, f"문서→문서 절 주소를 {len(sectioned)}개만 찾았다"
+
+
+def test_every_document_address_in_a_document_resolves():
+    """문서가 가리키는 절도 실제로 있어야 한다.
+
+    전에는 **코드→문서만** 봤다. 그래서 09 와 14 가 가리키는 07 §6.5 의 번호를 바꿔도
+    "이상 없음" 이 나왔다 — 실제로 깨뜨려 확인했다 (M11-T2).
+    """
+    names = {p.name for p in all_docs()}
+    dangling = []
+    for ref in doc_refs():
+        if ref.section is None:
+            continue  # 그래프 검사가 본다
+        if ref.doc not in names:
+            dangling.append(f"{ref.where()}  없는 문서 {ref.doc}")
+        elif ref.section not in sections_of(ROOT / "documents" / ref.doc):
+            dangling.append(f"{ref.where()}  {ref.doc} 에 §{ref.section} 절이 없다")
+    assert not dangling, "문서가 가리키는 절 주소가 썩었다:\n  " + "\n  ".join(dangling)
+
+
+def test_a_referenced_section_is_not_empty():
+    """가리켜지는 절은 내용을 들고 있어야 한다.
+
+    **내용을 다른 문서로 옮기고 제목만 남기는 것**이 가장 잡기 어려운 어긋남이다.
+    주소는 멀쩡히 해석되는데 가리키는 내용이 없다. 옮긴 자리에 **길잡이 한 줄**을
+    남겼다면 통과한다 — 그게 지키려는 규약이다 (11 §3.6).
+    """
+    hollow = []
+    sectioned = [r for r in doc_refs() + code_refs() if r.section and not r.problem]
+    for ref in sectioned:
+        doc = ROOT / "documents" / ref.doc
+        if not doc.is_file() or ref.section not in sections_of(doc):
+            continue  # 위 두 검사가 본다
+        if len(section_body(doc, ref.section)) < 40:
+            hollow.append(f"{ref.where()} 가 가리키는 {ref.doc} §{ref.section} 이 비었다")
+    assert not hollow, (
+        "옮기고 길잡이를 안 남겼다:\n  " + "\n  ".join(sorted(set(hollow))) + "\n(11 §3.6)"
+    )
+
+
 def test_enforcement_pointers_point_both_ways():
     """문서가 '이 테스트가 나를 강제한다' 고 적었으면, 그 테스트도 문서를 알아야 한다."""
     broken = []
@@ -111,3 +166,101 @@ def test_every_command_in_the_tooling_doc_is_wired_into_dev_sh():
         if missing:
             gaps.append(f"{verb} — {' · '.join(missing)} 에 없다")
     assert not gaps, "dev.sh 에 안 걸린 명령:\n  " + "\n  ".join(gaps)
+
+
+# ----------------------------------------------- DONE 의 구조 (union 머지 뒤처리)
+#
+# DONE 은 맨 위에 덧붙이기만 하는 파일이라 두 브랜치가 같은 자리를 건드린다.
+# 내용이 다투는 것이 아니라 **자리만 겹치는** 것이므로 `.gitattributes` 가
+# `merge=union` 으로 양쪽을 다 남긴다. 대신 날짜 머리글이 두 번 남을 수 있다 —
+# 그 뒤처리를 여기서 잡는다 (H-024).
+
+_DATE = re.compile(r"^## (\d{4}-\d{2}-\d{2})\s*$")
+_ENTRY = re.compile(r"^### (M\d+-T\d+|H-\d+) ·")
+
+
+def _done_outline() -> list[tuple[int, str, str]]:
+    """(줄 번호, 'date' | 'entry', 값). 울타리 안의 서식 예시는 건너뛴다."""
+    done = ROOT / "documents" / "plan" / "DONE.md"
+    outline = []
+    for n, line in outside_fences(done.read_text(encoding="utf-8")):
+        if m := _DATE.match(line):
+            outline.append((n, "date", m.group(1)))
+        elif m := _ENTRY.match(line):
+            outline.append((n, "entry", m.group(1)))
+    return outline
+
+
+def test_the_done_outline_was_actually_found():
+    """빈 목록을 훑으면 아래 검사들이 통과만 한다."""
+    outline = _done_outline()
+
+    assert sum(1 for _, kind, _ in outline if kind == "date") >= 3
+    assert sum(1 for _, kind, _ in outline if kind == "entry") >= 10
+
+
+def test_done_has_no_duplicate_date_heading():
+    """union 머지가 같은 날짜 머리글을 두 번 남길 수 있다. 그때 한쪽으로 모은다."""
+    dates = [value for _, kind, value in _done_outline() if kind == "date"]
+
+    doubled = sorted({d for d in dates if dates.count(d) > 1})
+    assert not doubled, f"날짜 머리글이 두 번 나온다: {doubled}"
+
+
+def test_done_date_headings_are_in_descending_order():
+    """날짜 역순으로 읽는 문서다."""
+    dates = [value for _, kind, value in _done_outline() if kind == "date"]
+
+    assert dates == sorted(dates, reverse=True), f"날짜 머리글 순서가 어긋났다: {dates}"
+
+
+def test_every_entry_sits_under_its_own_date():
+    """항목이 들고 있는 날짜와 머리글이 같아야 한다.
+
+    **순서 검사로는 안 잡힌다.** 실제로 2026-10-22 절을 끼워 넣다가 **2026-10-21
+    머리글을 먹어서** H-021 이하 전부가 22일 밑에 들어가 있었는데, 남은 머리글은
+    여전히 내림차순이라 아무것도 깨지지 않았다. 일부러 머리글을 지워 보고 알았다.
+    """
+    done = (ROOT / "documents" / "plan" / "DONE.md").read_text(encoding="utf-8")
+    lines = dict(outside_fences(done))
+
+    wrong, heading = [], None
+    for line, kind, value in _done_outline():
+        if kind == "date":
+            heading = value
+            continue
+        own = next(
+            (
+                m.group(1)
+                for n in range(line + 1, line + 4)
+                if (m := re.match(r"^(\d{4}-\d{2}-\d{2})", lines.get(n, "")))
+            ),
+            None,
+        )
+        if own is None:
+            wrong.append(f"DONE.md:{line}  {value} 에 날짜 줄이 없다")
+        elif own != heading:
+            wrong.append(f"DONE.md:{line}  {value} 는 {own} 인데 머리글은 {heading}")
+    assert not wrong, "항목과 날짜 머리글이 어긋났다:\n  " + "\n  ".join(wrong)
+
+
+def test_no_tag_has_two_entries_in_done():
+    """태그 번호는 재사용하지 않는다(CLAUDE.md 5절 5항). 두 번 나오면 union 의 흔적이다."""
+    tags = [value for _, kind, value in _done_outline() if kind == "entry"]
+
+    doubled = sorted({t for t in tags if tags.count(t) > 1})
+    assert not doubled, f"DONE 에 같은 태그가 두 번 있다: {doubled}"
+
+
+def test_every_done_entry_sits_under_a_date_heading():
+    """날짜 머리글 위에 끼워 넣으면 그 항목은 어느 날의 것도 아니게 된다."""
+    orphans = [
+        f"DONE.md:{line}  {value}"
+        for line, kind, value in _done_outline()
+        if kind == "entry" and not _seen_date_before(line)
+    ]
+    assert not orphans, "날짜 머리글 밖에 있는 항목:\n  " + "\n  ".join(orphans)
+
+
+def _seen_date_before(line: int) -> bool:
+    return any(n < line and kind == "date" for n, kind, _ in _done_outline())
