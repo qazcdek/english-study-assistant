@@ -91,6 +91,7 @@ CLAUDE.md                 메타 규약. 세션마다 자동으로 읽힌다
 |---|---|
 | [plan/ROADMAP](plan/ROADMAP.md) | **의도한 계획** — 마일스톤(M)과 태스크(T) |
 | [plan/ISSUES](plan/ISSUES.md) | **의도치 않게 생긴 문제** — 핫픽스(H) |
+| [plan/ONGOING](plan/ONGOING.md) | **진행 중인 세부** — `[~]` 인 태그만. 끝나면 DONE 으로 옮기고 지운다 |
 | [plan/DONE](plan/DONE.md) | **세부 기록** — 끝난 T·H 가 같은 태그로 모인다 |
 
 ROADMAP 과 ISSUES 는 같은 방식으로 적는다 — 체크박스 + 태그 + 한 줄 요약.

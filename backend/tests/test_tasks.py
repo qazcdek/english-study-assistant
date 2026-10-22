@@ -56,7 +56,7 @@ def test_merge_waiting_comes_first(repo):
     """`[~]` 는 가장 싸게 닫히고 가장 쉽게 잊힌다. 맨 앞이어야 한다."""
     out = tasks.render(tasks.scan_tasks())
     assert out.index("M1-T3") < out.index("H-002") < out.index("M1-T2")
-    assert "머지 대기" in out.splitlines()[0]
+    assert "진행 중" in out.splitlines()[0]
 
 
 def test_finished_tasks_are_not_shown(repo):
@@ -204,3 +204,47 @@ def test_this_repository_can_be_asked_how_far_behind_it_is():
     """순수 함수가 맞아도 git 을 못 읽으면 장치는 조용히 꺼진다."""
     # 앞서 있든 아니든 예외 없이 답해야 한다. 값 자체는 저장소 상태에 따라 달라진다.
     assert tasks.behind_base() is None or isinstance(tasks.behind_base(), str)
+
+
+# ----------------------------------- ONGOING 의 '다음 걸음' 을 고를 때 보여주는지
+
+
+def test_the_next_step_is_shown_on_an_open_line(repo):
+    """고를 때 "어디까지 했나" 가 보이지 않으면 ONGOING 은 안 읽힌다.
+
+    찾아 들어가야 하는 문서는 쓰이지 않는 문서가 된다 (H-027).
+    """
+    out = tasks.render(tasks.scan_tasks(), steps={"M1-T3": "스키마를 먼저 고친다"})
+
+    assert "다음 걸음 — 스키마를 먼저 고친다" in out
+
+
+def test_a_wrapped_next_step_becomes_one_line(repo, monkeypatch):
+    """문서는 줄을 접어 쓴다. 첫 줄만 읽으면 문장이 중간에서 끊긴다."""
+    ongoing = repo / "documents" / "plan" / "ONGOING.md"
+    ongoing.write_text(
+        "### M1-T3 · 고치는 중\n"
+        "시작 2026-10-22 · 갱신 2026-10-22\n\n"
+        "- **전제** 그렇다\n"
+        "- **다음 걸음** 앞 문장과\n  이어지는 뒷 문장\n",
+        encoding="utf-8",
+    )
+
+    assert tasks.next_steps()["M1-T3"] == "앞 문장과 이어지는 뒷 문장"
+
+
+def test_a_long_next_step_is_cut(repo):
+    """목록은 한 줄에 한 가지만 담는다. 길면 자르고 문서를 열어 보게 한다."""
+    cut = tasks._one_line("가" * 200)
+
+    assert len(cut) <= 96 and cut.endswith("…")
+
+
+def test_markup_is_stripped_from_the_next_step(repo):
+    """문서의 강조 표시가 목록에 그대로 나오면 읽기 어렵다."""
+    assert tasks._one_line("**굵게** 와 `코드`") == "굵게 와 코드"
+
+
+def test_a_missing_ongoing_file_is_not_an_error(repo):
+    """ONGOING 이 비거나 없을 수 있다 — 그게 정상 상태다."""
+    assert tasks.next_steps() == {}
