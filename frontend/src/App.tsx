@@ -12,6 +12,9 @@ import { ResultView } from './components/ResultView'
 import { StatusBar } from './components/StatusBar'
 import { MIN_CHARS } from './components/InputPanel'
 import { Toast } from './components/Toast'
+import { legalReady } from './legal/operator'
+import { Privacy } from './legal/Privacy'
+import { Terms } from './legal/Terms'
 import { initialState, reduce, type AnalysisState } from './lib/analysis'
 import {
   ApiError,
@@ -23,9 +26,25 @@ import {
   listHistory,
 } from './lib/api'
 import type { HistoryEntry } from './lib/history'
+import { useIsWide } from './lib/useIsWide'
 import { useSession } from './lib/useSession'
 import { useVocabulary } from './lib/useVocabulary'
 import type { Level, LlmHealth } from './lib/types'
+
+/** 주소와 화면의 짝. 한 곳에만 둔다 — 흩어지면 주소와 화면이 어긋난다. */
+const PATHS = {
+  analyze: '/',
+  mine: '/mine',
+  terms: '/terms',
+  privacy: '/privacy',
+} as const
+
+type View = keyof typeof PATHS
+
+function viewOf(pathname: string): View {
+  const found = (Object.keys(PATHS) as View[]).find((key) => PATHS[key] === pathname)
+  return found ?? 'analyze'
+}
 
 export default function App() {
   const session = useSession()
@@ -39,13 +58,32 @@ export default function App() {
   const [history, setHistory] = useState<HistoryEntry[]>([])
   const [activeId, setActiveId] = useState<string | null>(null)
   const [llmHealth, setLlmHealth] = useState<LlmHealth | null>(null)
-  // 분석 화면과 나의 표현 중 어느 쪽을 보고 있나. 주소를 쓰지 않는 한 화면 앱이다.
-  const [view, setView] = useState<'analyze' | 'mine'>('analyze')
+  // 어느 화면을 보고 있나. 법적 문서 둘은 **주소로 들어올 수 있어야 한다** —
+  // Google OAuth 심사가 개인정보처리방침 URL 을 요구한다. 라우터를 들이지 않고
+  // SPA 폴백 + history API 로 해결한다 (07 §5.1 이 같은 오리진을 쓰는 덕이다).
+  const [view, setView] = useState<View>(() => viewOf(window.location.pathname))
   const abortRef = useRef<AbortController | null>(null)
   // 같은 문구를 연달아 띄워도 다시 나타나야 해서, 띄운 시각을 key 로 쓴다.
   const [toast, setToast] = useState<{ message: string; at: number } | null>(null)
+  // 좁은 화면에서 기록 목록을 펼쳤나. 기본은 접힘 — 본문 위를 막지 않는다.
+  const [historyOpen, setHistoryOpen] = useState(false)
 
   const ready = session.stage === 'ready' || session.stage === 'local'
+
+  const wide = useIsWide()
+
+  /** 화면을 옮기고 주소도 맞춘다. 뒤로 가기가 동작해야 법적 문서를 링크할 수 있다. */
+  const go = useCallback((next: View) => {
+    setView(next)
+    const path = PATHS[next]
+    if (window.location.pathname !== path) window.history.pushState({}, '', path)
+  }, [])
+
+  useEffect(() => {
+    const onPop = () => setView(viewOf(window.location.pathname))
+    window.addEventListener('popstate', onPop)
+    return () => window.removeEventListener('popstate', onPop)
+  }, [])
   // 나의 표현은 두 화면이 함께 본다 — 분석 화면의 별과 목록이 어긋나지 않게 한 곳에서 든다.
   const vocab = useVocabulary(ready)
 
@@ -91,7 +129,7 @@ export default function App() {
     setError(null)
     setActiveId(null)
     // 나의 표현을 보던 중에 분석을 시작하면 결과가 안 보인다.
-    setView('analyze')
+    go('analyze')
 
     let state = initialState(trimmed)
     setAnalysis(state)
@@ -139,7 +177,7 @@ export default function App() {
     setText(entry.text)
     setActiveId(entry.id)
     setError(null)
-    setView('analyze')
+    go('analyze')
 
     // 목록에는 본문이 없다. 고를 때 가져온다.
     try {
@@ -171,6 +209,20 @@ export default function App() {
     return <p className="p-10 text-center text-sm text-stone-400">불러오는 중…</p>
   }
 
+  if (view === 'terms' || view === 'privacy') {
+    // **로그인 전에도 열려야 한다.** 동의 화면이 이 둘을 가리키고, Google OAuth 심사도
+    // 로그인 없이 방침 URL 을 열어 본다.
+    return (
+      <div className="mx-auto max-w-3xl px-4 py-10 sm:px-6">
+        {view === 'terms' ? (
+          <Terms onBack={() => go('analyze')} />
+        ) : (
+          <Privacy onBack={() => go('analyze')} />
+        )}
+      </div>
+    )
+  }
+
   if (session.stage !== 'ready' && session.stage !== 'local') {
     return (
       <div className="mx-auto max-w-6xl px-4 py-16 sm:px-6">
@@ -179,6 +231,8 @@ export default function App() {
           <ConsentPanel
             config={session.config}
             onAgree={async () => session.setAccount(await giveConsent())}
+            onOpenTerms={() => go('terms')}
+            onOpenPrivacy={() => go('privacy')}
           />
         )}
         {session.stage === 'api-key' && session.config && (
@@ -187,6 +241,16 @@ export default function App() {
       </div>
     )
   }
+
+  // 좁은 화면과 넓은 화면이 **같은 목록**을 쓴다. 두 벌을 쓰면 갈라진다.
+  const historyList = (
+    <HistoryList
+      entries={history}
+      activeId={activeId}
+      onSelect={handleSelectHistory}
+      onDelete={handleDeleteHistory}
+    />
+  )
 
   // ------------------------------------------------------------ 본 화면
 
@@ -209,7 +273,7 @@ export default function App() {
               <button
                 key={key}
                 type="button"
-                onClick={() => setView(key)}
+                onClick={() => go(key)}
                 aria-current={view === key}
                 className={`rounded-md px-2.5 py-1 transition ${
                   view === key
@@ -237,7 +301,7 @@ export default function App() {
       </header>
 
       <div className="grid gap-6 lg:grid-cols-[1fr_200px]">
-        <main className="flex flex-col gap-4">
+        <main className="flex min-w-0 flex-col gap-4">
           {view === 'mine' ? (
             <MyExpressions vocab={vocab} level={level} />
           ) : (
@@ -278,18 +342,52 @@ export default function App() {
           )}
         </main>
 
-        <aside className="order-first lg:order-none">
-          <h2 className="mb-2 px-2 text-xs font-medium uppercase tracking-wide text-stone-400">
-            최근 분석
-          </h2>
-          <HistoryList
-            entries={history}
-            activeId={activeId}
-            onSelect={handleSelectHistory}
-            onDelete={handleDeleteHistory}
-          />
+        {/* 좁은 화면에서는 이 칸이 **본문 위**에 온다(order-first). 늘 펼쳐 두면 분석
+            화면에 들어올 때마다 기록부터 지나가야 한다. 그래서 좁을 때만 접는다.
+            넓을 때는 옆 칸이라 길을 막지 않으므로 그대로 펼쳐 둔다. */}
+        <aside className="order-first min-w-0 lg:order-none">
+          {wide ? (
+            <>
+              <h2 className="mb-2 px-2 text-xs font-medium uppercase tracking-wide text-stone-400">
+                최근 분석
+              </h2>
+              {historyList}
+            </>
+          ) : (
+            <>
+              <button
+                type="button"
+                onClick={() => setHistoryOpen((v) => !v)}
+                aria-expanded={historyOpen}
+                className="flex w-full items-center gap-2 rounded-lg border border-stone-200 px-3 py-2 text-xs text-stone-500 transition hover:bg-stone-100 dark:border-stone-800 dark:hover:bg-stone-800"
+              >
+                {historyOpen ? '접기' : '이전 기록 보기'}
+                {history.length > 0 && (
+                  <span className="rounded-full bg-stone-100 px-1.5 text-[11px] text-stone-500 dark:bg-stone-800">
+                    {history.length}
+                  </span>
+                )}
+                <span className="ml-auto">{historyOpen ? '▴' : '▾'}</span>
+              </button>
+              {historyOpen && <div className="mt-2">{historyList}</div>}
+            </>
+          )}
         </aside>
       </div>
+
+      {/* 운영자 정보가 비어 있으면 **링크를 걸지 않는다** — 빈칸이 든 법적 문서를
+          사용자가 보는 쪽이 안 보이는 쪽보다 나쁘다 (legal/operator.ts). */}
+      {legalReady() && (
+        <footer className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-stone-100 pt-4 text-xs text-stone-400 dark:border-stone-800">
+          <button type="button" onClick={() => go('terms')} className="hover:text-stone-600 dark:hover:text-stone-300">
+            이용약관
+          </button>
+          <span aria-hidden>·</span>
+          <button type="button" onClick={() => go('privacy')} className="hover:text-stone-600 dark:hover:text-stone-300">
+            개인정보처리방침
+          </button>
+        </footer>
+      )}
     </div>
   )
 }

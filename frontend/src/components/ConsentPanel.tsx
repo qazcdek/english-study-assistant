@@ -1,10 +1,13 @@
 import { useState } from 'react'
 
+import { legalReady } from '../legal/operator'
 import type { AppConfig } from '../lib/types'
 
 interface Props {
   config: AppConfig
   onAgree: () => Promise<void>
+  onOpenTerms: () => void
+  onOpenPrivacy: () => void
 }
 
 /**
@@ -13,7 +16,7 @@ interface Props {
  * 이 서비스는 회원이 등록한 Gemini API 키로, 회원 본인의 사용 한도 안에서 호출한다.
  * 비용과 한도가 이용자에게 귀속되므로 동의 없이는 진행하지 않는다.
  */
-export function ConsentPanel({ config, onAgree }: Props) {
+export function ConsentPanel({ config, onAgree, onOpenTerms, onOpenPrivacy }: Props) {
   const [checked, setChecked] = useState(false)
   const [busy, setBusy] = useState(false)
 
@@ -93,6 +96,27 @@ export function ConsentPanel({ config, onAgree }: Props) {
         />
         <span>
           위 내용을 이해했고, <b>내 API 키와 내 사용 한도로 호출되는 것에 동의</b>합니다.
+          {legalReady() && (
+            <>
+              {' '}또한{' '}
+              <button
+                type="button"
+                onClick={onOpenTerms}
+                className="underline decoration-stone-300 hover:text-indigo-600 dark:decoration-stone-600"
+              >
+                이용약관
+              </button>
+              과{' '}
+              <button
+                type="button"
+                onClick={onOpenPrivacy}
+                className="underline decoration-stone-300 hover:text-indigo-600 dark:decoration-stone-600"
+              >
+                개인정보처리방침
+              </button>
+              에 동의합니다.
+            </>
+          )}
         </span>
       </label>
 

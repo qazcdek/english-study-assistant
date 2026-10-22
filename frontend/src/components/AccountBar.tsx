@@ -40,8 +40,8 @@ export function AccountBar({ account, usage, onChanged }: Props) {
 
       {open && (
         <div className="absolute right-0 z-10 mt-2 w-[min(18rem,calc(100vw-2rem))] rounded-xl border border-stone-200 bg-white p-4 shadow-lg dark:border-stone-700 dark:bg-stone-900">
-          <p className="truncate text-sm font-medium">{account.name}</p>
-          <p className="truncate text-xs text-stone-400">{account.email}</p>
+          <p className="min-w-0 truncate text-sm font-medium">{account.name}</p>
+          <p className="min-w-0 truncate text-xs text-stone-400">{account.email}</p>
 
           <dl className="mt-3 flex flex-col gap-1.5 border-t border-stone-100 pt-3 text-xs dark:border-stone-800">
             <div className="flex justify-between">
