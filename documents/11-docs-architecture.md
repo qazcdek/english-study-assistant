@@ -141,6 +141,7 @@ CLAUDE.md 에서 색인으로 가는 링크 하나만 평문으로 바꿔도 그
 | 태스크 줄의 형태 (안 잡히면 조용히 사라진다) | `backend/tests/test_tasks.py` |
 | [12 도구 규약](12-tooling.md) 7절의 명령 목록 | `backend/tests/test_doc_references.py` |
 | 문서끼리의 절 주소 · 옮긴 자리의 길잡이 (3.6) | `backend/tests/test_doc_references.py` |
+| DONE 의 구조 (날짜 머리글 · 태그 중복) | `backend/tests/test_doc_references.py` — `.gitattributes` 의 union 머지가 남기는 흔적을 잡는다 |
 | 문서 구조 (머리말 · 색인) | `./dev.sh docs` |
 | 추적 정합성 (체크된 태그는 DONE 에 세부가 있다) | `./dev.sh docs` |
 | [09 모드별 차이](09-mode-matrix.md) 의 표 | `backend/tests/test_mode_matrix.py` |

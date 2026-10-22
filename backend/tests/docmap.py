@@ -73,7 +73,7 @@ def code_files() -> list[Path]:
     return sorted(out)
 
 
-def _outside_fences(text: str) -> list[tuple[int, str]]:
+def outside_fences(text: str) -> list[tuple[int, str]]:
     """코드 블록 밖의 줄만 (1-기반 줄번호와 함께) 돌려준다."""
     lines, in_fence = [], False
     for n, line in enumerate(text.splitlines(), 1):
@@ -88,7 +88,7 @@ def _outside_fences(text: str) -> list[tuple[int, str]]:
 def links_in(doc: Path) -> list[str]:
     """인라인 코드도 뺀다 — 예시로 적어 둔 경로는 길이 아니다."""
     found: list[str] = []
-    for _, line in _outside_fences(doc.read_text(encoding="utf-8")):
+    for _, line in outside_fences(doc.read_text(encoding="utf-8")):
         found += _LINK.findall(_INLINE_CODE.sub("", line))
     return found
 
@@ -108,7 +108,7 @@ def edges_of(doc: Path) -> list[tuple[str, Path]]:
 def sections_of(doc: Path) -> set[str]:
     """`## 3.` 과 `### 3.1` 에서 절 번호만 모은다."""
     text = doc.read_text(encoding="utf-8")
-    return {m.group(1) for _, line in _outside_fences(text) if (m := _HEADING.match(line))}
+    return {m.group(1) for _, line in outside_fences(text) if (m := _HEADING.match(line))}
 
 
 def header_of(doc: Path) -> dict[str, str]:
@@ -175,7 +175,7 @@ def doc_refs() -> list[Ref]:
     """
     refs = []
     for src in sorted(all_docs() | {ROOT_DOC} | {ROOT / "README.md"}):
-        for n, line in _outside_fences(src.read_text(encoding="utf-8")):
+        for n, line in outside_fences(src.read_text(encoding="utf-8")):
             for m in _LINK_WITH_TEXT.finditer(line):
                 text, target = m.group(1), m.group(2)
                 name = _DOC_NAME.search(target.rsplit("/", 1)[-1])
