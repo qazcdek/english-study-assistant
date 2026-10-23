@@ -309,8 +309,13 @@ SQLite 는 검사 406개를 전부 통과시키고 Postgres 는 14개를 떨어�
 - **cloud 개발은 운영 브랜치를 가리키지 않는다.** 앱은 뜰 때 `upgrade head` 를 돌리고
   개발 중에는 `downgrade` 도 돈다 — 운영에 걸면 회원 데이터가 사라진다.
 
-**장치** `./dev.sh cloud` 는 `.env.cloud` 의 `DATABASE_URL` 이 Postgres 가 아니면
-**띄우기를 거부한다.** 이 표를 글로만 적어 두면 또 어긋난다 (12-tooling.md §6).
+**장치 둘.** 이 표를 글로만 적어 두면 또 어긋난다 (12-tooling.md §6).
+
+- `./dev.sh cloud` 는 `.env.cloud` 의 `DATABASE_URL` 이 Postgres 가 아니면
+  **띄우기를 거부한다.**
+- `backend/tests/test_dbs.py` 가 **이 판이 어느 엔진에서 돌고 있는지**와 **CI 가
+  Postgres 를 지시하고 있는지**를 함께 본다. 서비스를 띄워 놓고 안 쓰는 것이 가장
+  나쁘다 — 초록인데 전과 똑같다.
 
 ## 7. 아직 안 한 것
 
