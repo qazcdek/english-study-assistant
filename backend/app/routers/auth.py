@@ -18,7 +18,7 @@ from app.schemas import (
     ConsentRequest,
     DeletionSummary,
 )
-from app.services import account, keys
+from app.services import account, keys, operator
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
@@ -87,6 +87,11 @@ async def google_callback(
     user.email = info.get("email", "")
     user.name = info.get("name", "")
     user.picture = info.get("picture", "")
+    # **로그인할 때마다 다시 맞춘다.** 한 번 켜고 두면 운영자가 바뀐 뒤에도 옛 계정이
+    # 공용 글감 키 권한을 들고 있게 된다. 검증되지 않은 이메일로는 켜지지 않는다.
+    user.is_operator = operator.is_operator_email(
+        user.email, verified=bool(info.get("email_verified"))
+    )
     user.last_login_at = utcnow()
     db.commit()
 

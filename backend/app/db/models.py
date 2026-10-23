@@ -46,6 +46,11 @@ class User(Base):
     # 동의 없이는 분석을 시작할 수 없다.
     consented_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), default=None)
 
+    # **공용 글감을 만드는 키의 주인인가.** 권한이므로 구글이 검증한 이메일에서만
+    # 켜지고, 로그인할 때마다 다시 맞춰진다 — 이메일이 바뀌면 꺼진다.
+    # 어느 이메일이 운영자인지는 `app/services/operator.py`.
+    is_operator: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
+
     # 어느 제공자·모델로 일하나. **회원 전역 설정**이고, 바꿔 저장하면 그 뒤의 모든
     # 작업이 그것으로 간다 (09-mode-matrix.md §3.2). 비면 모드별 기본값을 쓴다.
     active_provider: Mapped[str] = mapped_column(String(20), default="")
