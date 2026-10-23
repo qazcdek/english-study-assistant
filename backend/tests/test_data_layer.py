@@ -5,6 +5,8 @@
 
 전에는 격리를 지키는 검사가 **히스토리 읽기 하나**뿐이었다. 나의 표현 · 연습 기록 ·
 데이터 삭제는 동작은 맞았지만 아무것도 지키고 있지 않았다.
+
+[문서] plan/DONE.md M13-T2
 """
 
 from __future__ import annotations
@@ -16,7 +18,7 @@ from pathlib import Path
 import pytest
 
 from app.auth.crypto import KeyCipher
-from app.db import Base, User, session_scope
+from app.db import SHARED, Base, User, session_scope
 from app.db.models import utcnow
 from app.services.account import OWNED
 from tests.modes import ENCRYPTION_KEY, login, make_cloud_user
@@ -27,9 +29,58 @@ DOC = ROOT / "documents" / "14-data-layer.md"
 SCANNED = ("app/routers", "app/services", "app/db")
 
 OWNED_NAMES = {model.__name__ for model in OWNED}
+SHARED_NAMES = {model.__name__ for model in SHARED}
 
 
 # --------------------------------------------------------------- 스키마 불변식
+
+
+def test_every_table_is_classified():
+    """14 §3.7 — **`user_id` 가 없는 표는 두 가지다.**
+
+    일부러 공용인 표와, 회원 소유로 만들려다 `user_id` 를 빠뜨린 표. 스키마만 봐서는
+    **둘의 생김새가 같다.** 빠뜨린 쪽은 그 표만 쓰는 기능이 멀쩡히 동작하므로 개발
+    중에는 드러나지 않고, 드러나는 것은 **두 번째 회원이 올 때**다 — 남의 데이터가
+    보인다.
+
+    그래서 공용이라면 `SHARED` 에 **적게** 한다. 적지 않으면 여기서 막힌다.
+    """
+    unclassified = []
+    for mapper in Base.registry.mappers:
+        model = mapper.class_
+        if model.__name__ == "User":
+            continue
+        has_user_id = "user_id" in model.__table__.columns
+        declared_shared = model.__name__ in SHARED_NAMES
+        if not has_user_id and not declared_shared:
+            unclassified.append(model.__name__)
+
+    assert not unclassified, (
+        "어느 쪽인지 알 수 없는 표가 있다: " + ", ".join(sorted(unclassified)) + "\n"
+        "  회원 것이면 user_id 를 달고 OWNED 에 더한다.\n"
+        "  공용이면 models.py 의 SHARED 에 적는다 (14-data-layer.md §3.7)."
+    )
+
+
+def test_a_shared_table_carries_no_owner():
+    """14 §3.7 — 공용 표에 회원을 가리키는 열이 생기면 **그 순간 공용이 아니다.**
+
+    그대로 두면 탈퇴해도 안 지워지는 회원 데이터가 된다 — 3.4 가 막는 바로 그 버그가
+    `SHARED` 에 숨어서 재발한다.
+    """
+    owned_looking = [m.__name__ for m in SHARED if "user_id" in m.__table__.columns]
+
+    assert not owned_looking, (
+        "공용이라 적어 놓고 user_id 를 들었다: " + ", ".join(sorted(owned_looking)) + "\n"
+        "  회원 것이면 SHARED 에서 빼고 OWNED 로 옮긴다."
+    )
+
+
+def test_the_two_lists_do_not_overlap():
+    """한 표가 양쪽에 있으면 탈퇴가 공용 데이터를 지운다."""
+    both = OWNED_NAMES & SHARED_NAMES
+
+    assert not both, f"OWNED 와 SHARED 양쪽에 있다: {sorted(both)}"
 
 
 def test_owned_covers_every_table_that_has_a_user_id():

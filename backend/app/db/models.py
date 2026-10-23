@@ -1,6 +1,12 @@
-"""회원별 저장 데이터.
+"""저장 데이터의 표.
 
-로컬 모드에서는 쓰이지 않는다. 웹 배포(cloud) 모드에서만 만들어진다.
+**두 모드가 같은 표를 쓴다.** 로컬도 Postgres 에 쌓고, 앱이 뜰 때 만드는 사용자 행
+하나(`id=1`)가 주인이다. 그래서 리비전도 하나다 (14-data-layer.md §2 · 09 §4).
+
+표는 **셋으로 갈린다** — `users`, `user_id` 를 든 표, 그리고 공용 표.
+무엇이 어느 쪽인지와 그 이유는 14-data-layer.md.
+
+[문서] plan/DONE.md M13-T2
 """
 
 from datetime import UTC, date, datetime
@@ -163,3 +169,103 @@ class UsageCounter(Base):
     analyses: Mapped[int] = mapped_column(Integer, default=0)
     practices: Mapped[int] = mapped_column(Integer, default=0)
     llm_calls: Mapped[int] = mapped_column(Integer, default=0)
+
+
+# ------------------------------------------------------------------ 공용 데이터
+#
+# **회원 것이 아닌 첫 데이터다.** 지금까지 표는 둘로만 갈렸다 — `users` 와
+# `user_id` 를 든 표. 서버가 골라 와 **모든 회원이 같은 것을 보는** 글감은 셋째다.
+#
+# 공용 표는 `user_id` 를 들지 않는다. 그래서 **"깜빡 빠뜨린 표" 와 생김새가 같다.**
+# 그 둘을 가르는 것이 아래 `SHARED` 이고, 적지 않으면 검사가 거부한다.
+#
+# [문서] 14-data-layer.md §3.7
+
+
+class Article(Base):
+    """서버가 골라 온 기사 한 편.
+
+    **본문을 통째로 들지 않는다.** 문단으로 쪼개 `ArticleParagraph` 에 둔다 —
+    분석이 문단마다 붙기 때문이다.
+
+    `source_id` 는 출처가 매긴 식별자다(가디언은 `world/2026/oct/22/...` 꼴).
+    URL 을 키로 쓰지 않는 이유는 **같은 기사의 URL 이 바뀔 수 있어서**다.
+    """
+
+    __tablename__ = "articles"
+    __table_args__ = (
+        UniqueConstraint("source", "source_id", name="uq_article_source_id"),
+        # **하루에 출처당 한 편.** 영·미 한 곳씩을 같은 날 올리는 모양을 미리 허용한다.
+        # 고르지 않은 기사는 `picked_for` 가 비어 있고, 빈 값은 유니크에 걸리지 않는다.
+        UniqueConstraint("picked_for", "source", name="uq_article_day_source"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    source: Mapped[str] = mapped_column(String(20), index=True)
+    source_id: Mapped[str] = mapped_column(String(500))
+    url: Mapped[str] = mapped_column(Text)
+    title: Mapped[str] = mapped_column(Text)
+    section: Mapped[str] = mapped_column(String(50), default="")
+    published_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+    # 어느 날짜의 글감으로 골랐나. **비어 있으면 아직 안 고른 후보다.**
+    picked_for: Mapped[date | None] = mapped_column(Date, index=True, default=None)
+    fetched_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+    paragraphs: Mapped[list["ArticleParagraph"]] = relationship(
+        back_populates="article", cascade="all, delete-orphan", order_by="ArticleParagraph.ordinal"
+    )
+
+
+class ArticleParagraph(Base):
+    """기사의 문단 하나. 분석이 붙는 단위다.
+
+    재 보니 가디언 기사의 `<p>` 문단은 **200~500자**였다 (M13-T1). 회원이 직접 치는
+    경로의 입력 제한(local 2000 · cloud 800)은 **여기에 걸리지 않는다** — 미리 분석은
+    서버가 돌리므로 그 경로를 타지 않는다.
+    """
+
+    __tablename__ = "article_paragraphs"
+    __table_args__ = (
+        UniqueConstraint("article_id", "ordinal", name="uq_paragraph_article_ordinal"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    article_id: Mapped[int] = mapped_column(
+        ForeignKey("articles.id", ondelete="CASCADE"), index=True
+    )
+    ordinal: Mapped[int] = mapped_column(Integer)
+    text: Mapped[str] = mapped_column(Text)
+
+    article: Mapped[Article] = relationship(back_populates="paragraphs")
+
+
+class ParagraphAnalysis(Base):
+    """문단 하나의 미리 분석 결과. 난이도마다 따로 둔다.
+
+    `AnalysisRecord` 와 모양을 맞춘다 — 같은 분석기가 만들고 같은 화면이 읽는다.
+    다른 점은 `user_id` 가 없다는 것뿐이다.
+    """
+
+    __tablename__ = "paragraph_analyses"
+    __table_args__ = (
+        UniqueConstraint("paragraph_id", "level", name="uq_analysis_paragraph_level"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    paragraph_id: Mapped[int] = mapped_column(
+        ForeignKey("article_paragraphs.id", ondelete="CASCADE"), index=True
+    )
+    level: Mapped[str] = mapped_column(String(20), default="intermediate")
+    result: Mapped[dict] = mapped_column(JSON)
+    markdown: Mapped[dict] = mapped_column(JSON)
+    failed_parts: Mapped[list] = mapped_column(JSON, default=list)
+    model: Mapped[str] = mapped_column(String(100), default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, index=True)
+
+    paragraph: Mapped[ArticleParagraph] = relationship()
+
+
+# 공용 표의 목록. **`user_id` 가 없어도 되는 표는 여기 적힌 것뿐이다.**
+# 새 표가 여기에도 없고 `user_id` 도 없으면 검사가 거부한다 — 일부러 공용인 것과
+# 회원 소유로 만들려다 `user_id` 를 빠뜨린 것을 **생김새로는 구별할 수 없어서**다.
+SHARED = (Article, ArticleParagraph, ParagraphAnalysis)
