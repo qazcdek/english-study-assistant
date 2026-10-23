@@ -16,6 +16,29 @@ jobs:
     # 린트 · 테스트 · 문서 계층을 한 잡에서 본다. ./dev.sh docs 가 backend/.venv 의
     # pytest 를 쓰므로 같은 venv 를 그대로 재사용한다.
     runs-on: ubuntu-latest
+
+    services:
+      # **머지 게이트는 운영과 같은 엔진을 본다** (H-032). 운영은 Neon Postgres 인데
+      # 검사가 SQLite 로만 돌던 동안, 엔진 전용 어긋남을 아무것도 못 잡았다 — 재 보니
+      # `String` 길이를 좁히는 사고에서 SQLite 는 406개를 전부 통과시키고 Postgres 는
+      # 14개를 떨어뜨린다 (tests/test_migrations.py 의 주석).
+      #
+      # 운영과 **메이저 버전을 맞춘다.** 로컬 도커도 17 이다 (dev.sh).
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: eng
+          POSTGRES_PASSWORD: eng
+          POSTGRES_DB: eng_study_ci
+        ports:
+          - 5432:5432
+        # 없으면 첫 테스트가 "아직 안 뜬 DB" 를 보고 터진다.
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
     steps:
       - uses: actions/checkout@v4
 
@@ -35,7 +58,10 @@ jobs:
 
       - name: pytest
         working-directory: backend
-        # 외부 의존이 없다. LLM 프로바이더는 전부 가짜로 갈아 끼우고 DB 는 임시 SQLite 다.
+        # LLM 프로바이더는 전부 가짜로 갈아 끼운다. DB 는 **운영과 같은 Postgres** 이고,
+        # 테스트마다 스키마 하나로 가둔다 (backend/tests/dbs.py).
+        env:
+          TEST_DATABASE_URL: postgresql+psycopg://eng:eng@127.0.0.1:5432/eng_study_ci
         run: .venv/bin/pytest -q
 
       - name: 문서 계층

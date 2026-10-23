@@ -61,12 +61,11 @@ def test_a_valid_choice_is_kept():
 
 
 @pytest.fixture
-def db(monkeypatch, tmp_path):
+def db(monkeypatch):
     from app.config import get_settings
     from app.db import init_engine, session_scope
 
     monkeypatch.setenv("APP_MODE", "local")
-    monkeypatch.setenv("DATABASE_URL", f"sqlite+pysqlite:///{tmp_path}/k.db")
     get_settings.cache_clear()
     init_engine(get_settings().database_url, create_all=True)
     with session_scope() as session:

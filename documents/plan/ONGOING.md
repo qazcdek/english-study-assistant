@@ -45,6 +45,49 @@ DONE               무엇을 / 왜 / 어떻게.  **다시 고치지 않는다**
 
 ---
 
+### H-032 · 검사와 cloud 개발이 운영과 다른 엔진에서 돈다
+시작 2026-10-23 · 갱신 2026-10-23
+
+- **전제** 네 군데서 DB 를 띄우는데 **운영만 Postgres** 다.
+
+  | 어디 | 엔진 | 확인한 곳 |
+  |---|---|---|
+  | 단위 검사 (로컬) | SQLite | `tests/conftest.py` · `tests/modes.py` |
+  | CI | SQLite | `.github/workflows/ci.yml` — 서비스 컨테이너가 없다 |
+  | local 모드 띄우기 | Postgres 17 (도커 15432) | `app/config.py` 의 기본값 |
+  | cloud 모드 띄우기 | SQLite | `backend/.env.cloud` 의 `DATABASE_URL` |
+  | 운영 (Render) | Neon Postgres | `07-web-deployment.md` |
+
+  **이미 두 번 물렸고, 둘 다 글로 막아 뒀다.** `String` 길이를 SQLite 는 무시하고
+  Postgres 는 `value too long` 으로 거부한다 (`tests/test_migrations.py` 의
+  주석), SQLite 는 `PRAGMA foreign_keys` 가 꺼져 있으면 CASCADE 가 아예 안 돈다
+  (`14-data-layer.md §3.3`). 둘 다 "그러니 조심해라" 로 끝난다 —
+  **선언이고 장치가 아니다** (`12-tooling.md §6`).
+
+  주석도 이미 어긋나 있었다. `app/db/session.py` 와 `app/main.py` 가
+  "local 은 docker Postgres, cloud 는 Neon" 이라고 적는데 `.env.cloud` 는 SQLite 다.
+
+- **결정** 세 층을 **다르게** 다룬다. 전부 Postgres 로 바꾸지 않는다.
+
+  1. **검사는 양쪽에서 돈다.** 기본은 SQLite 로 두고 (빠르고 오프라인에서 돈다),
+     `TEST_DATABASE_URL` 이 있으면 그 Postgres 에서 돈다. **CI 가 Postgres 쪽을
+     맡는다** — 머지 게이트가 운영 엔진을 보는 것이 핵심이고, 로컬 반복 속도는
+     그대로 둔다. 둘 다 돌리려면 `./dev.sh test --pg`.
+  2. **격리는 스키마로 한다.** 테스트마다 DB 를 만들면 느리고, 하나를 공유하면
+     서로의 행을 지운다. URL 에 `options=-csearch_path%3D<스키마>` 를 실어
+     테스트마다 스키마 하나를 만들고 끝나면 지운다 — **쳐 보고 확인했다**
+     (두 스키마가 같은 이름의 표를 각자 들고 서로를 못 본다).
+  3. **cloud 모드 띄우기는 Neon 의 별도 브랜치로** 옮긴다. 도커 Postgres 로도
+     엔진은 맞지만 **버전·연결 수 제한·콜드 스타트가 다르다.** 같은 서비스의
+     브랜치면 그것까지 같아진다.
+
+  **운영 저장소를 가리키지 않는다.** 앱은 뜰 때 `upgrade head` 를 돌리고
+  (`app/db/migrate.py`), 개발 중에는 `downgrade` 도 돈다 — 운영 DB 에 걸면
+  회원 데이터가 사라진다.
+
+- **다음 걸음** 사용자가 Neon 에 `dev` 브랜치를 만들어 `.env.cloud` 의
+  `DATABASE_URL` 을 바꾼다. 그 뒤 cloud 모드를 띄워 두 모드를 모두 확인한다.
+
 ### M13-T4 · 하루 한 번 고른다
 시작 2026-10-23 · 갱신 2026-10-23
 

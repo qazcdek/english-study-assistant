@@ -34,14 +34,16 @@ class Api(NamedTuple):
     user_id: int
 
 
-def setup_env(monkeypatch, tmp_path, mode: Mode) -> None:
+def setup_env(monkeypatch, mode: Mode) -> None:
     """모드별 환경변수를 세운다.
 
     `APP_MODE` 를 **두 모드 모두 명시적으로** 설정한다. 생략하면 개발용 `.env` 의
     값을 읽어 테스트가 돌리는 모드와 달라질 수 있다.
+
+    **`DATABASE_URL` 은 여기서 정하지 않는다.** `conftest.py` 의 `db_url` 하나가
+    정한다 — 두 곳이 각자 적으면 한쪽만 Postgres 로 옮겨진다 (H-032).
     """
     monkeypatch.setenv("APP_MODE", mode)
-    monkeypatch.setenv("DATABASE_URL", f"sqlite+pysqlite:///{tmp_path}/test.db")
     if mode == "cloud":
         monkeypatch.setenv("GOOGLE_CLIENT_ID", "cid")
         monkeypatch.setenv("GOOGLE_CLIENT_SECRET", "csecret")

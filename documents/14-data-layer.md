@@ -109,9 +109,13 @@ uq_usage_user_day         (user_id, day)
 
 FK 에 `CASCADE` 를 적어 두었지만 **코드는 표마다 명시적으로 지운다.**
 
-SQLite 는 `PRAGMA foreign_keys` 가 꺼져 있으면 CASCADE 가 안 돈다. 테스트는 SQLite 로
-도므로, 기대면 **테스트는 통과하고 Postgres 에서만 다르게 도는** 상태가 된다.
-그 방향의 어긋남은 배포본에서야 드러난다.
+SQLite 는 `PRAGMA foreign_keys` 가 꺼져 있으면 CASCADE 가 안 돈다. 테스트의 **기본**은
+SQLite 라서, 기대면 **로컬에서는 통과하고 Postgres 에서만 다르게 도는** 상태가 된다.
+
+CI 는 이제 Postgres 에서 돌므로 그 어긋남이 **머지 전에** 드러난다
+(09-mode-matrix.md §6.4). 그래도 **이 규약은 그대로 둔다** — 로컬 기본이 여전히
+SQLite 이고, 로컬에서 통과한 것이 CI 에서 처음 깨지는 것보다 아예 기대지 않는 편이
+싸다. 기대고 싶어지면 `./dev.sh test --pg` 로 양쪽을 다 보고 나서 판단한다.
 
 ### 3.4 표를 더하면 `OWNED` 에 더한다
 

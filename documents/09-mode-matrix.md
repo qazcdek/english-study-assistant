@@ -276,11 +276,41 @@ local 은 `id=1`, cloud 는 동의·키 등록까지 끝난 회원 + 세션 쿠�
 
 `cloud` 는 `uvicorn --env-file .env.cloud` 로 띄운다. `--env-file` 값은 `os.environ`
 에 올라가 pydantic-settings 의 `.env` 보다 우선하므로 코드를 고칠 필요가 없다.
-`.env.cloud` 는 로컬 SQLite 를 가리키므로 운영 DB 를 건드리지 않는다.
-llama-server 확인과 docker Postgres 기동은 그 모드에 필요할 때만 한다.
+`.env.cloud` 는 **운영과 같은 Neon 프로젝트의 `dev` 브랜치**를 가리킨다 — 같은
+서비스의 다른 저장소다 (6.4). llama-server 확인과 docker Postgres 기동은 그 모드에
+필요할 때만 한다.
 
 **cloud 를 띄워 보지 않고 머지하지 않는다.** 안 그러면 cloud 쪽 회귀를
 Render 에 올려야 발견하게 된다.
+
+### 6.4 검사와 개발이 **운영과 같은 엔진**을 본다
+
+모드가 갈리는 것은 **DB 의 내용**이고, **엔진은 갈리지 않는다.**
+
+| 어디 | 엔진 | 저장소 |
+|---|---|---|
+| 단위 검사 (로컬 기본) | SQLite | 테스트마다 임시 파일 |
+| 단위 검사 (`./dev.sh test --pg`) | Postgres 17 | `eng_study_test`, 테스트마다 스키마 하나 |
+| CI | Postgres 17 | 서비스 컨테이너, 테스트마다 스키마 하나 |
+| local 모드 | Postgres 17 | 도커 `eng_study` (포트 15432) |
+| cloud 모드 | Neon Postgres | 운영과 같은 프로젝트의 `dev` 브랜치 |
+| 운영 (Render) | Neon Postgres | 운영 브랜치 |
+
+**왜 이렇게 두는가.** 전에는 검사도 CI 도 cloud 개발도 SQLite 였다. 그동안 엔진 전용
+어긋남을 **아무것도 못 잡았다** (H-032). 재 보니 `String` 길이를 좁히는 사고에서
+SQLite 는 검사 406개를 전부 통과시키고 Postgres 는 14개를 떨어뜨린다.
+
+- **머지 게이트가 운영 엔진을 본다.** 거기만 막으면 어긋난 채로는 들어오지 못한다.
+- **로컬 기본은 SQLite 로 둔다.** 반복 속도(13초 대 25초)와 오프라인이 더 중요하고,
+  CI 가 뒤에서 받아 준다. 둘 다 보려면 `./dev.sh test --pg`.
+- **격리는 스키마로 한다.** 테스트마다 DB 를 만들면 느리고, 하나를 공유하면 서로의
+  행을 지운다. 주소에 `search_path` 를 실어 보내므로 앱 코드는 고칠 데가 없다
+  (`backend/tests/dbs.py`).
+- **cloud 개발은 운영 브랜치를 가리키지 않는다.** 앱은 뜰 때 `upgrade head` 를 돌리고
+  개발 중에는 `downgrade` 도 돈다 — 운영에 걸면 회원 데이터가 사라진다.
+
+**장치** `./dev.sh cloud` 는 `.env.cloud` 의 `DATABASE_URL` 이 Postgres 가 아니면
+**띄우기를 거부한다.** 이 표를 글로만 적어 두면 또 어긋난다 (12-tooling.md §6).
 
 ## 7. 아직 안 한 것
 
