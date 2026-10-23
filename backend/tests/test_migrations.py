@@ -20,12 +20,20 @@ TABLES = {table.name for table in Base.metadata.sorted_tables}
 
 
 @pytest.fixture
-def fresh_db(monkeypatch, tmp_path):
-    url = f"sqlite+pysqlite:///{tmp_path}/m.db"
+def fresh_db(monkeypatch, db_url):
+    """빈 DB 하나. 주소는 `conftest.py` 의 `db_url` 이 정한다 — SQLite 또는 Postgres.
+
+    전에는 이 파일만 `m.db` 라는 자기 주소를 들고 있었다. 그래서 다른 곳을 Postgres 로
+    돌려도 **여기는 SQLite 에 남는다** (H-032).
+
+    기본값 없는 `nullable=False` 열 추가는 **엔진과 무관하게** 여기서 잡힌다 —
+    깨뜨려 보니 SQLite 에서도 3개가 실패했다 (`render_as_batch` 가 표를 다시 만들고,
+    SQLite 도 행이 있으면 NOT NULL 을 거부한다). 엔진이 갈리는 것은 **길이**다 —
+    아래 `test_an_existing_key_still_decrypts_after_the_move` 의 주석을 본다.
+    """
     monkeypatch.setenv("APP_MODE", "local")
-    monkeypatch.setenv("DATABASE_URL", url)
     get_settings.cache_clear()
-    yield url
+    yield db_url
     get_settings.cache_clear()
 
 
@@ -127,9 +135,11 @@ def test_an_existing_key_still_decrypts_after_the_move(fresh_db):
     글자가 같은지만 보면 모자라다 — 옮기는 과정에서 인코딩이나 열 종류가 바뀌어도
     문자열 비교는 통과할 수 있다. 실제로 **풀리는지**를 본다.
 
-    (길이를 좁히는 사고는 `test_the_migration_matches_the_models` 가 먼저 잡는다.
-    재 보니 SQLite 는 길이를 무시하고 Postgres 는 거부하므로, **짧은 열은 테스트를
-    통과하고 배포 때 마이그레이션이 죽는다.**)
+    (모델만 좁히면 `test_the_migration_matches_the_models` 가 먼저 잡는다. 그런데
+    autogenerate 로 리비전까지 따라오면 **그 장치가 통과한다.** 실제로 `encrypted` 를
+    모델과 리비전 양쪽에서 `String(50)` 으로 좁혀 보니 — SQLite 는 길이를 무시해서
+    **406개가 전부 통과**했고, Postgres 는 `value too long` 으로 14 failed · 49
+    errors 를 냈다. 그래서 CI 를 Postgres 로 옮겼다, H-032.)
     """
     from alembic import command
     from sqlalchemy import text

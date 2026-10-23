@@ -37,6 +37,9 @@ async def lifespan(app: FastAPI):
     # 로컬: 로그인이 없으므로 모든 기록을 매달 사용자 행 하나를 만들어 둔다.
     with session_scope() as db:
         if db.get(User, LOCAL_USER_ID) is None:
+            # **운영자 플래그를 켜지 않는다.** 공용 글감은 cloud 전용이다
+            # (09-mode-matrix.md §3.8) — 혼자 쓰는 local 에서는 문단을 직접
+            # 넣으면 되고, 하루 한 편을 서버가 준비해 둘 이유가 없다.
             db.add(User(id=LOCAL_USER_ID, google_sub="local", email="local", name="local"))
 
     # llama-server 프로바이더 하나를 앱 수명 동안 공유한다.

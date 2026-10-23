@@ -10,6 +10,7 @@
 #   ./dev.sh db           Postgres 컨테이너만 띄운다
 #   ./dev.sh status       지금 뭐가 떠 있는지 본다
 #   ./dev.sh next         열린 작업을 모아 본다 (./dev.sh next M2 처럼 좁힐 수 있다)
+#   ./dev.sh test         백엔드 검사 (--pg 를 붙이면 운영과 같은 Postgres 에서)
 #   ./dev.sh docs         문서 계층 점검 (그래프 · 주소 · 머리말 · 색인 · 태그)
 #   ./dev.sh ptr          문서 → 코드 포인터 점검 (--write 로 코드 쪽을 갱신)
 #   ./dev.sh refs         한 문서(또는 절)로 들어오는 참조를 센다 — 옮기기 전에 본다
@@ -65,6 +66,10 @@ require_free_port() {
 }
 
 DB_PORT="${DB_PORT:-15432}"
+# 검사 전용 DB. **개발용 `eng_study` 와 다른 이름이어야 한다** — 같은 것을 쓰면
+# 검사가 개발 중인 데이터를 밟는다. 안에서 테스트마다 스키마로 또 갈린다
+# (backend/tests/dbs.py).
+DB_TEST_NAME="${DB_TEST_NAME:-eng_study_test}"
 
 start_db() {
   command -v docker >/dev/null 2>&1 || die "docker 를 찾을 수 없습니다. 분석 기록을 Postgres 에 저장합니다."
@@ -85,6 +90,30 @@ start_db() {
     sleep 0.5
   done
   die "Postgres 가 준비되지 않았습니다. docker compose logs db 를 확인하세요."
+}
+
+run_tests() {
+  # 기본은 SQLite 다 — 빠르고 도커가 없어도 돈다. `--pg` 는 **운영과 같은 엔진**으로
+  # 돌린다. 엔진이 갈려서 통과한 검사가 배포에서 깨진 적이 있다 (H-032).
+  # CI 는 항상 Postgres 쪽으로 돈다 (.github/workflows/ci.yml).
+  [[ -x "$BACKEND/.venv/bin/pytest" ]] || die "먼저 ./dev.sh backend 로 의존성을 설치하세요."
+
+  if [[ "${1:-}" == "--pg" ]]; then
+    shift
+    start_db
+    (cd "$ROOT" && docker compose exec -T db \
+       psql -U eng -d postgres -tAc \
+       "SELECT 1 FROM pg_database WHERE datname='$DB_TEST_NAME'" | grep -q 1) ||
+      (cd "$ROOT" && docker compose exec -T db \
+         createdb -U eng "$DB_TEST_NAME") ||
+      die "검사용 DB $DB_TEST_NAME 를 만들 수 없습니다."
+    info "Postgres 에서 검사합니다 ${DIM}${DB_TEST_NAME}${RESET}"
+    (cd "$BACKEND" &&
+       TEST_DATABASE_URL="postgresql+psycopg://eng:eng@127.0.0.1:$DB_PORT/$DB_TEST_NAME" \
+       .venv/bin/pytest "$@")
+  else
+    (cd "$BACKEND" && .venv/bin/pytest "$@")
+  fi
 }
 
 check_llm() {
@@ -192,6 +221,20 @@ preflight() {
       grep -qE "^${key}=.+" "$ENV_FILE" || missing+=("$key")
     done
     [[ ${#missing[@]} -eq 0 ]] || die "$ENV_FILE 에 값이 비어 있습니다: ${missing[*]}"
+
+    # **cloud 모드는 운영과 같은 엔진을 본다** (H-032). 전에는 여기가 SQLite 였고,
+    # 그래서 "배포와 같은 구성으로 띄운다" 는 말이 DB 에서만 거짓이었다.
+    # 글로 적어 두는 것으로는 또 어긋나므로 띄우기를 막는다 (12-tooling.md §6).
+    local db_url
+    db_url="$(grep -E '^DATABASE_URL=' "$ENV_FILE" 2>/dev/null | cut -d= -f2- || true)"
+    if [[ -z "$db_url" || "$db_url" == sqlite* ]]; then
+      die "$(printf '%s\n' \
+        "$ENV_FILE 의 DATABASE_URL 이 Postgres 가 아닙니다." \
+        "  운영은 Neon Postgres 입니다. SQLite 로 띄우면 엔진 전용 어긋남을 못 봅니다." \
+        "  Neon 콘솔에서 운영과 **같은 프로젝트**에 dev 브랜치를 만들어" \
+        "  그 연결 문자열을 넣으세요 (운영 브랜치를 가리키면 안 됩니다)." \
+        "  자세한 안내는 backend/.env.example 의 DATABASE_URL 주석.")"
+    fi
     warn "${BOLD}cloud${RESET} 모드 — 로그인과 회원 Gemini 키가 필요합니다 ${DIM}($(basename "$ENV_FILE"))${RESET}"
   fi
 
@@ -316,6 +359,10 @@ main() {
     docs)
       check_docs
       ;;
+    test)
+      shift
+      run_tests "$@"
+      ;;
     next|todo)
       # 열린 작업(ROADMAP + ISSUES)을 한 곳에 모아 본다. 인자로 태그 접두사를 좁힐 수 있다.
       [[ -x "$BACKEND/.venv/bin/python" ]] || die "먼저 ./dev.sh backend 로 의존성을 설치하세요."
@@ -376,7 +423,7 @@ main() {
       sed -n '3,20p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
       ;;
     *)
-      die "알 수 없는 인자: $1  (cloud | backend | frontend | db | docs | ptr | next | stop | status | check | help)"
+      die "알 수 없는 인자: $1  (cloud | backend | frontend | db | test | docs | ptr | next | stop | status | check | help)"
       ;;
   esac
 }

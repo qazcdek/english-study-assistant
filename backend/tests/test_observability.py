@@ -166,13 +166,13 @@ def test_the_release_is_the_deployed_commit(monkeypatch):
 
 
 @pytest.fixture
-def captured(monkeypatch, tmp_path):
+def captured(monkeypatch):
     """켜진 Sentry 가 실제로 내보내는 봉투를 가로챈다. 네트워크는 안 탄다."""
     import sentry_sdk
 
     from tests.modes import setup_env
 
-    setup_env(monkeypatch, tmp_path, "cloud")
+    setup_env(monkeypatch, "cloud")
     monkeypatch.setenv("SENTRY_DSN", "https://examplePublicKey@o0.ingest.sentry.io/0")
     get_settings.cache_clear()
 

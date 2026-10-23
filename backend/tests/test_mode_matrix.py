@@ -68,9 +68,9 @@ def test_mode_limits_stay_under_the_absolute_ceiling():
 
 
 @pytest.fixture(params=["local", "cloud"])
-def mode_app(request, monkeypatch, tmp_path):
+def mode_app(request, monkeypatch):
     """문서가 규정한 기본값으로 못박고 띄운다. 개발용 `.env` 에 흔들리지 않게 한다."""
-    setup_env(monkeypatch, tmp_path, request.param)
+    setup_env(monkeypatch, request.param)
     monkeypatch.setenv("LOCAL_MAX_INPUT_CHARS", str(DEFAULTS["local_max_input_chars"]))
     monkeypatch.setenv("CLOUD_MAX_INPUT_CHARS", str(DEFAULTS["cloud_max_input_chars"]))
     monkeypatch.setenv("DAILY_ANALYSIS_LIMIT", str(DEFAULTS["daily_analysis_limit"]))

@@ -1,6 +1,10 @@
 from app.db.models import (
+    SHARED,
     AnalysisRecord,
+    Article,
+    ArticleParagraph,
     Base,
+    ParagraphAnalysis,
     PracticeRecord,
     ProviderKey,
     UsageCounter,
@@ -10,8 +14,12 @@ from app.db.models import (
 from app.db.session import get_session, init_engine, session_scope
 
 __all__ = [
+    "SHARED",
     "AnalysisRecord",
+    "Article",
+    "ArticleParagraph",
     "Base",
+    "ParagraphAnalysis",
     "PracticeRecord",
     "ProviderKey",
     "UsageCounter",
