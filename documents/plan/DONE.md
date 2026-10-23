@@ -23,6 +23,41 @@
 
 ## 2026-10-23
 
+### H-034 · 고를 수는 있고 호출은 전부 터졌다
+2026-10-23 · [09 §3.2](../09-mode-matrix.md)
+
+- **무엇을** `M12` 가 **완료**로 닫혀 있는데, 설정에서 OpenAI 나 Anthropic 을 고르면
+  분석·연습의 **모든 LLM 호출이** `RuntimeError: 만들 방법을 모르는 제공자` 로 떨어졌다.
+  쳐 보고 확인했다.
+
+  ```
+  gemini     selectable=True  → OK GeminiProvider
+  openai     selectable=True  → RuntimeError: 만들 방법을 모르는 제공자: openai
+  anthropic  selectable=True  → RuntimeError: 만들 방법을 모르는 제공자: anthropic
+  ```
+
+- **왜 안 잡혔나** `deps.py` 의 `_build_cloud_provider` 가 `if provider_id == GEMINI`
+  로 하나만 만들고 나머지를 거부했다. `M12-T3`·`M12-T5` 에서 구현 두 개를
+  `IMPLEMENTATIONS` 에 넣었지만 **그 분기는 안 늘었다.**
+
+  검사가 있었는데도 넘어갔다. `test_every_implementation_has_an_entry` 는 목록과
+  구현 표를 맞춰 보기만 한다 — **만들어 보지는 않는다.** 그래서 "구현 표에 있다" 는
+  사실이 "고르면 돈다" 를 보장하지 못했다. `09 §3.2` 의 제공자 표도 목록만 본다.
+
+- **어떻게** 만드는 자리를 **`registry.build()` 하나로** 모으고, 제공자로 나누지
+  않는다. 세 구현이 생성자 모양을 공유하므로(`api_key` 하나 + 키워드) 표에 있는 것은
+  전부 만들어진다 — 구현을 더할 때 **여기도 고쳐야 한다는 사실을 기억하지 않아도** 된다.
+  설정이 덮어쓰는 것(Gemini 의 주소·제한 시간)만 따로 적는다.
+
+  llama-server 는 여기서 거부한다 — 주소가 첫 인자라 키 자리에 주소를 받아
+  **조용히 엉뚱한 서버로 붙는다.**
+
+  **장치는 "만들어 본다" 다.** `test_every_cloud_provider_can_actually_be_built` 가
+  고를 수 있는 것 전부를 실제로 만든다. 옛 모양으로 되돌려 **깨뜨려 확인했다** —
+  `openai` 에서 바로 떨어진다.
+
+- 전체 411 passed · ruff 통과. PR #44
+
 ### H-033 · 스택 PR 의 번호 순서가 머지 순서와 반대였다
 2026-10-23 · [12 §8](../12-tooling.md)
 

@@ -133,30 +133,6 @@ SessionUser = Annotated[User, Depends(session_user)]
 ActiveUser = Annotated[User, Depends(active_user)]
 
 
-def _build_cloud_provider(
-    choice: "keys.Choice", api_key: str, settings: Settings
-) -> LLMProvider:
-    """고른 cloud 제공자를 만든다.
-
-    **여기서 `if` 로 제공자를 또 나누지 않는다.** 레지스트리가 구현을 들고 있으므로
-    (`IMPLEMENTATIONS`) 그것을 쓴다 — 목록이 둘이 되면 한쪽만 늘어난다.
-
-    생성 인자가 제공자마다 다른 것은 어쩔 수 없다. 지금은 Gemini 하나뿐이고,
-    `M12-T3` 에서 둘이 늘면 그때 공통 모양을 찾는다 — **지금 미리 추상화하지 않는다.**
-    """
-    implementation = registry.IMPLEMENTATIONS[choice.provider.id]
-    if choice.provider.id == registry.GEMINI:
-        return implementation(
-            api_key,
-            base_url=settings.gemini_base_url,
-            model=choice.model,
-            timeout=settings.gemini_timeout,
-            temperature=settings.llm_temperature,
-            max_tokens=settings.llm_max_tokens,
-        )
-    raise RuntimeError(f"만들 방법을 모르는 제공자: {choice.provider.id}")
-
-
 async def get_provider(request: Request, settings: SettingsDep) -> AsyncIterator[LLMProvider]:
     """회원이 고른 제공자로 만든다.
 
@@ -180,7 +156,7 @@ async def get_provider(request: Request, settings: SettingsDep) -> AsyncIterator
         yield request.app.state.provider
         return
 
-    provider = _build_cloud_provider(choice, api_key, settings)
+    provider = registry.build(choice.provider.id, choice.model, api_key, settings)
     try:
         yield provider
     finally:
