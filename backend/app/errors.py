@@ -91,3 +91,16 @@ class UsageLimitError(AppError):
     code = "usage_limit"
     http_status = 429
     message = "오늘 사용 한도를 모두 썼습니다. 내일 다시 이용해 주세요."
+
+
+class OperatorKeyRequiredError(AppError):
+    """공용 글감을 만들 수 없다 — 운영자가 없거나 그 키가 없다 (M13-T5).
+
+    `ApiKeyRequiredError` 와 **다르다.** 그쪽은 회원이 자기 키를 등록하면 풀리지만,
+    이것은 **회원이 할 수 있는 일이 없다.** 그래서 문구에 "등록해 주세요" 를 넣지
+    않고, 4xx 가 아니라 **503** 을 쓴다 — 서버 쪽이 아직 준비되지 않은 것이다.
+    """
+
+    code = "operator_key_required"
+    http_status = 503
+    message = "읽을 글을 준비하는 중입니다. 잠시 후 다시 시도해 주세요."
