@@ -11,6 +11,7 @@ from pathlib import Path
 
 import pytest
 
+from app.config import get_settings
 from app.prompts import models as families
 from app.providers import registry
 
@@ -128,6 +129,36 @@ def test_every_implementation_has_an_entry():
     orphans = sorted(set(registry.IMPLEMENTATIONS) - set(registry.BY_ID))
 
     assert not orphans, f"구현은 있는데 목록에 없다: {orphans}"
+
+
+async def test_every_cloud_provider_can_actually_be_built():
+    """**고를 수 있으면 만들어진다.** 목록에 있다는 것으로는 모른다.
+
+    전에는 `deps.py` 가 `if provider_id == GEMINI` 로 하나만 만들고 나머지에
+    `RuntimeError` 를 냈다. OpenAI·Anthropic 구현이 들어온 뒤에도 그 분기가 안 늘어서
+    **고를 수는 있고 호출은 전부 터지는** 상태로 머지를 넘겼다 (H-034).
+
+    위의 `test_every_implementation_has_an_entry` 는 이걸 못 잡는다 — 목록과 구현 표를
+    맞춰 보기만 하고, **만들어 보지는 않는다.** 그래서 실제로 만든다.
+    """
+    settings = get_settings()
+
+    for provider in registry.selectable("cloud"):
+        built = registry.build(provider.id, provider.models[0], "sk-test", settings)
+        try:
+            assert isinstance(built, registry.IMPLEMENTATIONS[provider.id]), provider.id
+            assert built.model == provider.models[0]
+        finally:
+            await built.aclose()
+
+
+async def test_the_shared_local_server_is_not_built_here():
+    """llama-server 는 생성자 모양이 다르고(주소가 첫 인자) 앱 수명 동안 공유한다.
+
+    키 자리에 주소를 받아 **조용히 엉뚱한 서버로 붙는** 쪽을 막는다.
+    """
+    with pytest.raises(RuntimeError, match="lifespan"):
+        registry.build(registry.LLAMA, "local-model", "", get_settings())
 
 
 # ------------------------------------------- 방침과 대조한다 (M12-T5)

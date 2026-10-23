@@ -20,12 +20,18 @@ cloud    cloud LLM 만 — llama-server 는 내 PC 에 있어서 Render 에서 �
 """
 
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 from app.providers.anthropic import AnthropicProvider
 from app.providers.base import LLMProvider
 from app.providers.gemini import GeminiProvider
 from app.providers.llama_server import LlamaServerProvider
 from app.providers.openai import OpenAIProvider
+
+# 프로바이더 계층은 설정을 읽지 않는다 — 값은 `build()` 가 받아서 넘긴다.
+# 타입만 필요해서 런타임 import 를 두지 않는다.
+if TYPE_CHECKING:  # pragma: no cover
+    from app.config import Settings
 
 GEMINI = "gemini"
 OPENAI = "openai"
@@ -156,3 +162,47 @@ def default_for(mode: str) -> ProviderInfo:
 
 def info(provider_id: str) -> ProviderInfo | None:
     return BY_ID.get(provider_id)
+
+
+def _overrides(provider_id: str, settings: "Settings") -> dict[str, object]:
+    """설정이 **덮어쓰는 것만** 적는다. 안 적힌 제공자는 모듈 기본값으로 간다.
+
+    Gemini 만 주소와 제한 시간을 설정에서 받는다 — OpenAI 호환 엔드포인트를 쓰므로
+    주소가 평범하지 않고(`…/v1beta/openai`), 그 자리가 바뀐 적이 있다.
+    """
+    if provider_id == GEMINI:
+        return {"base_url": settings.gemini_base_url, "timeout": settings.gemini_timeout}
+    return {}
+
+
+def build(provider_id: str, model: str, api_key: str, settings: "Settings") -> LLMProvider:
+    """**키로 호출하는** 제공자를 만든다. 만드는 자리는 여기 하나다.
+
+    전에는 `deps.py` 가 `if provider_id == GEMINI` 로 하나만 만들고 나머지는
+    `RuntimeError` 를 냈다. OpenAI·Anthropic 구현이 들어온 뒤에도 그 분기가 안 늘어서,
+    **고를 수는 있고 호출은 전부 터지는** 상태로 한 번의 머지를 넘겼다 (H-034).
+    쳐 보니 두 제공자 모두 `만들 방법을 모르는 제공자` 로 떨어졌다.
+
+    그래서 **제공자로 나누지 않는다.** 세 구현이 생성자 모양을 공유하므로
+    (`api_key` 하나 + 키워드) `IMPLEMENTATIONS` 에 있는 것은 전부 만들어진다 —
+    구현을 더하면 **여기도 고쳐야 한다는 사실을 기억하지 않아도** 된다.
+    `tests/test_provider_registry.py` 가 고를 수 있는 것 전부를 실제로 만들어 본다.
+
+    **llama-server 는 여기서 만들지 않는다.** 생성자 모양이 다르고(주소가 첫 인자),
+    키가 없어 회원마다 다를 것이 없으므로 앱 수명 동안 하나를 공유한다
+    (`main.py` 의 `lifespan`).
+
+    [문서] plan/ISSUES.md H-034
+    """
+    if provider_id == LLAMA:
+        raise RuntimeError(
+            "llama-server 는 앱이 뜰 때 하나를 만들어 공유한다 (main.py 의 lifespan)"
+        )
+    implementation = IMPLEMENTATIONS[provider_id]
+    return implementation(
+        api_key,
+        model=model,
+        temperature=settings.llm_temperature,
+        max_tokens=settings.llm_max_tokens,
+        **_overrides(provider_id, settings),  # type: ignore[arg-type]
+    )
