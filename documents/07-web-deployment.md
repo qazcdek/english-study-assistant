@@ -148,16 +148,21 @@ Google 콘솔의 리디렉션 URI 를 그 주소로 맞추고 재배포한다.
 ### 6.4 로컬에서 cloud 모드 돌려보기
 
 ```bash
-cd backend
-APP_MODE=cloud \
-GOOGLE_CLIENT_ID=... GOOGLE_CLIENT_SECRET=... \
-SESSION_SECRET=$(python -c "import secrets;print(secrets.token_urlsafe(48))") \
-ENCRYPTION_KEY=$(python -c "from cryptography.fernet import Fernet;print(Fernet.generate_key().decode())") \
-DATABASE_URL=sqlite+pysqlite:///./local-cloud.db \
-.venv/bin/uvicorn app.main:app --reload --port 8000
+./dev.sh cloud
 ```
 
-DB 는 SQLite 로도 돌아간다. 테이블은 시작할 때 자동으로 만들어진다.
+`.env.cloud` 가 필요하고, 그 `DATABASE_URL` 은 **운영과 같은 Neon 프로젝트의 `dev`
+브랜치**를 가리킨다. 띄우는 방법은 [09 §6.3](09-mode-matrix.md), 무엇이 어느 엔진을
+보는지는 [09 §6.4](09-mode-matrix.md).
+
+**이 절은 `sqlite+pysqlite:///./local-cloud.db` 를 안내하고 있었다.** 운영이
+Postgres 인데 cloud 개발이 SQLite 였으니, 엔진 전용 어긋남을 띄워 봐도 못 봤다
+(H-032). 지금은 `./dev.sh cloud` 가 **SQLite 면 띄우기를 거부한다.**
+
+**dev 브랜치를 만든다** — Neon 콘솔 → 운영 프로젝트 → Branches → New Branch,
+부모는 운영 브랜치, **Current point in time**. 그 연결 문자열을 `.env.cloud` 에 넣는다.
+**운영 브랜치를 가리키면 안 된다** — 앱이 뜰 때 `upgrade head` 가 돌고 개발 중에는
+`downgrade` 도 돈다 (6.5). 회원 데이터가 사라진다.
 
 ### 6.5 스키마를 바꿀 때 (Alembic)
 

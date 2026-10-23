@@ -85,8 +85,14 @@ DONE               무엇을 / 왜 / 어떻게.  **다시 고치지 않는다**
   (`app/db/migrate.py`), 개발 중에는 `downgrade` 도 돈다 — 운영 DB 에 걸면
   회원 데이터가 사라진다.
 
+  **문서도 같이 어긋나 있었다.** `07-web-deployment.md §6.4` 가 cloud 를 띄우는
+  방법으로 `sqlite+pysqlite:///./local-cloud.db` 를 안내하고 있었다 — 결정 3항과
+  정면으로 반대고, `./dev.sh cloud` 의 장치가 **거부하는 것**을 적어 둔 셈이다.
+  `09 §6.4` 를 쓸 때 짝을 못 찾았다 (`CLAUDE.md §5.1-7`). 고쳐서 `09` 를 가리키게 했다.
+
 - **다음 걸음** 사용자가 Neon 에 `dev` 브랜치를 만들어 `.env.cloud` 의
-  `DATABASE_URL` 을 바꾼다. 그 뒤 cloud 모드를 띄워 두 모드를 모두 확인한다.
+  `DATABASE_URL` 을 바꾼다 — 절차는 `07-web-deployment.md §6.4`.
+  그 뒤 cloud 모드를 띄워 두 모드를 모두 확인한다.
 
 ### M13-T4 · 하루 한 번 고른다
 시작 2026-10-23 · 갱신 2026-10-23
