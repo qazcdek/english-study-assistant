@@ -38,8 +38,17 @@ _INLINE_CODE = re.compile(r"`[^`\n]*`")
 # 표준 마크다운 링크 [글자](주소) — 주소 뒤의 "제목" 은 버린다.
 _LINK = re.compile(r"\[[^\]\n]*\]\(\s*([^)\s]+)(?:\s+\"[^\"]*\")?\s*\)")
 _HEADING = re.compile(r"^#{2,6}\s+(\d+(?:\.\d+)*)\.?\s")
-_DOC_NAME = re.compile(r"\d{2}-[a-z0-9-]+\.md")
+# 설계 문서는 번호가 곧 이름이고(`09-mode-matrix.md`), 추적 문서는 폴더까지 적는다
+# (`plan/DONE.md`). 번호 패턴 하나로는 뒤쪽을 못 잡는데, 코드가 실제로 가장 많이
+# 가리키는 것이 추적 문서다 — 생성된 역참조 스물두 줄 중 열이 그쪽이었다 (H-036).
+_DESIGN_NAME = r"\d{2}-[a-z0-9-]+\.md"
+_PLAN_NAME = r"plan/(?:ROADMAP|ISSUES|ONGOING|DONE)\.md"
+_DOC_NAME = re.compile(f"(?:{_PLAN_NAME})|(?:{_DESIGN_NAME})")
 _SECTION_AFTER = re.compile(r"^\s*§\s*(\d+(?:\.\d+)*)")
+# 추적 문서는 절 번호가 없다. 가리키는 단위는 태그다 — `plan/DONE.md M13-T2`.
+_TAG_AFTER = re.compile(r"^\s+(M\d+-T\d+|H-\d+)\b")
+# 그 태그를 **선언하는** 줄. 열린 것은 목록에, 끝난 것은 DONE 의 세부 제목에 있다.
+_TAG_DECL = re.compile(r"^(?:\s*[-*]\s+(?:\[.\]\s+)?|#{2,4}\s+)(M\d+-T\d+|H-\d+)\b")
 # 문서끼리는 절 번호를 **링크 글자 안에** 넣는다 — `[07 §6.5](07-web-deployment.md)`.
 _LINK_WITH_TEXT = re.compile(r"\[([^\]\n]*)\]\(\s*([^)\s]+)(?:\s+\"[^\"]*\")?\s*\)")
 _SECTION_IN_TEXT = re.compile(r"§\s*(\d+(?:\.\d+)*)")
@@ -105,6 +114,17 @@ def edges_of(doc: Path) -> list[tuple[str, Path]]:
     return out
 
 
+def doc_path(name: str) -> Path:
+    """주소 표기를 실물로 푼다. 설계 문서도 추적 문서도 `documents/` 아래에 있다."""
+    return ROOT / "documents" / name
+
+
+def tags_of(doc: Path) -> set[str]:
+    """추적 문서가 실제로 들고 있는 태그. 코드가 가리킬 수 있는 단위다."""
+    text = doc.read_text(encoding="utf-8")
+    return {m.group(1) for _, line in outside_fences(text) if (m := _TAG_DECL.match(line))}
+
+
 def sections_of(doc: Path) -> set[str]:
     """`## 3.` 과 `### 3.1` 에서 절 번호만 모은다."""
     text = doc.read_text(encoding="utf-8")
@@ -137,10 +157,18 @@ class Ref(tuple):
 
     __slots__ = ()
 
-    def __new__(cls, src: Path, line: int, doc: str, section: str | None, problem: str | None):
-        return super().__new__(cls, (src, line, doc, section, problem))
+    def __new__(
+        cls,
+        src: Path,
+        line: int,
+        doc: str,
+        section: str | None,
+        problem: str | None,
+        tag: str | None = None,
+    ):
+        return super().__new__(cls, (src, line, doc, section, problem, tag))
 
-    src, line, doc, section, problem = (property(lambda s, i=i: s[i]) for i in range(5))
+    src, line, doc, section, problem, tag = (property(lambda s, i=i: s[i]) for i in range(6))
 
     def where(self) -> str:
         return f"{rel(self.src)}:{self.line}"
@@ -153,14 +181,16 @@ def code_refs() -> list[Ref]:
         for n, line in enumerate(src.read_text(encoding="utf-8").splitlines(), 1):
             for m in _DOC_NAME.finditer(line):
                 after = line[m.end() :]
-                section = problem = None
+                section = tag = problem = None
                 if line[: m.start()].endswith("/"):
                     problem = "`documents/` 접두사를 쓰지 않는다"
+                elif t := _TAG_AFTER.match(after):
+                    tag = t.group(1)
                 elif s := _SECTION_AFTER.match(after):
                     section = s.group(1)
                 elif legacy := _LEGACY_SECTION.match(after):
                     problem = f"절은 `§{legacy.group(1)}` 로 적는다 (`{legacy.group(0).strip()}` 아님)"
-                refs.append(Ref(src, n, m.group(0), section, problem))
+                refs.append(Ref(src, n, m.group(0), section, problem, tag))
     return refs
 
 

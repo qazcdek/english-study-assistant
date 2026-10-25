@@ -7,7 +7,7 @@
  * `{{...}}` 가 남아 있으면 **아직 채워지지 않은 값**이다. 그 상태로 배포되면
  * 이용자가 빈칸을 보게 되므로, `frontend/src/__tests__/legal.test.tsx` 가 막는다.
  *
- * 근거: documents/plan/ONGOING.md M1-T2
+ * 근거: plan/DONE.md M1-T2
  */
 export const OPERATOR = {
   /** 개인 운영이므로 상호·사업자번호는 두지 않는다 (사용자 선택). */
