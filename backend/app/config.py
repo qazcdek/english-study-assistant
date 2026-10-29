@@ -66,7 +66,7 @@ class Settings(BaseSettings):
     #   local  넉넉히. 혼자 쓰고 llama-server 한도만 신경 쓰면 된다
     #   cloud  좁게.  회원 각자의 Gemini 한도를 소모한다
     local_max_input_chars: int = 2000
-    cloud_max_input_chars: int = 800
+    cloud_max_input_chars: int = 1200
 
     # --- 사용량 제한 ---
     daily_analysis_limit: int = 60

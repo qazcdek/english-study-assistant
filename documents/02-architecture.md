@@ -34,7 +34,8 @@
 분석은 **네 파트를 각각 독립된 LLM 호출로** 처리한다 (근거는 05-benchmark.md).
 
 1. `POST /api/analyze/stream` 으로 `{ "text": "..." }` 수신
-2. `AnalyzeRequest` 로 길이/공백 검증 (최대 800자 — `schemas.MAX_INPUT_CHARS`)
+2. `AnalyzeRequest` 로 길이/공백 검증 (절대 상한 2000자 — `schemas.ABSOLUTE_MAX_INPUT_CHARS`).
+   **모드별 상한은 이보다 좁고 라우터가 건다** — 09-mode-matrix.md §3.1
 3. `PART_SPECS` 를 순서대로 돌며 파트마다:
    - `build_messages(spec, ...)` 가 그 파트 전용 시스템 프롬프트 + 작은 JSON 스키마 구성
    - `LlamaServerProvider.complete()` 가 `response_format` 으로 스키마 강제

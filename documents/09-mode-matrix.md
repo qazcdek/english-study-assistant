@@ -24,7 +24,7 @@
 | **모델** | `LLM_MODEL` (예: qwen3.8-27b) | `GEMINI_MODEL` (gemini-3.5-flash-lite) |
 | **프로바이더 수명** | 앱 시작 시 하나를 공유 | **요청마다 새로** (키가 회원 것이므로) |
 | **로그인** | 없음 (`session_user` 가 `id=1` 을 돌려준다) | Google OAuth |
-| **입력 상한** | **2000자** | **800자** |
+| **입력 상한** | **2000자** | **1200자** |
 | **DB** | Postgres (docker, 15432) | Postgres (Neon) |
 | **사용자 행** | 시작할 때 만드는 `id=1` 하나 | Google 로그인마다 생성 |
 | **사용량 한도** | 없음 | 하루 분석 60 / 연습 200 |
@@ -40,11 +40,16 @@
 
 ```
 local  2000자   혼자 쓰고 llama-server 한도만 신경 쓰면 된다
-cloud   800자   회원 각자의 Gemini 한도를 소모한다
+cloud  1200자   회원 각자의 Gemini 한도를 소모한다
 ```
 
 **`Settings.max_input_chars` 하나만 본다.** 스키마의 `ABSOLUTE_MAX_INPUT_CHARS` 는
 어떤 모드에서도 넘을 수 없는 **절대 상한**(2000)이고, 모드별 제한은 라우터에서 그보다 좁게 건다.
+
+**cloud 는 처음에 800자였다.** 써 보니 기사 한 문단을 붙여 넣으면 자주 걸렸다 —
+가디언 기사의 `<p>` 문단이 200~500자이고 긴 것은 1,021자까지 간다(`M13-T1` 실측).
+넓힐 때 **절대 상한까지 밀지 않는 이유는 그대로다** — 넓히는 비용을 회원이 치른다.
+`local` 보다 좁다는 성질이 유지되는 한 숫자는 다시 움직일 수 있다 (`M3-T6`).
 
 값이 사는 곳 `→ backend/app/config.py::Settings.max_input_chars` ·
 거는 곳 `→ backend/app/routers/analyze.py::_check_length`
@@ -52,7 +57,7 @@ cloud   800자   회원 각자의 Gemini 한도를 소모한다
 ```
 schemas.ABSOLUTE_MAX_INPUT_CHARS = 2000   ← Pydantic 이 막는 하드 천장
 Settings.local_max_input_chars   = 2000   ← 실제 적용
-Settings.cloud_max_input_chars   =  800   ← 실제 적용
+Settings.cloud_max_input_chars   = 1200   ← 실제 적용
 ```
 
 프론트는 이 값을 하드코딩하지 않는다. `GET /api/config` 의 `max_input_chars` 를 쓴다.

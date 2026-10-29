@@ -7,7 +7,7 @@ const LEVELS: { value: Level; label: string }[] = [
 ]
 
 /** 서버가 /api/config 로 알려주기 전에 잠깐 쓰는 값. 서버 값이 단일 출처다. */
-const FALLBACK_MAX_CHARS = 800
+const FALLBACK_MAX_CHARS = 1200
 
 /**
  * 이보다 짧으면 분석하지 않는다.
