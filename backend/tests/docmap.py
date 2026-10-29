@@ -9,6 +9,8 @@
     09-mode-matrix.md §3.1     절을 가리킬 때
 
 `documents/` 접두사와 `3.1절` 표기는 쓰지 않는다. 형태가 하나여야 기계가 읽는다.
+
+[문서] plan/ISSUES.md H-035
 """
 
 from __future__ import annotations
@@ -29,7 +31,19 @@ ROOT = _repo_root()
 ROOT_DOC = ROOT / "CLAUDE.md"
 
 # 저장소에 속하지 않거나 생성물인 곳. 여기 파일은 세지 않는다.
-SKIP_DIRS = {".git", "node_modules", ".venv", ".pytest_cache", "__pycache__", "dist", "build"}
+# `_local` 은 `.git/info/exclude` 로 **이 사본에만** 숨긴 작업 공간이다. 올라가지 않으므로
+# 문서 계층에 들어올 수 없는데, 훑으면 "닿지 않는 문서" 로 잡혀 매번 빨간불을 낸다 (H-035).
+# 거짓 경보는 장치를 못 믿게 만든다 — 믿지 않는 검사는 없는 것과 같다 (12 §6).
+SKIP_DIRS = {
+    ".git",
+    "_local",
+    "node_modules",
+    ".venv",
+    ".pytest_cache",
+    "__pycache__",
+    "dist",
+    "build",
+}
 
 HEADER_KEYS = ("층", "상태", "강제", "읽어야 할 때", "위", "아래", "함께")
 
@@ -133,7 +147,8 @@ def sections_of(doc: Path) -> set[str]:
 
 def header_of(doc: Path) -> dict[str, str]:
     """제목 바로 아래 인용 블록의 `**키** 값` 들. 값 안에도 굵은 글씨가 있을 수 있으므로
-    아는 키 이름만 칸의 시작으로 본다."""
+    아는 키 이름만 칸의 시작으로 본다.
+    """
     quote = []
     for line in doc.read_text(encoding="utf-8").splitlines():
         if line.startswith("> "):

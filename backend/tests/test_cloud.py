@@ -119,7 +119,7 @@ def test_cloud_input_limit_is_narrower(cloud):
     login(cloud, make_user())
     limit = get_settings().max_input_chars
 
-    assert limit == 800
+    assert limit == 1200
     assert cloud.post("/api/analyze", json={"text": "a" * limit}).status_code == 200
     assert cloud.post("/api/analyze", json={"text": "a" * (limit + 1)}).status_code == 422
     assert cloud.get("/api/config").json()["max_input_chars"] == limit
