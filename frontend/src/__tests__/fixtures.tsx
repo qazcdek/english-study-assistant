@@ -106,7 +106,7 @@ export function appConfig(overrides: Partial<AppConfig> = {}): AppConfig {
     daily_analysis_limit: 60,
     daily_practice_limit: 200,
     api_key_issue_url: '',
-    max_input_chars: 800,
+    max_input_chars: 1200,
     providers: [
       {
         id: 'gemini',

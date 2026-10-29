@@ -20,7 +20,7 @@ from tests.modes import build_app, setup_env
 # --- 09-mode-matrix.md §3.1 · §3.3 의 값 ---------------------------------------
 DEFAULTS = {
     "local_max_input_chars": 2000,
-    "cloud_max_input_chars": 800,
+    "cloud_max_input_chars": 1200,
     "daily_analysis_limit": 60,
     "daily_practice_limit": 200,
 }
