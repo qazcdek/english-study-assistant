@@ -66,14 +66,33 @@ def test_code_writes_document_addresses_in_the_one_agreed_form():
 
 
 def test_every_document_address_in_the_code_resolves():
-    names = {p.name for p in all_docs()}
+    """설계 문서는 절까지, 추적 문서는 태그까지 실제로 있는지 본다.
+
+    추적 문서 쪽이 더 잘 썩는다 — 끝난 일의 세부는 규약상 ONGOING 에서 **지워지고**
+    DONE 으로 옮겨지므로(CLAUDE.md 5절 4항), 코드가 적어 둔 `plan/ONGOING.md M1-T2` 는
+    그 일이 끝나는 순간 가리킬 자리를 잃는다. 파일은 그대로 있어서 파일 검사로는 안 잡힌다.
+    """
     dangling = []
     for ref in code_refs():
-        if ref.doc not in names:
+        doc = docmap.doc_path(ref.doc)
+        if not doc.is_file():
             dangling.append(f"{ref.where()}  없는 문서 {ref.doc}")
-        elif ref.section and ref.section not in sections_of(ROOT / "documents" / ref.doc):
+        elif ref.section and ref.section not in sections_of(doc):
             dangling.append(f"{ref.where()}  {ref.doc} 에 §{ref.section} 절이 없다")
+        elif ref.tag and ref.tag not in docmap.tags_of(doc):
+            dangling.append(f"{ref.where()}  {ref.doc} 에 {ref.tag} 가 없다")
     assert not dangling, "코드가 가리키는 문서 주소가 썩었다:\n  " + "\n  ".join(dangling)
+
+
+def test_the_code_scan_sees_tracking_doc_addresses():
+    """코드가 가리키는 추적 문서 주소도 집계에 들어와야 한다.
+
+    주소 패턴이 번호로 시작하는 이름(`09-mode-matrix.md`)만 알던 때가 있었다. 그래서
+    `plan/DONE.md M13-T2` 같은 주소는 **아무도 보지 않았다** — 코드에 스물두 줄이
+    있었는데 열두 줄만 검사를 받았다. 실제로 썩은 주소 둘이 그 틈으로 통과했다 (H-036).
+    """
+    tagged = [r for r in code_refs() if r.tag]
+    assert len(tagged) >= 5, f"추적 문서를 가리키는 주소를 {len(tagged)}개만 찾았다"
 
 
 def test_the_doc_to_doc_scan_actually_found_something():
@@ -137,7 +156,10 @@ def test_documents_cited_by_code_are_listed_in_the_claude_md_table():
     """코드가 근거로 드는 문서라면, 그 코드를 고치는 사람에게 펴라고 말해 줘야 한다."""
     table = ROOT_DOC.read_text(encoding="utf-8").split("## 4.")[1].split("## 5.")[0]
     listed = set(docmap._DOC_NAME.findall(table))
-    cited = {ref.doc for ref in code_refs() if ref.src.parts[-2] != "tests"}
+    # 추적 문서는 4절 표가 아니라 5절이 든다. 짝을 맞출 설계 문서만 본다.
+    cited = {
+        ref.doc for ref in code_refs() if ref.src.parts[-2] != "tests" and "/" not in ref.doc
+    }
     assert not cited - listed, (
         "코드가 가리키는데 CLAUDE.md 4절 표에 없는 문서: " + " · ".join(sorted(cited - listed))
     )

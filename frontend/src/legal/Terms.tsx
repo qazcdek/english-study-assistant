@@ -11,7 +11,7 @@ import { OPERATOR } from './operator'
  * 하루 한도 숫자는 **적지 않는다.** 설정으로 바뀌는 값이라 적으면 조용히 낡는다.
  * 화면이 서버 값을 보여주고, 약관은 "한도를 둔다" 는 사실만 말한다.
  *
- * 근거: documents/plan/ONGOING.md M1-T2
+ * 근거: plan/DONE.md M1-T2
  */
 export function Terms({ onBack }: { onBack: () => void }) {
   return (
