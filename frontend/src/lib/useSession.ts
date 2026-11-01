@@ -99,8 +99,13 @@ export function useSession(): Session {
             if (me.has_api_key) void refreshUsage()
             try {
               setSettings(await getSettings())
-            } catch {
-              // 위와 같다 — 부가 정보다.
+            } catch (e) {
+              // **부가 정보가 아니다.** 관문은 "지금 고른 제공자의 키가 있나" 로
+              // 열리고 닫히므로, 이것이 없으면 관문이 그릴 것을 못 받는다.
+              // 삼키면 흰 화면이 된다 — 화면에는 나갈 문이 없다 (H-039).
+              setError(
+                e instanceof ApiError ? e.message : '설정을 가져오지 못했습니다.',
+              )
             }
           } catch (e) {
             // 401 은 그냥 비로그인 상태다.

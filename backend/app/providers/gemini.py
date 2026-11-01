@@ -23,8 +23,13 @@ class GeminiProvider(OpenAICompatibleProvider):
         timeout: float = 120.0,
         temperature: float = 0.3,
         max_tokens: int = 4096,
+        reasoning_effort: str = "low",
         client: httpx.AsyncClient | None = None,
     ) -> None:
+        # **사고를 낮춰 보낸다.** `-lite` 가 아닌 flash 는 사고 모델이고, 안 걸면
+        # 짧은 답 하나에 수백 토큰을 쓴다 — 그 비용은 회원의 한도가 치른다.
+        # `low` 는 lite 와 사고 모델 **양쪽에서** 받는다 (`none` 은 lite 가 400).
+        self._reasoning_effort = reasoning_effort
         super().__init__(
             base_url,
             model=model,
@@ -34,6 +39,12 @@ class GeminiProvider(OpenAICompatibleProvider):
             max_tokens=max_tokens,
             client=client,
         )
+
+    def _extra_payload(self) -> dict:
+        """사고 수준을 얹는다. 비워 두면 보내지 않는다 (`M3-T7`)."""
+        if not self._reasoning_effort:
+            return {}
+        return {"reasoning_effort": self._reasoning_effort}
 
     def _describe_auth_error(self, status: int, body: str) -> str | None:
         if status in (401, 403):

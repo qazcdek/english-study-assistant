@@ -163,3 +163,84 @@ test('로컬 설정 메뉴에도 모델 선택이 있다', () => {
 
   expect(screen.getByText('Google Gemini')).toBeTruthy()
 })
+
+// ------------------------------------------------- 등록된 키를 바꾼다 (H-040)
+//
+// 전에는 바꿀 길이 없어서 **지우고 다시 넣어야** 했고, 지우는 순간 분석이 멈춘다.
+
+const WITH_KEY = appConfig({
+  providers: [
+    {
+      id: 'gemini',
+      label: 'Google Gemini',
+      models: ['gemini-3.5-flash-lite', 'gemini-3.5-flash', 'gemini-3.8-flash'],
+      needs_key: true,
+      key_url: 'https://aistudio.google.com/apikey',
+    },
+  ],
+})
+
+function held(overrides = {}) {
+  return accountSettings({ keys: { gemini: '••••0000' }, ready: true, ...overrides })
+}
+
+describe('이미 키가 있는 제공자', () => {
+  test('키를 지우지 않고 **바꿀 수 있다**', async () => {
+    render(
+      <ModelPicker config={WITH_KEY} settings={held()} onChanged={() => {}} />,
+    )
+
+    // 처음에는 입력칸이 없다 — 있는 키를 실수로 덮지 않게.
+    expect(screen.queryByPlaceholderText(/Google Gemini/)).toBeNull()
+
+    fireEvent.click(screen.getByRole('button', { name: '키 바꾸기' }))
+    fireEvent.change(screen.getByPlaceholderText(/Google Gemini/), {
+      target: { value: 'AIzaNEWKEY12345' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: '키 저장' }))
+
+    await waitFor(() => expect(saveApiKey).toHaveBeenCalledWith('AIzaNEWKEY12345', 'gemini'))
+    // **지우지 않았다.** 바꾸는 것과 지우는 것은 다른 일이다.
+    expect(removeApiKey).not.toHaveBeenCalled()
+  })
+
+  test('취소하면 입력칸이 닫힌다', () => {
+    render(
+      <ModelPicker config={WITH_KEY} settings={held()} onChanged={() => {}} />,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: '키 바꾸기' }))
+    fireEvent.click(screen.getByRole('button', { name: '취소' }))
+
+    expect(screen.queryByPlaceholderText(/Google Gemini/)).toBeNull()
+  })
+
+  test('지우는 길도 그대로 있다', async () => {
+    render(
+      <ModelPicker config={WITH_KEY} settings={held()} onChanged={() => {}} />,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: '키 삭제' }))
+
+    await waitFor(() => expect(removeApiKey).toHaveBeenCalledWith('gemini'))
+  })
+
+  test('모델도 바꿀 수 있다 — Gemini 는 flash 가 여럿이다 (M3-T7)', async () => {
+    render(
+      <ModelPicker config={WITH_KEY} settings={held()} onChanged={() => {}} />,
+    )
+
+    const select = screen.getByRole('combobox')
+    expect(Array.from(select.querySelectorAll('option')).map((o) => o.textContent)).toEqual([
+      'gemini-3.5-flash-lite',
+      'gemini-3.5-flash',
+      'gemini-3.8-flash',
+    ])
+
+    fireEvent.change(select, { target: { value: 'gemini-3.8-flash' } })
+
+    await waitFor(() =>
+      expect(chooseModel).toHaveBeenCalledWith('gemini', 'gemini-3.8-flash'),
+    )
+  })
+})
