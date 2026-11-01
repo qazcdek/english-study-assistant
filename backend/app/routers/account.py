@@ -7,7 +7,6 @@ from app.db import AnalysisRecord, PracticeRecord, User, VocabularyItem
 from app.deps import CipherDep, DbDep, SessionUser
 from app.errors import AppError, NotFoundError
 from app.providers import registry
-from app.providers.gemini import verify_api_key
 from app.schemas import (
     AccountSettings,
     ActiveModelRequest,
@@ -285,15 +284,10 @@ async def save_api_key(
     if not provider.needs_key:
         raise AppError(f"{provider.label} 는 키가 필요하지 않습니다.")
 
-    # 지금은 Gemini 하나뿐이다. 둘이 늘면 확인 방법도 제공자마다 갈린다 (M12-T3).
-    if provider_id == registry.GEMINI:
-        ok, detail = await verify_api_key(
-            request.api_key,
-            base_url=settings.gemini_base_url,
-            model=provider.models[0],
-        )
-        if not ok:
-            raise AppError(f"키를 확인하지 못했습니다. {detail or ''}".strip())
+    # **키가 필요한 제공자 전부**를 확인한다. 전에는 Gemini 만 확인했다 (H-037).
+    ok, detail = await registry.verify_key(provider_id, request.api_key, settings)
+    if not ok:
+        raise AppError(f"키를 확인하지 못했습니다. {detail or ''}".strip())
 
     keys.save(db, user.id, provider_id, request.api_key, cipher)
     db.commit()

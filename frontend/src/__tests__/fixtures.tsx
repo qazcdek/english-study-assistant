@@ -1,4 +1,5 @@
 import type {
+  Account,
   AccountSettings,
   AppConfig,
   Expression,
@@ -127,6 +128,19 @@ export function accountSettings(overrides: Partial<AccountSettings> = {}): Accou
     active_model: 'gemini-3.5-flash-lite',
     keys: {},
     ready: false,
+    ...overrides,
+  }
+}
+
+/** 로그인한 회원의 모형. 관문 판단이 이걸 본다. */
+export function account(overrides: Partial<Account> = {}): Account {
+  return {
+    email: 'a@b.com',
+    name: '테스터',
+    picture: '',
+    has_consented: true,
+    has_api_key: false,
+    api_key_hint: '',
     ...overrides,
   }
 }

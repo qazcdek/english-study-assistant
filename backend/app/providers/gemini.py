@@ -46,30 +46,3 @@ class GeminiProvider(OpenAICompatibleProvider):
                 "Gemini 사용 한도를 넘었습니다. 회원님 계정의 한도가 회복되면 다시 시도해 주세요."
             )
         return None
-
-
-async def verify_api_key(
-    api_key: str,
-    *,
-    base_url: str,
-    model: str,
-    timeout: float = 20.0,
-) -> tuple[bool, str | None]:
-    """키를 저장하기 전에 실제로 쓸 수 있는지 확인한다.
-
-    사용 한도를 거의 쓰지 않도록 아주 짧은 요청 하나만 보낸다.
-    """
-    provider = GeminiProvider(api_key, base_url=base_url, model=model, timeout=timeout)
-    try:
-        from app.providers.base import ChatMessage
-
-        await provider.complete(
-            [ChatMessage(role="user", content="Reply with the single word: ok")],
-            temperature=0.0,
-            max_tokens=8,
-        )
-        return True, None
-    except Exception as exc:  # noqa: BLE001 - 사용자에게 보여줄 메시지로 바꾼다
-        return False, str(exc)
-    finally:
-        await provider.aclose()
