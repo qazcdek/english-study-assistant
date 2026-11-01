@@ -40,7 +40,6 @@ class Settings(BaseSettings):
     # --- Gemini (cloud) ---
     # 회원이 등록한 API 키로 호출하므로 서버에는 키를 두지 않는다.
     gemini_base_url: str = "https://generativelanguage.googleapis.com/v1beta/openai"
-    gemini_model: str = "gemini-3.5-flash-lite"
     gemini_timeout: float = 120.0
 
     # --- 인증 (cloud) ---

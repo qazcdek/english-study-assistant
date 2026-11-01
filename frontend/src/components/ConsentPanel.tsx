@@ -46,8 +46,8 @@ export function ConsentPanel({ config, onAgree, onOpenTerms, onOpenPrivacy }: Pr
         <li className="flex gap-3">
           <span className="text-indigo-500">3</span>
           <span>
-            사용 모델은 <code className="font-mono text-xs">{config.model}</code> 입니다. 호출
-            횟수는 이렇게 쌓입니다.
+            기본 모델은 <code className="font-mono text-xs">{config.default_model}</code> 이고,
+            가입 후 설정에서 바꾸실 수 있습니다. 어느 모델이든 호출 횟수는 이렇게 쌓입니다.
             <span className="mt-2 block rounded-lg bg-stone-50 px-3 py-2 dark:bg-stone-950">
               <span className="block">
                 · 문장 분석 <b>1회</b> = LLM 호출 <b>4회</b> (번역 · 표현 · 구조 · 총평)

@@ -83,8 +83,9 @@
   관문 분기는 `frontend/src/components/Gate.tsx`
 - [x] H-040  등록된 키를 **바꿀 길이 없었다.** 지우고 다시 넣어야 했고, 지우는 순간 분석이 멈춘다
 - [x] H-041  키가 없으면 **자기 기록과 나의 표현까지 막혔다.** 그 둘은 키가 필요 없다
-- [ ] H-042  cloud 기본 모델이 `registry.models[0]` 과 `GEMINI_MODEL` **두 곳**에 있다. `/api/config` 는 후자를 보고하므로 목록 순서를 바꾸면 보고값과 실제가 갈린다 — 동의 화면이 그 값을 보여준다
-- [ ] H-043  공용 글감 작업이 `models[0]` 에 얹혀 있다. **목록 순서만 바꿔도 72호출 작업의 모델이 조용히 따라간다** — `operator.py` 는 "값 때문에 Flash-Lite" 라고 적어 뒀다
+- [x] H-042  cloud 기본 모델이 `registry.models[0]` 과 `GEMINI_MODEL` **두 곳**에 있다. `/api/config` 는 후자를 보고하므로 목록 순서를 바꾸면 보고값과 실제가 갈린다 — 동의 화면이 그 값을 보여준다
+- [x] H-043  공용 글감 작업이 `models[0]` 에 얹혀 있다. **목록 순서만 바꿔도 72호출 작업의 모델이 조용히 따라간다** — `operator.py` 는 "값 때문에 Flash-Lite" 라고 적어 뒀다
+  `→ backend/app/services/operator.py`
 
 ---
 

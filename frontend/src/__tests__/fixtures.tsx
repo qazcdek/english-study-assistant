@@ -103,7 +103,7 @@ export function appConfig(overrides: Partial<AppConfig> = {}): AppConfig {
   return {
     mode: 'cloud',
     requires_login: true,
-    model: 'gemini-3.5-flash-lite',
+    default_model: 'gemini-3.5-flash-lite',
     daily_analysis_limit: 60,
     daily_practice_limit: 200,
     api_key_issue_url: '',

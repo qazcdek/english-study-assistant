@@ -37,7 +37,14 @@ def app_config() -> AppConfigResponse:
     return AppConfigResponse(
         mode=settings.app_mode,
         requires_login=settings.is_cloud,
-        model=settings.gemini_model if settings.is_cloud else settings.llm_model,
+        # **설정에 사본을 두지 않는다.** cloud 의 기본 모델은 레지스트리 목록이
+        # 들고 (`registry.default_model`), local 은 llama-server 에 실제로 보내는
+        # 이름이 설정에 있다 — 목록의 `local-model` 은 자리만 채운다 (H-042).
+        default_model=(
+            registry.default_model(settings.app_mode)
+            if settings.is_cloud
+            else settings.llm_model
+        ),
         daily_analysis_limit=settings.daily_analysis_limit if settings.is_cloud else 0,
         daily_practice_limit=settings.daily_practice_limit if settings.is_cloud else 0,
         api_key_issue_url=API_KEY_ISSUE_URL if settings.is_cloud else "",
@@ -66,7 +73,11 @@ async def health(request: Request) -> HealthResponse:
     settings = get_settings()
     if settings.is_cloud:
         return HealthResponse(
-            llm=LLMHealth(reachable=True, base_url=settings.gemini_base_url, models=[settings.gemini_model])
+            llm=LLMHealth(
+                reachable=True,
+                base_url=settings.gemini_base_url,
+                models=[registry.default_model(settings.app_mode)],
+            )
         )
 
     reachable, models, detail = await request.app.state.provider.health()
