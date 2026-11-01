@@ -46,9 +46,19 @@ class Settings(BaseSettings):
     google_client_id: str = ""
     google_client_secret: str = ""
     # OAuth 콜백이 돌아올 백엔드 주소. 예: https://eng-study.onrender.com
+    #
+    # **아래 둘은 스킴과 호스트가 같아야 한다.** 콜백이 세션 쿠키를
+    # `public_base_url` 의 호스트에 심고, 그 직후 `frontend_base_url` 로 보낸다.
+    # 쿠키는 **포트는 무시하지만 호스트 이름은 구분한다** — `127.0.0.1` 에 심은
+    # 쿠키는 `localhost` 에서 안 실린다. 그러면 로그인이 **오류 없이** 안 된다:
+    # 콜백은 303 으로 잘 돌아오고 화면만 다시 로그인 화면이다.
+    # 스킴도 같아야 한다 — `secure` 플래그를 `public_base_url` 에서 끌어오므로
+    # (`routers/auth.py`), 백엔드만 https 면 http 프론트에 쿠키가 안 실린다.
+    #
+    # 전에는 기본값과 `.env.example` 이 `127.0.0.1` 과 `localhost` 로 갈려 있었다 (H-044).
     public_base_url: str = "http://127.0.0.1:8000"
-    # 로그인 후 사용자를 돌려보낼 프론트엔드 주소
-    frontend_base_url: str = "http://localhost:5173"
+    # 로그인 후 사용자를 돌려보낼 프론트엔드 주소. **위와 같은 호스트.**
+    frontend_base_url: str = "http://127.0.0.1:5173"
     session_secret: str = ""
     session_days: int = 30
     # 오류 수집. **비어 있으면 아무것도 보내지 않는다** — 로컬에서 켜질 일이 없어야 한다.
