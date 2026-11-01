@@ -112,9 +112,15 @@ def analyzer_for(db: Session, cipher: KeyCipher, settings: Settings) -> Analyzer
     if info is None:  # pragma: no cover - 레지스트리와 함께 바뀐다
         raise OperatorKeyRequiredError(detail=f"목록에 없는 제공자: {operator.JOB_PROVIDER}")
 
-    # **운영자의 활성 선택을 따르지 않는다.** 목록의 기본 모델로 고정한다.
+    # **운영자의 활성 선택도, 목록의 순서도 따르지 않는다.** 쓸 모델을 적어 둔
+    # 자리가 하나다 (`operator.JOB_MODEL` — 왜 그 모델인지도 거기 있다).
+    if operator.JOB_MODEL not in info.models:
+        raise OperatorKeyRequiredError(
+            "공용 글감용 모델이 제공자 목록에 없습니다.",
+            detail=f"{operator.JOB_PROVIDER}/{operator.JOB_MODEL}",
+        )
     return AnalyzerService(
-        registry.build(info.id, info.models[0], api_key, settings)
+        registry.build(info.id, operator.JOB_MODEL, api_key, settings)
     )
 
 

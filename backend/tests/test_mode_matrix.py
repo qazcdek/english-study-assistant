@@ -138,3 +138,49 @@ def test_both_modes_store_records_in_a_database(mode_app):
     """통합 뒤 두 모드 모두 DB 를 쓴다. 'local 은 DB 가 없다' 는 설명은 옛말이다 (H-011)."""
     _mode, _app, client = mode_app
     assert client.get("/api/history").status_code in (200, 401)
+
+
+# --- 09-mode-matrix.md §2 "모델" 줄 -------------------------------------------
+#
+# **기본 모델은 사본을 두지 않는다.** 전에는 `GEMINI_MODEL` 설정이 같은 값을
+# 들고 있었고 `/api/config` 가 그것을 보고했다. 호출에는 안 쓰이므로 **목록
+# 순서를 바꾸면 보고값과 실제가 갈린다** — 동의 화면이 그 값을 보여준다 (H-042).
+
+
+def test_cloud_reports_the_default_model_from_the_registry(monkeypatch):
+    """**사본이 아니라 끌어온 값인지** 본다 — 목록을 바꾸면 보고값도 따라와야 한다.
+
+    `default_for` 는 `BY_ID` 가 아니라 `PROVIDERS` 를 훑는다. 둘은 같은 목록의
+    두 모습이라, 한쪽만 바꿔 놓고 재면 **아무것도 안 바꾼 것과 같다.**
+    """
+    from dataclasses import replace
+
+    from app.providers import registry
+
+    gemini = registry.BY_ID[registry.GEMINI]
+    assert registry.default_model("cloud") == gemini.models[0]
+
+    # 목록 첫 줄을 바꾸면 보고값도 따라온다. 사본이면 안 따라온다.
+    shuffled = ("gemini-3.8-flash",) + tuple(m for m in gemini.models if m != "gemini-3.8-flash")
+    monkeypatch.setattr(
+        registry,
+        "PROVIDERS",
+        tuple(replace(p, models=shuffled) if p.id == registry.GEMINI else p for p in registry.PROVIDERS),
+    )
+
+    assert registry.default_model("cloud") == "gemini-3.8-flash"
+
+
+def test_local_reports_the_name_it_actually_sends_to_llama_server(monkeypatch):
+    """목록의 `local-model` 은 자리만 채운다. 실제로 보내는 이름은 `LLM_MODEL` 이다."""
+    monkeypatch.setenv("LLM_MODEL", "qwen3.8-27b")
+    setup_env(monkeypatch, "local")
+    with TestClient(build_app()) as client:
+        body = client.get("/api/config").json()
+
+    assert body["default_model"] == "qwen3.8-27b"
+
+
+def test_the_settings_no_longer_hold_a_copy_of_the_cloud_model():
+    """**설정에 사본이 돌아오면 같은 드리프트가 다시 생긴다** (H-042)."""
+    assert "gemini_model" not in Settings.model_fields

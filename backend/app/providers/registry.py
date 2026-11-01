@@ -174,6 +174,19 @@ def default_for(mode: str) -> ProviderInfo:
     return chosen[0]
 
 
+def default_model(mode: str) -> str:
+    """그 모드에서 **아직 안 고른 회원이 돌리게 되는** 모델.
+
+    전에는 이 값이 `GEMINI_MODEL` 설정에도 따로 있었다. 호출에는 쓰이지 않고
+    `/api/config` 가 보고하기만 했으므로, **목록 순서를 바꾸면 보고값과 실제가
+    갈린다** — 그리고 동의 화면이 그 값을 보여준다 (H-042).
+
+    `local` 은 여기서 답하지 않는다. 목록의 `local-model` 은 자리만 채우는
+    이름이고, llama-server 에 실제로 보내는 이름은 `LLM_MODEL` 이 든다.
+    """
+    return default_for(mode).models[0]
+
+
 def info(provider_id: str) -> ProviderInfo | None:
     return BY_ID.get(provider_id)
 

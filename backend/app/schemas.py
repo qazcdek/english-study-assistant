@@ -254,7 +254,11 @@ class AppConfigResponse(BaseModel):
 
     mode: Literal["local", "cloud"]
     requires_login: bool
-    model: str
+    # **아직 안 고른 회원이 돌리게 되는 모델.** 지금 쓰는 모델이 아니다 —
+    # 고른 뒤에는 `GET /api/account/settings` 의 `active_model` 이 답한다.
+    # 이름이 `model` 이었을 때 **"지금 쓰는 것" 으로 읽혔고**, 그래서 설정값
+    # 사본을 보고하는 것이 오래 안 들켰다 (H-042).
+    default_model: str
     daily_analysis_limit: int = 0
     daily_practice_limit: int = 0
     api_key_issue_url: str = ""

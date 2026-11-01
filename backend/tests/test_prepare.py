@@ -9,6 +9,7 @@
 """
 
 import json
+from dataclasses import replace
 
 import pytest
 
@@ -16,6 +17,7 @@ from app.auth.crypto import KeyCipher
 from app.config import get_settings
 from app.db import Article, ArticleParagraph, ParagraphAnalysis, User, session_scope
 from app.errors import OperatorKeyRequiredError
+from app.providers import registry
 from app.services import operator, prepare
 from app.services.analyzer import AnalyzerService
 from tests.fake_provider import PART_PAYLOADS, FakeProvider
@@ -52,8 +54,42 @@ def test_the_operators_key_builds_the_fixed_provider(cloud):
 
         analyzer = prepare.analyzer_for(db, _cipher(), get_settings())
 
-    assert analyzer.provider.model == "gemini-3.5-flash-lite"
+    assert analyzer.provider.model == operator.JOB_MODEL
     assert type(analyzer.provider).__name__ == "GeminiProvider"
+
+
+def test_the_job_model_is_pinned_not_borrowed_from_the_list(cloud, monkeypatch):
+    """**목록 순서를 바꿔도 따라가지 않는다.**
+
+    전에는 `models[0]` 을 그대로 썼다. 회원 기본값과 같은 값이라 맞아 보였지만,
+    회원 기본값을 고르는 일과 **72 호출 작업의 비용을 정하는 일은 다른 결정이다** —
+    기본값을 사고 모델로 옮기려다 이 결합을 발견했다 (H-043).
+    """
+    info = registry.BY_ID[registry.GEMINI]
+    # 사고 모델을 첫 줄로 올린다 — 기본값을 옮긴 상황을 그대로 만든다.
+    shuffled = ("gemini-3.8-flash",) + tuple(m for m in info.models if m != "gemini-3.8-flash")
+    monkeypatch.setitem(registry.BY_ID, registry.GEMINI, replace(info, models=shuffled))
+
+    with session_scope() as db:
+        operator_with_key(db, _cipher())
+        analyzer = prepare.analyzer_for(db, _cipher(), get_settings())
+
+    assert registry.BY_ID[registry.GEMINI].models[0] == "gemini-3.8-flash"
+    assert analyzer.provider.model == operator.JOB_MODEL != "gemini-3.8-flash"
+
+
+def test_the_job_model_must_exist_in_the_list(cloud, monkeypatch):
+    """오타나 내려간 모델을 **첫 호출 전에** 잡는다 — 72번을 헛돌지 않는다."""
+    info = registry.BY_ID[registry.GEMINI]
+    monkeypatch.setitem(
+        registry.BY_ID, registry.GEMINI, replace(info, models=("gemini-3.5-flash",))
+    )
+
+    with session_scope() as db:
+        operator_with_key(db, _cipher())
+
+        with pytest.raises(OperatorKeyRequiredError, match="목록에 없습니다"):
+            prepare.analyzer_for(db, _cipher(), get_settings())
 
 
 # ----------------------------------------------------------------- 채운다

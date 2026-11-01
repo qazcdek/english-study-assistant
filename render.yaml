@@ -47,8 +47,7 @@ services:
       - key: ENCRYPTION_KEY
         sync: false
 
-      - key: GEMINI_MODEL
-        value: gemini-3.5-flash-lite
+      # 모델 이름은 여기 없다 — providers/registry.py 가 든다 (H-042).
       - key: DAILY_ANALYSIS_LIMIT
         value: "60"
       - key: DAILY_PRACTICE_LIMIT

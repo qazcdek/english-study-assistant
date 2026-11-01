@@ -181,7 +181,12 @@ export interface ProviderOption {
 export interface AppConfig {
   mode: 'local' | 'cloud'
   requires_login: boolean
-  model: string
+  /**
+   * **아직 안 고른 회원이 돌리게 되는 모델.** 지금 쓰는 모델이 아니다 —
+   * 고른 뒤에는 `AccountSettings.active_model` 이 답한다. 이름이 `model` 이었을
+   * 때 "지금 쓰는 것" 으로 읽혔다 (H-042).
+   */
+  default_model: string
   daily_analysis_limit: number
   daily_practice_limit: number
   api_key_issue_url: string
