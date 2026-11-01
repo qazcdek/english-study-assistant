@@ -137,7 +137,13 @@ FastAPI 가 SPA 로 서빙한다. 서비스가 **하나**라 무료 플랜 하�
      ```bash
      python -c "from cryptography.fernet import Fernet;print(Fernet.generate_key().decode())"
      ```
-   - `PUBLIC_BASE_URL`, `FRONTEND_BASE_URL` — 배포 후 받은 주소로 **둘 다 같게**
+   - `PUBLIC_BASE_URL`, `FRONTEND_BASE_URL` — 배포 후 받은 주소로 **둘 다 같게**.
+     **스킴과 호스트가 갈리면 로그인이 오류 없이 안 된다** — 콜백이 세션 쿠키를
+     앞의 호스트에 심고 뒤의 주소로 보내는데, 쿠키는 포트는 무시하지만 호스트
+     이름은 구분한다. 콜백은 303 으로 잘 돌아오고 화면만 다시 로그인 화면이다.
+     `secure` 플래그도 `PUBLIC_BASE_URL` 에서 끌어오므로 스킴까지 같아야 한다.
+     개발용 기본값과 `.env.example` 이 `127.0.0.1` 과 `localhost` 로 갈려 있었고,
+     지금은 검사가 그 짝을 본다 (`H-044` · `tests/test_cloud.py`).
 3. `SESSION_SECRET` 은 Render 가 생성한다
 4. `SENTRY_DSN` 은 **비워 두어도 된다.** 채우면 오류가 모인다 (9절).
    Sentry 에서 프로젝트를 만들면 `https://...@...ingest.../1` 꼴의 주소를 준다
