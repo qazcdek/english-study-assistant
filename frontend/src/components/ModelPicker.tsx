@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 
 import { ApiError, chooseModel, removeApiKey, saveApiKey } from '../lib/api'
 import type { AccountSettings, AppConfig } from '../lib/types'
@@ -24,8 +24,16 @@ export function ModelPicker({
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [typedKey, setTypedKey] = useState('')
+  // 이미 키가 있는데 **바꾸려는** 중인가. 전에는 바꿀 길이 없어서 지우고 다시
+  // 넣어야 했고, 지우는 순간 분석이 멈춘다 (H-040).
+  const [changing, setChanging] = useState(false)
 
   const chosen = config.providers.find((p) => p.id === settings.active_provider)
+  const held = chosen ? settings.keys[chosen.id] : undefined
+
+  // 제공자를 옮기면 바꾸던 중이던 것은 닫는다 — 열어 둔 입력칸이 **다른 제공자의**
+  // 것으로 보이면 그 자리에 엉뚱한 키가 들어간다.
+  useEffect(() => setChanging(false), [chosen?.id])
 
   async function run(work: () => Promise<AccountSettings>) {
     setBusy(true)
@@ -33,6 +41,7 @@ export function ModelPicker({
     try {
       onChanged(await work())
       setTypedKey('')
+      setChanging(false)
     } catch (e) {
       setError(e instanceof ApiError ? e.message : '바꾸지 못했습니다.')
     } finally {
@@ -100,11 +109,20 @@ export function ModelPicker({
 
       {chosen?.needs_key && (
         <div className="flex flex-col gap-2 border-t border-stone-100 pt-3 dark:border-stone-800">
-          {settings.keys[chosen.id] ? (
+          {held && (
             <div className="flex items-center gap-2 text-xs">
               <span className="min-w-0 flex-1 truncate text-stone-400">
-                {chosen.label} 키 {settings.keys[chosen.id]}
+                {chosen.label} 키 {held}
               </span>
+              {/* **바꾸는 것과 지우는 것은 다르다.** 지우면 그 사이 분석이 멈춘다. */}
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => setChanging((v) => !v)}
+                className="shrink-0 rounded-lg border border-stone-200 px-2 py-1 transition hover:bg-stone-100 disabled:opacity-50 dark:border-stone-700 dark:hover:bg-stone-800"
+              >
+                {changing ? '취소' : '키 바꾸기'}
+              </button>
               <button
                 type="button"
                 disabled={busy}
@@ -114,7 +132,8 @@ export function ModelPicker({
                 키 삭제
               </button>
             </div>
-          ) : (
+          )}
+          {(!held || changing) && (
             <>
               <input
                 type="password"

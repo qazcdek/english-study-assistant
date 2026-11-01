@@ -29,6 +29,11 @@ class Settings(BaseSettings):
     llm_timeout: float = 300.0
     llm_temperature: float = 0.3
     llm_max_tokens: int = 4096
+    # **Gemini 의 사고 수준.** `-lite` 가 아닌 flash 는 사고 모델이라, 안 걸면
+    # 짧은 답 하나에도 토큰을 수백 개 쓴다. 같은 요청을 재 보니
+    # `gemini-3.8-flash` 가 합계 523 → `low` 로 61 토큰이었다 (`M3-T7` 실측).
+    # 빈 문자열이면 안 보낸다. `none` 은 lite 가 거부하므로 기본값으로 두지 않는다.
+    gemini_reasoning_effort: str = "low"
     llm_enable_thinking: bool | None = False
     llm_json_mode: Literal["json_schema", "json_object", "none"] = "json_schema"
 

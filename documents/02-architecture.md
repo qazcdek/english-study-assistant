@@ -120,6 +120,7 @@ eng_study/
 | `LLM_ENABLE_THINKING` | `false` | reasoning 모델의 사고 과정 사용 여부 |
 | `LLM_JSON_MODE` | `json_schema` | `json_schema` / `json_object` / `none` |
 | `CORS_ORIGINS` | `http://localhost:5173` | 쉼표 구분 |
+| `GEMINI_REASONING_EFFORT` | `low` | Gemini 의 사고 수준. 빈 문자열이면 안 보낸다 ([13 §2.2](13-gemini-benchmark.md)) |
 
 ## 7. 에러 처리 방침
 
@@ -148,6 +149,17 @@ Qwen3 같은 하이브리드 reasoning 모델을 `--jinja` 로 띄우면 사고 
 그래서 기본값을 `LLM_ENABLE_THINKING=false` 로 둔다. 프로바이더는
 `chat_template_kwargs: {"enable_thinking": ...}` 로 이를 전달하고,
 `finish_reason == "length"` 를 감지해 `llm_truncated` 로 명확히 알린다.
+
+### 8.1 Gemini 에서도 같은 일이 난다
+
+**같은 현상이 cloud 에서도 났다.** `-lite` 가 아닌 Gemini flash 는 사고 모델이라,
+`max_tokens=8` 로 짧은 확인 요청을 보냈더니 넷 모두 `finish_reason: length` 가
+났다 — **멀쩡한 모델이 고장으로 보였다.**
+
+손잡이 이름이 다르다. llama-server 는 `chat_template_kwargs`, Gemini 는
+OpenAI 호환 `reasoning_effort` 다. Gemini 는 `low` 로 합계 523 → 61 토큰이었다
+([13 §2.2](13-gemini-benchmark.md) 실측). 그래서 **모델별로 손잡이를 찾아
+기본값을 낮춰 둔다** — 안 걸면 비용을 회원의 한도가 조용히 치른다.
 
 ## 9. 화면과 주소
 

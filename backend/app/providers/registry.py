@@ -91,11 +91,25 @@ PROVIDERS: tuple[ProviderInfo, ...] = (
     ProviderInfo(
         id=GEMINI,
         label="Google Gemini",
-        models=("gemini-3.5-flash-lite",),
+        # **실제로 도는 것만 적는다.** 운영자 키로 하나씩 쳐 봤다 (`M3-T7`) —
+        # `gemini-2.5-*` 는 이 엔드포인트에서 404 로 내려갔고, `-latest` 별칭은
+        # 움직이는 과녁이라 넣지 않는다(지금 무엇으로 돌았는지 추적할 수 없다).
+        #
+        # **`-lite` 를 첫 줄에 둔다.** 첫 번째가 기본값이고, 가장 싸다.
+        # 뒤의 넷은 **사고 모델**이다 — `gemini_reasoning_effort` 로 낮춰 보낸다.
+        models=(
+            "gemini-3.5-flash-lite",
+            "gemini-3.1-flash-lite",
+            "gemini-3.5-flash",
+            "gemini-3.6-flash",
+            "gemini-3.7-flash",
+            "gemini-3.8-flash",
+        ),
         needs_key=True,
         local_only=False,
         key_url="https://aistudio.google.com/apikey",
         transfer_name="Google (Gemini API)",
+        note="-lite 가 아닌 flash 는 사고 모델이다 — 사고 수준을 낮춰 보낸다",
     ),
     ProviderInfo(
         id=OPENAI,
@@ -171,7 +185,11 @@ def _overrides(provider_id: str, settings: "Settings") -> dict[str, object]:
     주소가 평범하지 않고(`…/v1beta/openai`), 그 자리가 바뀐 적이 있다.
     """
     if provider_id == GEMINI:
-        return {"base_url": settings.gemini_base_url, "timeout": settings.gemini_timeout}
+        return {
+            "base_url": settings.gemini_base_url,
+            "timeout": settings.gemini_timeout,
+            "reasoning_effort": settings.gemini_reasoning_effort,
+        }
     return {}
 
 
@@ -228,7 +246,10 @@ async def verify_key(
         await provider.complete(
             [ChatMessage(role="user", content="Reply with the single word: ok")],
             temperature=0.0,
-            max_tokens=8,
+            # **8 토큰으로는 사고 모델이 못 답한다** — 사고에서 전부 소진되고
+            # `finish_reason: length` 가 나서 **멀쩡한 키가 거부된다.** 실제로
+            # `gemini-3.8-flash` 를 8 토큰으로 쳤더니 그랬다 (`M3-T7`).
+            max_tokens=256,
         )
         return True, None
     except Exception as exc:  # noqa: BLE001 - 사용자에게 보여줄 메시지로 바꾼다

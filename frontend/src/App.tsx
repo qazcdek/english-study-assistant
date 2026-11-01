@@ -1,12 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 
 import { AccountBar } from './components/AccountBar'
-import { ApiKeyPanel } from './components/ApiKeyPanel'
-import { ConsentPanel } from './components/ConsentPanel'
 import { DataMenu } from './components/DataMenu'
+import { Gate } from './components/Gate'
 import { HistoryList } from './components/HistoryList'
 import { InputPanel } from './components/InputPanel'
-import { LoginPanel } from './components/LoginPanel'
 import { MyExpressions } from './components/MyExpressions'
 import { ResultView } from './components/ResultView'
 import { StatusBar } from './components/StatusBar'
@@ -22,7 +20,6 @@ import {
   analyzeStream,
   deleteHistory,
   getHistoryDetail,
-  giveConsent,
   health as fetchHealth,
   listHistory,
 } from './lib/api'
@@ -57,7 +54,14 @@ export default function App() {
   // 좁은 화면에서 기록 목록을 펼쳤나. 기본은 접힘 — 본문 위를 막지 않는다.
   const [historyOpen, setHistoryOpen] = useState(false)
 
-  const ready = session.stage === 'ready' || session.stage === 'local'
+  // **두 가지를 구분한다.** 저장된 기록과 나의 표현을 읽는 데에는 키가 필요 없다
+  // (`deps.session_user` 가 신원만 본다). 키가 필요한 것은 LLM 을 부를 때다.
+  // 하나로 묶어 두면 키가 없는 회원에게서 **자기 기록까지 숨긴다** (H-041).
+  const identified =
+    session.stage === 'ready' || session.stage === 'local' || session.stage === 'api-key'
+  const canAnalyze = session.stage === 'ready' || session.stage === 'local'
+  // 키 단계를 넘겨 뒀나. 넘겨도 분석은 안 된다 — 보이는 것이 늘어날 뿐이다.
+  const [skipKeyGate, setSkipKeyGate] = useState(false)
 
   const wide = useIsWide()
 
@@ -75,15 +79,15 @@ export default function App() {
     return () => window.removeEventListener('popstate', onPop)
   }, [])
   // 나의 표현은 두 화면이 함께 본다 — 분석 화면의 별과 목록이 어긋나지 않게 한 곳에서 든다.
-  const vocab = useVocabulary(ready)
+  const vocab = useVocabulary(identified)
 
   useEffect(() => {
-    if (!ready) return
+    if (!identified) return
     fetchHealth()
       .then((h) => setLlmHealth(h.llm))
       .catch(() => setLlmHealth({ reachable: false, base_url: '백엔드 미응답', models: [] }))
     return () => abortRef.current?.abort()
-  }, [ready])
+  }, [identified])
 
   // 웹 모드는 히스토리를 서버에서 가져와 기기 간 동기화한다.
   const reloadServerHistory = useCallback(async () => {
@@ -105,9 +109,9 @@ export default function App() {
 
   useEffect(() => {
     // 두 모드 모두 기록은 서버에 있다. cloud 는 로그인·키 등록까지 끝나야 읽을 수 있다.
-    if (session.stage !== 'ready' && session.stage !== 'local') return
+    if (!identified) return
     void reloadServerHistory()
-  }, [session.stage, reloadServerHistory])
+  }, [identified, reloadServerHistory])
 
   async function handleSubmit() {
     const trimmed = text.trim()
@@ -203,13 +207,13 @@ export default function App() {
   )
 
   useEffect(() => {
-    // cloud 는 관문을 지나야 기록을 읽을 수 있다. 링크로 들어왔으면 그때까지 기다린다.
-    if (!ready) return
+    // cloud 는 로그인·동의를 지나야 기록을 읽을 수 있다. 링크로 들어왔으면 기다린다.
+    if (!identified) return
     if (route.recordId === shownRef.current) return
     shownRef.current = route.recordId
     if (route.recordId) void loadRecord(route.recordId)
     else setAnalysis(null)
-  }, [ready, route.recordId, loadRecord])
+  }, [identified, route.recordId, loadRecord])
 
   function handleSelectHistory(entry: HistoryEntry) {
     // 본문은 목록이 들고 있으니 먼저 비춘다. 나머지는 주소가 부른다.
@@ -237,29 +241,20 @@ export default function App() {
     )
   }
 
-  if (session.stage !== 'ready' && session.stage !== 'local') {
+  // 키 단계는 **넘길 수 있다.** 로그인과 동의는 못 넘긴다 — 신원과 법적 근거다.
+  const atGate = !canAnalyze && !(session.stage === 'api-key' && skipKeyGate)
+  if (atGate) {
     return (
       <div className="mx-auto max-w-6xl px-4 py-16 sm:px-6">
-        {/* **보던 주소로 돌아온다.** 전에는 늘 `/` 로 떨어져서, 나의 표현을 링크로
-            받은 사람이 로그인하면 분석 화면에 도착했다 (H-038). */}
-        {session.stage === 'login' && (
-          <LoginPanel error={session.error} next={pathOf(route)} />
-        )}
-        {session.stage === 'consent' && session.config && (
-          <ConsentPanel
-            config={session.config}
-            onAgree={async () => session.setAccount(await giveConsent())}
-            onOpenTerms={() => go('terms')}
-            onOpenPrivacy={() => go('privacy')}
-          />
-        )}
-        {session.stage === 'api-key' && session.config && session.settings && (
-          <ApiKeyPanel
-            config={session.config}
-            settings={session.settings}
-            onSettingsChanged={session.setSettings}
-          />
-        )}
+        {/* 분기는 `Gate` 가 든다 — 틀리면 사용자가 갇히는 판단이라 검사가 닿아야
+            한다 (H-039). `next` 로 **보던 주소로 돌아온다** (H-038). */}
+        <Gate
+          session={session}
+          next={pathOf(route)}
+          onOpenTerms={() => go('terms')}
+          onOpenPrivacy={() => go('privacy')}
+          onSkipKey={() => setSkipKeyGate(true)}
+        />
       </div>
     )
   }
@@ -329,7 +324,7 @@ export default function App() {
             ))}
           </nav>
           {!cloud && <StatusBar health={llmHealth} />}
-          {!cloud && ready && (
+          {!cloud && identified && (
             <DataMenu
               config={session.config}
               settings={session.settings}
@@ -355,6 +350,23 @@ export default function App() {
             <MyExpressions vocab={vocab} level={level} />
           ) : (
             <>
+          {!canAnalyze && (
+            // **분석만 막혀 있다.** 기록과 나의 표현은 위아래로 그대로 보인다.
+            <div className="flex flex-wrap items-center gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-200">
+              <p className="min-w-0 flex-1">
+                API 키가 없어 <b>새 분석만</b> 시작되지 않습니다. 이전 기록과 나의 표현은
+                그대로 보실 수 있습니다.
+              </p>
+              <button
+                type="button"
+                onClick={() => setSkipKeyGate(false)}
+                className="shrink-0 rounded-lg bg-amber-600 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-amber-500"
+              >
+                키 등록하기
+              </button>
+            </div>
+          )}
+
           <InputPanel
             text={text}
             level={level}
@@ -362,7 +374,8 @@ export default function App() {
             onTextChange={setText}
             maxChars={session.config?.max_input_chars}
             onLevelChange={setLevel}
-            onSubmit={handleSubmit}
+            // 키가 없으면 **오류를 보여주는 대신 등록 화면으로 보낸다.**
+            onSubmit={canAnalyze ? handleSubmit : () => setSkipKeyGate(false)}
             onTooShort={() => setToast({ message: `${MIN_CHARS}자 이상 입력해 주세요`, at: Date.now() })}
           />
 

@@ -47,7 +47,14 @@ beforeEach(() => {
 })
 
 function show(settings: AccountSettings) {
-  render(<ApiKeyPanel config={CONFIG} settings={settings} onSettingsChanged={() => {}} />)
+  render(
+    <ApiKeyPanel
+      config={CONFIG}
+      settings={settings}
+      onSettingsChanged={() => {}}
+      onSkip={() => {}}
+    />,
+  )
 }
 
 describe('키 등록 화면은 **지금 고른 제공자**를 따른다 (H-037)', () => {
