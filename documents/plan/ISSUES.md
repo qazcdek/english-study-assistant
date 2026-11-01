@@ -74,6 +74,11 @@
   `→ backend/app/prompts/analysis.py`
   `→ backend/app/services/refine.py::clean_expressions`
 - [x] H-023  기록 묶음을 제시문만으로 걸었다. 안 섞이는 이유가 호출하는 쪽이 걸러 준다는 것뿐이었다
+- [x] H-037  모델 선택에서 **키 없는 제공자를 고르면 게이트에 갇힌다.** 화면은 제공자와 무관하게 Gemini 키를 요구하고, 넣은 키는 고른 제공자 자리에 무검증으로 저장된다
+  `→ backend/app/providers/registry.py::verify_key`
+  화면 쪽은 `ApiKeyPanel.tsx` 와 `useSession.ts` 의 `stageFor`
+- [x] H-038  화면마다 주소가 없어 **뒤로 가기가 앱을 나간다.** 기록 하나를 링크할 수도, 로그인 뒤 보던 화면으로 돌아올 수도 없다
+  주소와 화면의 짝은 `frontend/src/lib/routes.ts` 한 곳에 있다
 
 ---
 

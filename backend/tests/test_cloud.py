@@ -1,9 +1,12 @@
 """웹 배포(cloud) 모드: 로그인 · 동의 · 회원 키 · 사용량 · 저장."""
 
+import pytest
 from fastapi.testclient import TestClient
 
 from app.config import get_settings
 from app.db import User, session_scope
+from app.providers import registry
+from app.providers.base import CompletionResult
 from tests.modes import SESSION_SECRET, build_app, login
 from tests.modes import make_cloud_user as make_user
 
@@ -196,3 +199,61 @@ def test_clearing_records_keeps_the_key(cloud):
 
 def test_leaving_requires_login(cloud):
     assert cloud.delete("/api/auth/account").status_code == 401
+
+
+# ------------------------------------------- 키 등록은 **고른 제공자**를 따른다 (H-037)
+#
+# 확인 분기가 `if provider_id == GEMINI` 하나였다. OpenAI·Anthropic 은 **무검증으로**
+# 저장됐고, 화면까지 제공자와 무관하게 Gemini 키를 요구했으므로 **Gemini 키가 OpenAI
+# 키 자리에** 들어갔다. 분석을 눌러야 그걸 알 수 있었다.
+
+
+class _Probe:
+    """키 확인이 **실제로 제공자를 불렀나.** 네트워크로 나가지 않는다."""
+
+    def __init__(self, *, ok: bool) -> None:
+        self.ok = ok
+        self.called = False
+
+    async def complete(self, messages, **kwargs) -> CompletionResult:
+        self.called = True
+        if not self.ok:
+            raise RuntimeError("401 Unauthorized")
+        return CompletionResult(text="ok", model="probe")
+
+    async def aclose(self) -> None:
+        pass
+
+
+# **목록에서 끌어온다.** 여기에 셋을 적으면 네 번째 제공자가 들어올 때
+# 조용히 빠진다 — 그게 이 결함이 생긴 방식이다.
+NEEDS_KEY = [p.id for p in registry.PROVIDERS if p.needs_key and p.implemented]
+
+
+@pytest.mark.parametrize("provider_id", NEEDS_KEY)
+def test_a_key_is_verified_for_every_provider_that_needs_one(cloud, monkeypatch, provider_id):
+    """하나만 확인하면 **나머지는 무검증 저장**이다."""
+    login(cloud, make_user(with_key=False))
+    assert cloud.put("/api/account/settings", json={"provider": provider_id}).status_code == 200
+
+    probe = _Probe(ok=False)
+    monkeypatch.setattr(registry, "build", lambda *a, **k: probe)
+
+    resp = cloud.put("/api/account/api-key", json={"api_key": "bogus-key-0000"})
+
+    assert probe.called, f"{provider_id}: 키를 확인도 하지 않고 받았다"
+    assert resp.status_code == 400
+    assert cloud.get("/api/account/settings").json()["keys"] == {}
+
+
+@pytest.mark.parametrize("provider_id", NEEDS_KEY)
+def test_a_key_is_stored_under_the_chosen_provider(cloud, monkeypatch, provider_id):
+    """제공자를 안 주면 **지금 고른 것**으로 간다. 화면이 그 사실을 보여줘야 한다."""
+    login(cloud, make_user(with_key=False))
+    cloud.put("/api/account/settings", json={"provider": provider_id})
+    monkeypatch.setattr(registry, "build", lambda *a, **k: _Probe(ok=True))
+
+    body = cloud.put("/api/account/api-key", json={"api_key": "some-key-1234"}).json()
+
+    assert body["keys"] == {provider_id: "••••1234"}
+    assert body["ready"] is True

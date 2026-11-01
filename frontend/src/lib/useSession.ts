@@ -24,12 +24,26 @@ export interface Session {
   refreshUsage: () => Promise<void>
 }
 
-function stageFor(config: AppConfig | null, account: Account | null): SessionStage {
+/**
+ * 어느 화면을 보여줄지. **검사가 직접 부를 수 있게 내놓는다** — 관문 판단은
+ * 네트워크 없이 따질 수 있는 순수한 것이고, 틀리면 사용자가 갇힌다.
+ */
+export function stageFor(
+  config: AppConfig | null,
+  account: Account | null,
+  settings: AccountSettings | null,
+): SessionStage {
   if (!config) return 'loading'
   if (!config.requires_login) return 'local'
   if (!account) return 'login'
   if (!account.has_consented) return 'consent'
-  if (!account.has_api_key) return 'api-key'
+  // **키 보유는 "지금 고른 제공자" 에 달렸다** (M12-T2). 제공자를 바꾸면 로그인 때
+  // 받은 `account` 는 그 자리에서 낡는다 — 설정이 이 사실의 주인이고, `account` 의
+  // 같은 칸은 설정을 아직 못 읽었을 때의 첫 값일 뿐이다.
+  //
+  // 둘을 각자 믿으면 **제공자를 되돌려도 관문이 열리지 않는다.** 실제로 그랬다 —
+  // 키 없는 제공자를 고른 회원이 키 등록 화면에 갇혔다 (H-037).
+  if (!(settings ? settings.ready : account.has_api_key)) return 'api-key'
   return 'ready'
 }
 
@@ -104,7 +118,7 @@ export function useSession(): Session {
   }, [refreshUsage])
 
   return {
-    stage: loaded ? stageFor(config, account) : 'loading',
+    stage: loaded ? stageFor(config, account, settings) : 'loading',
     config,
     account,
     usage,

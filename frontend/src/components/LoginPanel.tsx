@@ -1,6 +1,7 @@
 import { loginUrl } from '../lib/api'
 
-export function LoginPanel({ error }: { error?: string | null }) {
+/** `next` 는 로그인 뒤 돌아갈 주소다. **보던 화면으로 돌려보낸다** (H-038). */
+export function LoginPanel({ error, next = '/' }: { error?: string | null; next?: string }) {
   return (
     <div className="mx-auto max-w-md rounded-2xl border border-stone-200 bg-white p-8 text-center shadow-sm dark:border-stone-800 dark:bg-stone-900">
       <h2 className="text-lg font-semibold tracking-tight">English Study Assistant</h2>
@@ -17,7 +18,7 @@ export function LoginPanel({ error }: { error?: string | null }) {
       )}
 
       <a
-        href={loginUrl('/')}
+        href={loginUrl(next)}
         className="mt-6 inline-flex w-full items-center justify-center gap-2 rounded-xl border border-stone-300 bg-white py-2.5 text-sm font-medium text-stone-700 transition hover:bg-stone-50 dark:border-stone-600 dark:bg-stone-800 dark:text-stone-100 dark:hover:bg-stone-700"
       >
         <svg width="18" height="18" viewBox="0 0 48 48" aria-hidden>
@@ -32,7 +33,7 @@ export function LoginPanel({ error }: { error?: string | null }) {
       <p className="mt-4 text-xs leading-relaxed text-stone-400">
         로그인은 신원 확인에만 사용합니다. 분석은 가입 후 등록하시는
         <br />
-        회원님의 Gemini API 키로, 회원님의 사용 한도 안에서 이루어집니다.
+        회원님의 API 키로, 회원님의 사용 한도 안에서 이루어집니다.
       </p>
     </div>
   )

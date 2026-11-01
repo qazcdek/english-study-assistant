@@ -1,82 +1,50 @@
-import { useState } from 'react'
-
-import { ApiError, getAccount, saveApiKey } from '../lib/api'
-import type { Account, AppConfig } from '../lib/types'
+import type { AccountSettings, AppConfig } from '../lib/types'
+import { ModelPicker } from './ModelPicker'
 
 interface Props {
   config: AppConfig
-  onSaved: (account: Account) => void
+  settings: AccountSettings
+  onSettingsChanged: (next: AccountSettings) => void
 }
 
-export function ApiKeyPanel({ config, onSaved }: Props) {
-  const [key, setKey] = useState('')
-  const [busy, setBusy] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-
-  async function submit() {
-    if (!key.trim() || busy) return
-    setBusy(true)
-    setError(null)
-    try {
-      // 응답은 설정이다. 관문 판단은 계정을 보므로 다시 읽어 넘긴다.
-      await saveApiKey(key.trim())
-      onSaved(await getAccount())
-    } catch (e) {
-      setError(e instanceof ApiError ? e.message : '키를 저장하지 못했습니다.')
-    } finally {
-      setBusy(false)
-    }
-  }
+/**
+ * 관문의 마지막 칸 — **지금 고른 제공자의 키가 없으면** 여기서 멈춘다.
+ *
+ * **키 입력을 여기서 또 그리지 않는다.** 제공자 선택·키 입력·키 삭제는
+ * `ModelPicker` 하나가 든다 (두 모드가 같은 화면을 쓰는 이유는 거기 적혀 있다).
+ *
+ * 전에는 이 화면이 자기 입력칸을 들고 **제목·발급 링크를 Gemini 로 고정**한 채
+ * 제공자를 안 붙여 저장했다. 그래서 OpenAI 를 고른 회원에게 Gemini 키를 요구하고
+ * **그 키를 OpenAI 키 자리에** 넣었다. 게다가 제공자를 되돌릴 길이 없어
+ * 여기서 빠져나올 수 없었다 (H-037).
+ */
+export function ApiKeyPanel({ config, settings, onSettingsChanged }: Props) {
+  const chosen = config.providers.find((p) => p.id === settings.active_provider)
 
   return (
     <div className="mx-auto max-w-2xl rounded-2xl border border-stone-200 bg-white p-6 shadow-sm dark:border-stone-800 dark:bg-stone-900">
-      <h2 className="text-lg font-semibold tracking-tight">Gemini API 키 등록</h2>
+      <h2 className="text-lg font-semibold tracking-tight">
+        {chosen ? `${chosen.label} API 키 등록` : 'API 키 등록'}
+      </h2>
       <p className="mt-2 text-sm leading-relaxed text-stone-500 dark:text-stone-400">
-        Google AI Studio에서 키를 발급받아 붙여넣어 주세요. 무료 등급으로도 쓸 수 있습니다.
+        분석은 회원님이 등록하신 키로, 회원님의 사용 한도 안에서 이루어집니다. 무료 등급으로도
+        쓸 수 있습니다.
       </p>
 
       <ol className="mt-4 flex flex-col gap-1.5 text-sm text-stone-600 dark:text-stone-300">
-        <li>
-          1.{' '}
-          <a
-            href={config.api_key_issue_url}
-            target="_blank"
-            rel="noreferrer"
-            className="text-indigo-600 underline underline-offset-2 dark:text-indigo-400"
-          >
-            aistudio.google.com/apikey
-          </a>{' '}
-          에서 <b>Create API key</b>
-        </li>
-        <li>2. 만들어진 키를 복사</li>
-        <li>3. 아래에 붙여넣고 저장</li>
+        <li>1. 아래 {chosen?.key_url ? <b>키 발급</b> : <b>제공자</b>} 에서 키를 만듭니다</li>
+        <li>2. 만들어진 키를 복사합니다</li>
+        <li>3. 아래 칸에 붙여넣고 저장합니다</li>
       </ol>
 
-      <input
-        type="password"
-        value={key}
-        onChange={(e) => setKey(e.target.value)}
-        onKeyDown={(e) => e.key === 'Enter' && submit()}
-        placeholder="AIza..."
-        autoComplete="off"
-        spellCheck={false}
-        className="mt-5 w-full rounded-xl border border-stone-200 bg-stone-50 p-3 font-mono text-sm outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-200 dark:border-stone-700 dark:bg-stone-950 dark:focus:ring-indigo-900"
-      />
-
-      {error && <p className="mt-2 text-sm text-red-600 dark:text-red-400">{error}</p>}
-
-      <button
-        type="button"
-        onClick={submit}
-        disabled={!key.trim() || busy}
-        className="mt-3 w-full rounded-xl bg-indigo-600 py-2.5 text-sm font-medium text-white transition hover:bg-indigo-500 disabled:bg-stone-300 dark:disabled:bg-stone-700"
-      >
-        {busy ? '키를 확인하는 중…' : '저장하고 시작'}
-      </button>
+      <div className="mt-5 rounded-xl border border-stone-200 p-4 dark:border-stone-800">
+        <ModelPicker config={config} settings={settings} onChanged={onSettingsChanged} />
+      </div>
 
       <p className="mt-3 text-xs leading-relaxed text-stone-400">
-        저장 전에 짧은 요청 한 번으로 키가 실제로 동작하는지 확인합니다. 키는 암호화해 보관하며
-        다시 화면에 표시되지 않습니다.
+        <b>다른 제공자를 쓰실 수 있습니다</b> — 위 목록에서 바꾸면 그 제공자의 키를 넣는
+        화면이 됩니다. 키는 저장 전에 짧은 요청 한 번으로 실제로 동작하는지 확인하며,
+        암호화해 보관하고 다시 화면에 표시하지 않습니다.
       </p>
     </div>
   )

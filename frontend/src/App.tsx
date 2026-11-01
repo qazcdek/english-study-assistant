@@ -27,25 +27,11 @@ import {
   listHistory,
 } from './lib/api'
 import type { HistoryEntry } from './lib/history'
+import { pathOf, routeOf, type Route, type View } from './lib/routes'
 import { useIsWide } from './lib/useIsWide'
 import { useSession } from './lib/useSession'
 import { useVocabulary } from './lib/useVocabulary'
 import type { Level, LlmHealth } from './lib/types'
-
-/** 주소와 화면의 짝. 한 곳에만 둔다 — 흩어지면 주소와 화면이 어긋난다. */
-const PATHS = {
-  analyze: '/',
-  mine: '/mine',
-  terms: '/terms',
-  privacy: '/privacy',
-} as const
-
-type View = keyof typeof PATHS
-
-function viewOf(pathname: string): View {
-  const found = (Object.keys(PATHS) as View[]).find((key) => PATHS[key] === pathname)
-  return found ?? 'analyze'
-}
 
 export default function App() {
   const session = useSession()
@@ -57,13 +43,15 @@ export default function App() {
   const [error, setError] = useState<ApiError | null>(null)
   const [analysis, setAnalysis] = useState<AnalysisState | null>(null)
   const [history, setHistory] = useState<HistoryEntry[]>([])
-  const [activeId, setActiveId] = useState<string | null>(null)
   const [llmHealth, setLlmHealth] = useState<LlmHealth | null>(null)
-  // 어느 화면을 보고 있나. 법적 문서 둘은 **주소로 들어올 수 있어야 한다** —
-  // Google OAuth 심사가 개인정보처리방침 URL 을 요구한다. 라우터를 들이지 않고
-  // SPA 폴백 + history API 로 해결한다 (07 §5.1 이 같은 오리진을 쓰는 덕이다).
-  const [view, setView] = useState<View>(() => viewOf(window.location.pathname))
+  // **어느 화면을 보고 있나는 주소가 정한다.** 화면 상태를 따로 들면 둘이 어긋나고,
+  // 어긋나면 뒤로 가기가 엉뚱한 데로 간다. 짝은 `lib/routes.ts` 한 곳에 있다.
+  const [route, setRoute] = useState<Route>(() => routeOf(window.location.pathname))
+  const view = route.view
+  const activeId = route.recordId
   const abortRef = useRef<AbortController | null>(null)
+  // 지금 띄워 둔 기록. **주소가 바뀌었는지 비교하는 데만** 쓴다.
+  const shownRef = useRef<string | null>(null)
   // 같은 문구를 연달아 띄워도 다시 나타나야 해서, 띄운 시각을 key 로 쓴다.
   const [toast, setToast] = useState<{ message: string; at: number } | null>(null)
   // 좁은 화면에서 기록 목록을 펼쳤나. 기본은 접힘 — 본문 위를 막지 않는다.
@@ -73,15 +61,16 @@ export default function App() {
 
   const wide = useIsWide()
 
-  /** 화면을 옮기고 주소도 맞춘다. 뒤로 가기가 동작해야 법적 문서를 링크할 수 있다. */
-  const go = useCallback((next: View) => {
-    setView(next)
-    const path = PATHS[next]
+  /** 화면을 옮기고 주소도 맞춘다. **옮기는 길은 이 하나다** — 둘이 되면 갈라진다. */
+  const go = useCallback((view: View, recordId: string | null = null) => {
+    const next = { view, recordId }
+    setRoute(next)
+    const path = pathOf(next)
     if (window.location.pathname !== path) window.history.pushState({}, '', path)
   }, [])
 
   useEffect(() => {
-    const onPop = () => setView(viewOf(window.location.pathname))
+    const onPop = () => setRoute(routeOf(window.location.pathname))
     window.addEventListener('popstate', onPop)
     return () => window.removeEventListener('popstate', onPop)
   }, [])
@@ -128,7 +117,9 @@ export default function App() {
 
     setRunning(true)
     setError(null)
-    setActiveId(null)
+    // 새 분석이다. 주소가 기록을 안 가리키므로 **효과가 방금 띄운 결과를 지우지
+    // 않게** 띄워 둔 기록을 먼저 비운다 — 안 비우면 빈 화면이 된다.
+    shownRef.current = null
     // 나의 표현을 보던 중에 분석을 시작하면 결과가 안 보인다.
     go('analyze')
 
@@ -165,43 +156,65 @@ export default function App() {
       return
     }
     await reloadServerHistory()
-    // 보고 있던 항목을 지웠다면 결과 화면도 비운다.
-    if (entry.id === activeId) {
-      setActiveId(null)
-      setAnalysis(null)
-    }
+    // 보고 있던 항목을 지웠다면 주소도 되돌린다 — 결과 화면은 효과가 비운다.
+    if (entry.id === activeId) go('analyze')
   }
 
-  async function handleSelectHistory(entry: HistoryEntry) {
-    abortRef.current?.abort()
-    setRunning(false)
-    setText(entry.text)
-    setActiveId(entry.id)
-    setError(null)
-    go('analyze')
+  /**
+   * 주소가 가리키는 기록을 띄운다.
+   *
+   * **목록에서 골랐을 때·뒤로 갔을 때·링크로 처음 들어왔을 때가 모두 이 길을
+   * 지난다.** 전에는 "고를 때 가져온다" 가 목록 항목에만 붙어 있어서, 주소로는
+   * 아무것도 열 수 없었다 (H-038).
+   */
+  const loadRecord = useCallback(
+    async (id: string) => {
+      abortRef.current?.abort()
+      setRunning(false)
+      setError(null)
 
-    // 목록에는 본문이 없다. 고를 때 가져온다.
-    try {
-      const detail = await getHistoryDetail(Number(entry.id))
-      setAnalysis({
+      // 목록에는 본문이 없다. 열 때 가져온다 — 링크로 들어오면 목록조차 없다.
+      try {
+        const detail = await getHistoryDetail(Number(id))
+        setText(detail.source_text)
+        setAnalysis({
         result: detail.result,
-        markdown: detail.markdown,
-        fullMarkdown: detail.markdown.full,
-        status: {
-          translation: { state: 'done' },
-          expressions: { state: 'done' },
-          structures: { state: 'done' },
-          overview: { state: 'done' },
-        },
-      })
-    } catch (e) {
-      // 서버가 무엇이 틀렸는지 말해 준다 — `not_found` 면 "찾을 수 없습니다" 다.
-      // 전부 같은 문구로 덮으면 404 를 구별해 준 의미가 없어진다 (H-012).
-      setError(e instanceof ApiError ? e : new ApiError('unknown', '기록을 불러오지 못했습니다.'))
-      // 목록에만 남은 유령 항목을 고른 경우다. 목록을 다시 읽어 치운다.
-      await reloadServerHistory()
-      setActiveId(null)
-    }
+          markdown: detail.markdown,
+          fullMarkdown: detail.markdown.full,
+          status: {
+            translation: { state: 'done' },
+            expressions: { state: 'done' },
+            structures: { state: 'done' },
+            overview: { state: 'done' },
+          },
+        })
+      } catch (e) {
+        // 서버가 무엇이 틀렸는지 말해 준다 — `not_found` 면 "찾을 수 없습니다" 다.
+        // 전부 같은 문구로 덮으면 404 를 구별해 준 의미가 없어진다 (H-012).
+        setError(
+          e instanceof ApiError ? e : new ApiError('unknown', '기록을 불러오지 못했습니다.'),
+        )
+        // 목록에만 남은 유령 항목이다. 목록을 다시 읽고 **주소도 되돌린다.**
+        await reloadServerHistory()
+        go('analyze')
+      }
+    },
+    [reloadServerHistory, go],
+  )
+
+  useEffect(() => {
+    // cloud 는 관문을 지나야 기록을 읽을 수 있다. 링크로 들어왔으면 그때까지 기다린다.
+    if (!ready) return
+    if (route.recordId === shownRef.current) return
+    shownRef.current = route.recordId
+    if (route.recordId) void loadRecord(route.recordId)
+    else setAnalysis(null)
+  }, [ready, route.recordId, loadRecord])
+
+  function handleSelectHistory(entry: HistoryEntry) {
+    // 본문은 목록이 들고 있으니 먼저 비춘다. 나머지는 주소가 부른다.
+    setText(entry.text)
+    go('analyze', entry.id)
   }
 
   // ------------------------------------------------------------ 로그인 전 화면
@@ -227,7 +240,11 @@ export default function App() {
   if (session.stage !== 'ready' && session.stage !== 'local') {
     return (
       <div className="mx-auto max-w-6xl px-4 py-16 sm:px-6">
-        {session.stage === 'login' && <LoginPanel error={session.error} />}
+        {/* **보던 주소로 돌아온다.** 전에는 늘 `/` 로 떨어져서, 나의 표현을 링크로
+            받은 사람이 로그인하면 분석 화면에 도착했다 (H-038). */}
+        {session.stage === 'login' && (
+          <LoginPanel error={session.error} next={pathOf(route)} />
+        )}
         {session.stage === 'consent' && session.config && (
           <ConsentPanel
             config={session.config}
@@ -236,8 +253,12 @@ export default function App() {
             onOpenPrivacy={() => go('privacy')}
           />
         )}
-        {session.stage === 'api-key' && session.config && (
-          <ApiKeyPanel config={session.config} onSaved={session.setAccount} />
+        {session.stage === 'api-key' && session.config && session.settings && (
+          <ApiKeyPanel
+            config={session.config}
+            settings={session.settings}
+            onSettingsChanged={session.setSettings}
+          />
         )}
       </div>
     )

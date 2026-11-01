@@ -23,7 +23,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from app.providers.anthropic import AnthropicProvider
-from app.providers.base import LLMProvider
+from app.providers.base import ChatMessage, LLMProvider
 from app.providers.gemini import GeminiProvider
 from app.providers.llama_server import LlamaServerProvider
 from app.providers.openai import OpenAIProvider
@@ -206,3 +206,32 @@ def build(provider_id: str, model: str, api_key: str, settings: "Settings") -> L
         max_tokens=settings.llm_max_tokens,
         **_overrides(provider_id, settings),  # type: ignore[arg-type]
     )
+
+
+async def verify_key(
+    provider_id: str, api_key: str, settings: "Settings"
+) -> tuple[bool, str | None]:
+    """키를 저장하기 전에 **실제로 한 번 호출해 본다.** 사용 한도는 거의 쓰지 않는다.
+
+    **제공자로 나누지 않는다.** 전에는 이 확인이 라우터 안의
+    `if provider_id == GEMINI` 하나였다 — OpenAI·Anthropic 은 그 분기에 없어서
+    **무검증으로 저장됐고**, 화면까지 제공자와 무관하게 Gemini 키를 요구했으므로
+    Gemini 키가 OpenAI 키 자리에 들어갔다. 분석을 눌러야 그걸 알 수 있었다 (H-037).
+
+    `build()` 가 제공자로 나누지 않는 것과 같은 이유다 — 구현을 더할 때
+    **여기도 고쳐야 한다는 사실을 기억하지 않아도** 되어야 한다.
+
+    [문서] plan/ISSUES.md H-037
+    """
+    provider = build(provider_id, info(provider_id).models[0], api_key, settings)  # type: ignore[union-attr]
+    try:
+        await provider.complete(
+            [ChatMessage(role="user", content="Reply with the single word: ok")],
+            temperature=0.0,
+            max_tokens=8,
+        )
+        return True, None
+    except Exception as exc:  # noqa: BLE001 - 사용자에게 보여줄 메시지로 바꾼다
+        return False, str(exc)
+    finally:
+        await provider.aclose()
