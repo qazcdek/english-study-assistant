@@ -18,6 +18,7 @@
 /** 매개변수 없는 화면들. */
 export const PATHS = {
   analyze: '/',
+  article: '/article',
   mine: '/mine',
   terms: '/terms',
   privacy: '/privacy',
@@ -27,6 +28,23 @@ export type View = keyof typeof PATHS
 
 /** 기록 하나를 보고 있을 때의 주소. **분석 화면의 매개변수**다 — 따로 선 화면이 아니다. */
 const RECORD_PREFIX = '/analysis/'
+
+/**
+ * 머리에 띄우는 탭. **글감은 cloud 에만 있다** (09 §3.8).
+ *
+ * 공용 글감은 cloud 전용이라 local 에서는 표가 늘 비어 있다 — 아무것도 없는
+ * 화면으로 가는 문을 달아 둘 이유가 없다. 이 판단을 JSX 안에 두면 **검사가
+ * 화면을 띄워야만** 물을 수 있어서, 주소 해석과 같은 자리로 꺼냈다.
+ *
+ * 법적 문서 둘은 탭이 아니다 — 바닥 링크로만 들어간다.
+ */
+export function tabsFor(cloud: boolean): readonly (readonly [View, string])[] {
+  return [
+    ['analyze', '분석'],
+    ...(cloud ? ([['article', '글감']] as const) : []),
+    ['mine', '나의 표현'],
+  ] as const
+}
 
 export interface Route {
   view: View

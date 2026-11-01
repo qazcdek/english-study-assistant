@@ -61,6 +61,45 @@ export interface AnalysisResult {
   overview: Overview | null
 }
 
+// --- 공용 글감 (M13) ---
+
+/** 글감의 문단 하나. **본문만** 담긴다 — 분석은 펼칠 때 따로 가져온다. */
+export interface DailyParagraph {
+  ordinal: number
+  text: string
+  /** 미리 분석이 있나. 준비가 중간에 멈추면 뒤쪽 문단이 `false` 로 남는다. */
+  prepared: boolean
+}
+
+export interface DailyArticle {
+  id: number
+  source: string
+  url: string
+  title: string
+  section: string
+  published_at: string
+  /** **며칠의 글감인가.** 오늘 것이 아직 없으면 어제 것이 온다 (09 §3.8). */
+  picked_for: string
+  /** 미리 분석이 어느 난이도로 준비됐나. **회원이 고른 난이도가 아니다.** */
+  level: Level
+  paragraphs: DailyParagraph[]
+}
+
+/** 글감이 없을 수 있다. **오류가 아니라 정상 상태다** (첫 배포 직후·고르기 실패 중). */
+export interface DailyArticleResponse {
+  article: DailyArticle | null
+}
+
+/** 문단 하나의 미리 분석. 회원 자기 기록(`HistoryDetail`)과 **같은 칸**을 든다. */
+export interface ParagraphAnalysis {
+  ordinal: number
+  level: Level
+  result: AnalysisResult
+  markdown: MarkdownSections
+  failed_parts: string[]
+  model: string
+}
+
 export interface MarkdownSections {
   translation: string
   expressions: string

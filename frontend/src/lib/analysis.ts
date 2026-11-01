@@ -107,6 +107,36 @@ export function reduce(state: AnalysisState, event: StreamEvent): AnalysisState 
   }
 }
 
+/**
+ * **이미 끝난 분석**을 화면이 읽는 상태로 바꾼다.
+ *
+ * 두 곳이 같은 일을 한다 — 저장된 기록 하나를 열 때와 글감 문단을 펼칠 때.
+ * 둘 다 네 파트가 이미 다 결정된 것을 받으므로 `reduce` 를 지나지 않는다.
+ * 각자 짜면 한쪽만 고친 채로 갈라진다.
+ *
+ * **실패한 파트는 실패로 표시한다.** 전부 `done` 으로 칠하면 빈 칸이 "결과가
+ * 없음" 처럼 보인다 — 미리 분석은 파트 하나가 실패해도 보여주기로 한 쪽이라
+ * (`M13-T4`) 그 구별이 실제로 나타난다.
+ */
+export function finishedState(
+  result: AnalysisResult,
+  markdown: MarkdownSections,
+  failedParts: readonly string[] = [],
+): AnalysisState {
+  const failed = new Set(failedParts)
+  return {
+    result,
+    markdown,
+    fullMarkdown: markdown.full,
+    status: Object.fromEntries(
+      PART_FIELDS.map((field) => [
+        field,
+        failed.has(field) ? { state: 'error', error: '가져오지 못했습니다.' } : { state: 'done' },
+      ]),
+    ) as AnalysisState['status'],
+  }
+}
+
 export function isFinished(state: AnalysisState): boolean {
   return PART_FIELDS.every((f) => state.status[f].state === 'done' || state.status[f].state === 'error')
 }

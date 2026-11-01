@@ -11,10 +11,19 @@ export function ResultView({
   state,
   level,
   vocab,
+  caption,
 }: {
   state: AnalysisState
   level: Level
   vocab: VocabularyStore
+  /**
+   * 머리줄에 적을 말. **`meta` 가 없는 분석**에만 쓴다.
+   *
+   * 지금 돌고 있는 분석은 모델과 소요 시간을 `meta` 로 들고 오지만, 미리 분석된
+   * 글감에는 그것이 없다(소요 시간을 저장하지 않는다). 그렇다고 비워 두면 아래
+   * 분기가 **끝난 분석을 "진행 중" 으로 읽는다.**
+   */
+  caption?: string
 }) {
   const { result, status, meta } = state
   const [copied, setCopied] = useState(false)
@@ -30,6 +39,10 @@ export function ResultView({
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-center gap-3 text-xs text-stone-400">
+        {/* **끝났는지를 먼저 본다.** 전에는 `meta` 가 없으면 진행 중으로 읽었는데,
+            저장된 기록과 미리 분석은 `meta` 없이 **이미 끝난 채로** 들어온다 —
+            그래서 다 그려진 화면 위에 "분석하는 중" 이 영구히 남았다.
+            모델·소요 시간을 기록 쪽에서도 되살리는 것은 `H-045`. */}
         {meta ? (
           <>
             <span>{meta.model}</span>
@@ -39,8 +52,10 @@ export function ResultView({
               <span className="text-red-500">· {meta.failed_parts.length}개 파트 실패</span>
             )}
           </>
-        ) : (
+        ) : !done ? (
           <span>파트별로 분석하는 중…</span>
+        ) : (
+          caption && <span>{caption}</span>
         )}
         <button
           type="button"
