@@ -1,9 +1,13 @@
 """웹 배포(cloud) 모드: 로그인 · 동의 · 회원 키 · 사용량 · 저장."""
 
+from pathlib import Path
+from urllib.parse import urlparse
+
 import pytest
 from fastapi.testclient import TestClient
 
-from app.config import get_settings
+from app.auth.session import COOKIE_NAME
+from app.config import Settings, get_settings
 from app.db import User, session_scope
 from app.providers import registry
 from app.providers.base import CompletionResult
@@ -257,3 +261,49 @@ def test_a_key_is_stored_under_the_chosen_provider(cloud, monkeypatch, provider_
 
     assert body["keys"] == {provider_id: "••••1234"}
     assert body["ready"] is True
+
+
+# --------------------------------- 로그인 쿠키가 실리는 호스트 (H-044)
+#
+# 콜백이 세션 쿠키를 `PUBLIC_BASE_URL` 의 호스트에 심고 `FRONTEND_BASE_URL` 로
+# 보낸다. 쿠키는 **포트는 무시하지만 호스트 이름은 구분한다** — 둘이 갈리면
+# 로그인이 **오류 없이** 안 된다. 콜백은 303 으로 잘 돌아오고 화면만 다시
+# 로그인 화면이다. 그래서 선언이 아니라 **검사로** 건다 (11 §2 원리 ③).
+
+
+def _origin(url: str) -> tuple[str, str]:
+    """스킴과 호스트만. **포트는 뺀다** — 쿠키가 포트를 구분하지 않는다."""
+    parsed = urlparse(url)
+    return parsed.scheme, (parsed.hostname or "")
+
+
+def test_the_two_base_urls_share_a_scheme_and_host_by_default():
+    """코드 기본값만으로 cloud 를 띄워도 로그인이 되어야 한다."""
+    assert _origin(Settings.model_fields["public_base_url"].default) == _origin(
+        Settings.model_fields["frontend_base_url"].default
+    )
+
+
+def test_the_env_example_does_not_hand_out_a_broken_pair():
+    """**사람들이 복사하는 파일이 이쪽이다.** 기본값만 고치면 예제가 남는다."""
+    example = Path(__file__).resolve().parent.parent / ".env.example"
+    values = {}
+    for line in example.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if line.startswith(("PUBLIC_BASE_URL=", "FRONTEND_BASE_URL=")):
+            key, value = line.split("=", 1)
+            values[key] = value
+
+    assert set(values) == {"PUBLIC_BASE_URL", "FRONTEND_BASE_URL"}, values
+    assert _origin(values["PUBLIC_BASE_URL"]) == _origin(values["FRONTEND_BASE_URL"]), (
+        f"호스트가 갈리면 로그인이 조용히 안 된다: {values}"
+    )
+
+
+def test_the_session_cookie_is_not_secure_over_plain_http(cloud):
+    """`secure` 는 `PUBLIC_BASE_URL` 에서 끌어온다 — http 개발에서 켜지면 안 실린다."""
+    login(cloud, make_user())
+    jar = cloud.cookies.jar
+    cookie = next(c for c in jar if c.name == COOKIE_NAME)
+
+    assert cookie.secure is False
