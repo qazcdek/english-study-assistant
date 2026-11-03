@@ -18,10 +18,32 @@ PART_PAYLOADS: dict[str, dict] = {
                 "expression": "across the pond",
                 "type": "관용구",
                 "meaning": "(비격식) 대서양을 건너 — 주로 영국과 미국 사이를 가리킬 때 쓴다.",
-                "example": "Her book finally made it across the pond.",
-                "example_ko": "그녀의 책은 마침내 대서양을 건너갔다.",
+                # 난이도 셋이 **단어 수로** 갈린다 (M16). 길이를 실제로 다르게 둬야
+                # "셋을 다 받아 두면 화면이 고를 수 있다" 를 검사가 물을 수 있다.
+                "examples": {
+                    "beginner": {
+                        "en": "Her book sold well across the pond.",
+                        "ko": "그녀의 책은 대서양 건너에서 잘 팔렸다.",
+                    },
+                    "intermediate": {
+                        "en": "Her book finally made it across the pond, where critics praised it.",
+                        "ko": "그녀의 책은 마침내 대서양을 건너갔고, 거기서 비평가들이 칭찬했다.",
+                    },
+                    "advanced": {
+                        "en": (
+                            "Having been ignored at home for years, her book finally made it "
+                            "across the pond, where critics received it warmly."
+                        ),
+                        "ko": (
+                            "여러 해 동안 본국에서 외면당한 끝에, 그녀의 책은 마침내 "
+                            "대서양을 건너갔고 거기서 비평가들이 따뜻하게 맞아 주었다."
+                        ),
+                    },
+                },
             },
             {
+                # **예문이 아예 없는 표현.** 모델이 빠뜨릴 수 있고, 그때 화면이
+                # 어떻게 되는지를 검사가 봐야 한다.
                 "expression": "sum up",
                 "type": "Phrasal Verb",
                 "meaning": "요약하다, 진수를 보여주다",

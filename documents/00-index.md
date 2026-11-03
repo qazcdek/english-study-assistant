@@ -83,7 +83,7 @@ CLAUDE.md                 메타 규약. 세션마다 자동으로 읽힌다
 |---|---|
 | [05-benchmark](05-benchmark.md) | 호출 구조나 스키마 제약을 바꾸려 할 때 |
 | [13-gemini-benchmark](13-gemini-benchmark.md) | Gemini 쪽 출력 품질을 의심할 때. 프롬프트·스키마 제약을 바꾸려 할 때 |
-| [08-level-design](08-level-design.md) | 초·중·고급 기준을 다시 손볼 때 |
+| [08-level-design](08-level-design.md) | **대체됨.** 난이도를 왜 분석에서 걷어냈는지 알아야 할 때 |
 
 ### 진행
 

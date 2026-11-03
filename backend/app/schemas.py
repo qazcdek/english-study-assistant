@@ -36,7 +36,6 @@ class AnalyzeRequest(BaseModel):
     text: str = Field(
         min_length=1, max_length=ABSOLUTE_MAX_INPUT_CHARS, description="분석할 영어 문장 또는 문단"
     )
-    level: Level = "intermediate"
 
     @field_validator("text")
     @classmethod
@@ -50,16 +49,34 @@ class AnalyzeRequest(BaseModel):
 # --------------------------------------------------------------------------- 분석 결과
 
 
+class ExamplePair(BaseModel):
+    """예문 한 쌍 — 영어와 그 한국어 뜻."""
+
+    en: str = Field(default="", description="그 난이도의 예문")
+    ko: str = Field(default="", description="그 문장의 한국어 뜻. 작문 연습의 제시문")
+
+
+class Examples(BaseModel):
+    """난이도별 예문 셋 (M16).
+
+    **난이도가 분석에서 여기로 옮겨 왔다.** 분석의 깊이는 정도부사로밖에 적을 수
+    없어 판정이 안 됐는데(`08 §1`), 예문 난이도는 단어 수와 절 개수로 적힌다.
+
+    셋 다 기본값이 있다 — **낡은 기록은 중급 하나만 들고 있다** (`records.upgrade`
+    가 옛 `example`/`example_ko` 를 그 자리로 옮긴다).
+    """
+
+    beginner: ExamplePair = Field(default_factory=ExamplePair)
+    intermediate: ExamplePair = Field(default_factory=ExamplePair)
+    advanced: ExamplePair = Field(default_factory=ExamplePair)
+
+
 class Expression(BaseModel):
     expression: str = Field(description="원문에 등장한 영어 표현 그대로")
     type: ExpressionType
     meaning: str = Field(description="한국어 대역어 한두 개")
-    nuance: str = Field(
-        default="",
-        description="어떤 상황에서 쓰는지·뉘앙스. 초급에서는 쓰지 않는다",
-    )
-    example: str | None = Field(default=None, description="다른 맥락의 예문. 확실하지 않으면 생략")
-    example_ko: str | None = Field(default=None, description="example 의 한국어 뜻. 작문 연습의 제시문")
+    nuance: str = Field(default="", description="어떤 상황에서 쓰는지·뉘앙스")
+    examples: Examples = Field(default_factory=Examples)
 
 
 class StructureNote(BaseModel):
@@ -350,9 +367,10 @@ class DeletionSummary(BaseModel):
 
 
 class HistoryItem(BaseModel):
+    """저장된 분석 하나. **난이도 칸이 없다** (`M16`) — 분석은 한 가지로 돈다."""
+
     id: int
     source_text: str
-    level: Level
     created_at: str
     failed_parts: list[str] = Field(default_factory=list)
 
@@ -373,6 +391,12 @@ class HistoryDetail(HistoryItem):
 
 
 class VocabularyCreate(BaseModel):
+    """나의 표현에 담는다.
+
+    **예문은 한 쌍만 든다.** 표에서 담을 때 보고 있던 난이도의 것이다 — 나의 표현은
+    "내가 고른 문장" 이므로 셋을 다 끌고 오면 무엇을 고른 것인지 사라진다 (`M16`).
+    """
+
     expression: str = Field(min_length=1, max_length=200)
     type: str = ""
     meaning: str = ""
@@ -432,6 +456,9 @@ class ArticleOut(BaseModel):
 
     **`byline` 과 `url` 은 선택이 아니다.** 출처 약관이 기자 크레딧과 원문 백링크를
     요구하므로(M13-T10) 화면이 둘 다 적는다.
+
+    **난이도 칸이 없다** (`M16`) — 분석이 한 가지로 도므로 "어느 난이도로 준비됐나" 가
+    사라졌다. 예문 난이도는 회원이 연습할 때 고른다.
     """
 
     id: int
@@ -442,8 +469,6 @@ class ArticleOut(BaseModel):
     section: str
     published_at: str
     picked_for: str
-    #: 미리 분석이 어느 난이도로 준비됐나. **회원이 고른 난이도가 아니다.**
-    level: Level
     paragraphs: list[ParagraphOut]
 
 
@@ -465,7 +490,6 @@ class ParagraphAnalysisOut(BaseModel):
     """
 
     ordinal: int
-    level: Level
     result: AnalysisResult
     markdown: MarkdownSections
     failed_parts: list[str] = Field(default_factory=list)

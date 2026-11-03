@@ -217,7 +217,6 @@ def test_trimming_takes_the_analyses_of_the_deleted_paragraphs_and_no_others(clo
             db.add(
                 ParagraphAnalysis(
                     paragraph_id=row.id,
-                    level="intermediate",
                     result={"schema_version": 3},
                     markdown={"full": ""},
                     failed_parts=[],

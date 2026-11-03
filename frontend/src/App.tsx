@@ -29,13 +29,16 @@ import { pathOf, routeOf, tabsFor, type Route, type View } from './lib/routes'
 import { useIsWide } from './lib/useIsWide'
 import { useSession } from './lib/useSession'
 import { useVocabulary } from './lib/useVocabulary'
-import type { Level, LlmHealth } from './lib/types'
+import type { Level, LlmHealth, StreamEvent } from './lib/types'
 
 export default function App() {
   const session = useSession()
   const cloud = session.config?.requires_login ?? false
 
   const [text, setText] = useState('')
+  // **예문 난이도다** (M16). 전에는 "분석 난이도" 였는데 분석에서 걷어내고
+  // 작문 연습의 예문으로 옮겼다 — 고르는 자리도 입력 화면에서 표 안으로 옮겼다.
+  // 상태를 여기 두는 이유는 탭을 옮겨도 고른 것이 남아야 하기 때문이다.
   const [level, setLevel] = useState<Level>('intermediate')
   const [running, setRunning] = useState(false)
   const [error, setError] = useState<ApiError | null>(null)
@@ -100,7 +103,6 @@ export default function App() {
           text: r.source_text,
           createdAt: Date.parse(r.created_at) || Date.now(),
           state: null,
-          level: r.level,
         })),
       )
     } catch {
@@ -134,8 +136,7 @@ export default function App() {
     try {
       await analyzeStream(
         trimmed,
-        level,
-        (event) => {
+        (event: StreamEvent) => {
           state = reduce(state, event)
           setAnalysis(state)
         },
@@ -338,7 +339,7 @@ export default function App() {
       <div className="grid gap-6 lg:grid-cols-[1fr_200px]">
         <main className="flex min-w-0 flex-col gap-4">
           {view === 'article' ? (
-            <DailyArticle vocab={vocab} level={level} />
+            <DailyArticle vocab={vocab} level={level} onLevelChange={setLevel} />
           ) : view === 'mine' ? (
             <MyExpressions vocab={vocab} level={level} />
           ) : (
@@ -362,11 +363,9 @@ export default function App() {
 
           <InputPanel
             text={text}
-            level={level}
             loading={running}
             onTextChange={setText}
             maxChars={session.config?.max_input_chars}
-            onLevelChange={setLevel}
             // 키가 없으면 **오류를 보여주는 대신 등록 화면으로 보낸다.**
             onSubmit={canAnalyze ? handleSubmit : () => setSkipKeyGate(false)}
             onTooShort={() => setToast({ message: `${MIN_CHARS}자 이상 입력해 주세요`, at: Date.now() })}
@@ -386,7 +385,14 @@ export default function App() {
             </div>
           )}
 
-          {analysis && <ResultView state={analysis} level={level} vocab={vocab} />}
+          {analysis && (
+            <ResultView
+              state={analysis}
+              level={level}
+              onLevelChange={setLevel}
+              vocab={vocab}
+            />
+          )}
 
           {!analysis && !error && (
             <div className="rounded-2xl border border-dashed border-stone-300 p-10 text-center text-sm text-stone-400 dark:border-stone-700">

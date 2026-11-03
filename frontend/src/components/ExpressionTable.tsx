@@ -1,6 +1,6 @@
 import { Fragment, useState } from 'react'
 
-import type { Expression, ExpressionType, Level } from '../lib/types'
+import { exampleAt, type Expression, type ExpressionType, type Level } from '../lib/types'
 import { useIsWide } from '../lib/useIsWide'
 import type { VocabularyStore } from '../lib/useVocabulary'
 import { ConfirmDialog } from './ConfirmDialog'
@@ -19,9 +19,52 @@ const TYPE_COLORS: Record<ExpressionType, string> = {
 
 const FALLBACK = 'bg-stone-200 text-stone-700 dark:bg-stone-800 dark:text-stone-300'
 
-/** 예문과 그 한국어 뜻이 둘 다 있어야 작문 연습을 할 수 있다. */
-function canPractice(e: Expression): boolean {
-  return Boolean(e.example && e.example_ko)
+/** 예문과 그 한국어 뜻이 둘 다 있어야 작문 연습을 할 수 있다.
+ *
+ *  **난이도마다 따로 본다** (M16). 중급은 있고 고급은 비어 있는 기록이 흔하다 —
+ *  낡은 기록은 중급 하나만 들고 있다. */
+function canPractice(e: Expression, level: Level): boolean {
+  const pair = exampleAt(e, level)
+  return Boolean(pair.en && pair.ko)
+}
+
+const LEVEL_LABELS: { value: Level; label: string }[] = [
+  { value: 'beginner', label: '초급' },
+  { value: 'intermediate', label: '중급' },
+  { value: 'advanced', label: '고급' },
+]
+
+/** 어느 난이도의 예문으로 연습할지 고른다.
+ *
+ *  **난이도가 분석에서 여기로 왔다** (M16). 전에는 입력 화면에서 "분석 난이도" 를
+ *  골랐는데 그게 바꾸는 것은 설명의 깊이뿐이었고, "깊게" 가 무엇인지 모델도 우리도
+ *  몰랐다 (`08 §1`). 예문 난이도는 **써 볼 문장의 길이와 구조**라 고른 효과가 보인다. */
+function LevelPicker({
+  value,
+  onChange,
+}: {
+  value: Level
+  onChange: (level: Level) => void
+}) {
+  return (
+    <span className="flex items-center gap-1" role="group" aria-label="예문 난이도">
+      {LEVEL_LABELS.map((l) => (
+        <button
+          key={l.value}
+          type="button"
+          onClick={() => onChange(l.value)}
+          aria-pressed={value === l.value}
+          className={`rounded-md px-2 py-0.5 text-xs transition ${
+            value === l.value
+              ? 'bg-stone-800 text-white dark:bg-stone-200 dark:text-stone-900'
+              : 'text-stone-500 hover:bg-stone-100 dark:text-stone-400 dark:hover:bg-stone-800'
+          }`}
+        >
+          {l.label}
+        </button>
+      ))}
+    </span>
+  )
 }
 
 /** 제외하면 연습 기록이 사라진다는 경고. 서버의 연쇄 삭제와 같은 말을 해야 한다. */
@@ -99,22 +142,33 @@ function PracticeButton({ open, onClick }: { open: boolean; onClick: () => void 
 /** 예문 자리에 무엇이 오는가 — 예문 · 연습 버튼 · 가려짐 · 없음(—). */
 function ExampleSlot({
   e,
+  level,
   masked,
   open,
   onToggle,
 }: {
   e: Expression
+  level: Level
   masked: boolean
   open: boolean
   onToggle: () => void
 }) {
-  if (!e.example) {
-    return <span className="text-xs text-stone-300 dark:text-stone-600">—</span>
+  const pair = exampleAt(e, level)
+  if (!pair.en) {
+    // **그 난이도만 없다.** 낡은 기록은 중급 하나뿐이다 — 꾸며 내지 않고 비었다고 적는다.
+    return (
+      <span
+        className="text-xs text-stone-300 dark:text-stone-600"
+        title="이 난이도의 예문이 없습니다"
+      >
+        —
+      </span>
+    )
   }
   if (!masked) {
-    return <p className="break-words font-mono text-xs italic text-stone-400">“{e.example}”</p>
+    return <p className="break-words font-mono text-xs italic text-stone-400">“{pair.en}”</p>
   }
-  if (canPractice(e)) {
+  if (canPractice(e, level)) {
     return <PracticeButton open={open} onClick={onToggle} />
   }
   return (
@@ -130,7 +184,9 @@ function ExampleSlot({
 interface Props {
   expressions: Expression[]
   keyExpressions?: string[]
+  /** 어느 난이도의 예문으로 연습할지. **고르는 자리는 이 표 안에 있다** (M16). */
   level: Level
+  onLevelChange: (level: Level) => void
   /** 이 표현들이 나온 원문. 나의 표현에 올릴 때 함께 저장한다. */
   sourceText: string
   vocab: VocabularyStore
@@ -140,6 +196,7 @@ export function ExpressionTable({
   expressions,
   keyExpressions = [],
   level,
+  onLevelChange,
   sourceText,
   vocab,
 }: Props) {
@@ -156,10 +213,10 @@ export function ExpressionTable({
     return <p className="text-sm text-stone-400">따로 짚을 만한 표현이 없습니다.</p>
   }
 
-  const hasExample = expressions.some((e) => e.example)
+  const hasExample = expressions.some((e) => exampleAt(e, level).en)
   // 예문이 하나도 없으면 체크박스가 사라져 **연습 기능이 없는 것처럼 보인다.**
   // 실제로 배포본에서 그렇게 보였다 (H-019). 없으면 없다고 적는다.
-  const practiceable = expressions.some(canPractice)
+  const practiceable = expressions.some((e) => canPractice(e, level))
   // 연습할 수 있는 표현이 하나도 없으면 가려 둘 이유가 없다. 체크박스도 없으므로
   // 가린 채로 두면 예문을 **영영 못 보게 된다.**
   const masked = hideExamples && practiceable
@@ -172,7 +229,7 @@ export function ExpressionTable({
     setPending(expression)
     try {
       if (!vocab.has(expression)) {
-        await vocab.add(e, sourceText)
+        await vocab.add(e, sourceText, level)
         return
       }
       const id = vocab.idOf(expression)
@@ -230,26 +287,42 @@ export function ExpressionTable({
         </p>
       )}
 
-      {hasExample && !practiceable && (
-        <p className="mb-2 text-right text-xs text-stone-400">
-          한국어 제시문이 없어 이번에는 <b className="font-medium">직접 써보기</b>를 할 수 없습니다
-        </p>
-      )}
-
-      {hasExample && practiceable && (
-        <label className="mb-2 flex cursor-pointer items-center justify-end gap-1.5 text-xs text-stone-400">
-          <input
-            type="checkbox"
-            checked={hideExamples}
-            onChange={(e) => {
-              setHideExamples(e.target.checked)
+      {/* **난이도는 늘 고를 수 있다.** 그 난이도에 예문이 없어도 보여 준다 —
+          감추면 "왜 고급이 없지" 가 아니라 "기능이 없나" 로 읽힌다. */}
+      <div className="mb-2 flex flex-wrap items-center justify-end gap-x-3 gap-y-1 text-xs text-stone-400">
+        <span className="flex items-center gap-1.5">
+          예문 난이도
+          <LevelPicker
+            value={level}
+            onChange={(next) => {
+              onLevelChange(next)
+              // 난이도를 바꾸면 펼쳐 둔 연습은 다른 문장을 가리키게 된다. 접는다.
               setOpenIndex(null)
             }}
-            className="accent-indigo-600"
           />
-          예문 가리고 직접 써보기
-        </label>
-      )}
+        </span>
+
+        {hasExample && !practiceable && (
+          <span>
+            이 난이도에는 제시문이 없어 <b className="font-medium">직접 써보기</b>를 할 수 없습니다
+          </span>
+        )}
+
+        {hasExample && practiceable && (
+          <label className="flex cursor-pointer items-center gap-1.5">
+            <input
+              type="checkbox"
+              checked={hideExamples}
+              onChange={(e) => {
+                setHideExamples(e.target.checked)
+                setOpenIndex(null)
+              }}
+              className="accent-indigo-600"
+            />
+            예문 가리고 직접 써보기
+          </label>
+        )}
+      </div>
 
       {wide ? (
         <table className="w-full border-collapse text-sm">
@@ -300,6 +373,7 @@ export function ExpressionTable({
                       <td className="py-3 pl-3">
                         <ExampleSlot
                           e={e}
+                          level={level}
                           masked={masked}
                           open={open}
                           onToggle={() => setOpenIndex(open ? null : i)}
@@ -356,6 +430,7 @@ export function ExpressionTable({
                   <div className="mt-2 border-t border-stone-100 pt-2 dark:border-stone-800/60">
                     <ExampleSlot
                       e={e}
+                      level={level}
                       masked={masked}
                       open={open}
                       onToggle={() => setOpenIndex(open ? null : i)}

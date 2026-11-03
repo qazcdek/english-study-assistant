@@ -10,6 +10,7 @@
 "표현만 뽑아라" 같은 열린 과제에서 모델이 후보를 끝없이 재검토하기 때문이다.
 그래서 파트 프롬프트에도 개수와 판별 기준을 구체적으로 못박는다 (05-benchmark.md).
 
+[문서] plan/DONE.md M16-T1
 [문서] plan/ISSUES.md H-021
 """
 
@@ -38,70 +39,59 @@ EXPRESSION_TYPES = [
 FORMALITIES = ["매우 격식", "격식", "중립", "비격식", "속어에 가까움"]
 STYLES = ["문어체", "구어체", "혼합"]
 
-LEVEL_GUIDE = {
-    "beginner": (
-        "학습자는 초급이다. 문법 용어를 최소한으로 쓰고 풀어서 설명한다. "
-        "구문 해설은 2개 이하로 줄인다."
-    ),
-    "intermediate": (
-        "학습자는 중급이다. 일반적인 문법 용어를 써도 좋다. "
-        "구문 해설은 2~4개가 적당하다."
-    ),
-    "advanced": (
-        "학습자는 상급이다. **설명을 깊게** 한다 — 뉘앙스 차이, 어원, 비슷한 표현과의 비교, "
-        "어떤 자리에서 쓰면 어색해지는지까지 짚어 준다.\n"
-        "  난이도가 높다고 해서 **표현을 더 많이 뽑거나 쉬운 낱말까지 끌어오지 않는다.** "
-        "고르는 기준은 초급·중급과 같고, 고른 것에 대한 설명만 깊어진다.\n"
-        "  구문 해설은 3~5개까지 다룰 수 있다."
-    ),
-}
-
 # **출력 규율은 여기 없다.** 모델마다 다르게 둘 수 있어야 하므로
 # `prompts/models.py` 가 계열별로 들고 있다 (04 §9). 이 틀은 교육 내용만 든다.
+# 전에는 여기에 `{level_guide}` 가 있었다. **난이도를 분석에서 걷어냈다** (`M16`) —
+# "설명을 깊게" 같은 정도부사뿐이어서 모델도 우리도 기준을 몰랐고 검증도 못 했다
+# (`08 §1` 이 그 진단을 적어 뒀다). 난이도는 **예문**으로 옮겨 갔다.
 SHARED_SYSTEM = """너는 한국인 영어 학습자를 돕는 영어 분석 전문가다.
 주어진 영어 텍스트를 분석해, 지정된 JSON 스키마를 따르는 객체 하나만 출력한다.
 
 {output_rules}
 
-{level_guide}
-
 {task}"""
 
 # --------------------------------------------------------------------- 파트별 스키마
 
-_EXPRESSION_BASE = {
-    "expression": {"type": "string"},
-    "type": {"type": "string", "enum": EXPRESSION_TYPES},
-    "meaning": {"type": "string"},
-    "example": {"type": "string"},
-    "example_ko": {"type": "string"},
+#: 예문 한 쌍 — 영어와 그 한국어 뜻.
+_EXAMPLE_PAIR = {
+    "type": "object",
+    "properties": {"en": {"type": "string"}, "ko": {"type": "string"}},
+    "required": ["en", "ko"],
+    "additionalProperties": False,
 }
-_NUANCE = {"nuance": {"type": "string"}}
 
+#: **난이도별 예문 셋.** 셋 다 `required` 다 — 전에 예문이 선택이었을 때 작은 모델이
+#: 생략을 기본값으로 삼아 **작문 연습 기능이 통째로 비었다** (`H-019` · `H-021`).
+#: 난이도가 분석에서 **여기로 옮겨 왔다** (`M16`). 분석의 깊이는 "깊게" 같은 정도부사로밖에
+#: 적을 수 없어 판정이 안 됐는데(`08 §1`), 예문 난이도는 **단어 수와 절 개수로** 적힌다.
+_EXAMPLES = {
+    "type": "object",
+    "properties": {
+        "beginner": _EXAMPLE_PAIR,
+        "intermediate": _EXAMPLE_PAIR,
+        "advanced": _EXAMPLE_PAIR,
+    },
+    "required": ["beginner", "intermediate", "advanced"],
+    "additionalProperties": False,
+}
 
-def expression_item(level: str) -> dict:
-    """난이도별 표현 항목 스키마.
-
-    초급 스키마에는 `nuance` 속성이 **아예 없다**. `additionalProperties: False` 이므로
-    모델이 설명을 쓰고 싶어도 쓸 자리가 없다. 프롬프트로 "대역어만 쓰라"고 부탁하는 것보다
-    확실하다.
-
-    **`example` 과 `example_ko` 도 필수다.** 전에는 선택이었고 프롬프트로만 부탁했는데,
-    작은 모델이 생략을 기본값으로 삼아 **작문 연습 기능이 통째로 비었다** (H-019 · H-021).
-    모든 표현에서 연습할 수 있어야 한다는 것이 제품 결정이다 (04-prompt-design.md §1).
-    어순을 틀릴 위험은 프롬프트의 정오 예시로 다룬다 — 빠져나갈 구멍이 아니라 쓰는 법으로.
-    """
-    beginner = level == "beginner"
-    return {
-        "type": "object",
-        "properties": _EXPRESSION_BASE if beginner else {**_EXPRESSION_BASE, **_NUANCE},
-        "required": ["expression", "type", "meaning", "example", "example_ko"]
-        + ([] if beginner else ["nuance"]),
-        "additionalProperties": False,
-    }
-
-
-_EXPRESSION_ITEM = expression_item("intermediate")
+#: 표현 항목 하나. **난이도에 따라 달라지지 않는다** (`M16`).
+#:
+#: 전에는 초급 스키마에서 `nuance` 를 아예 빼서 모델이 쓸 자리를 없앴다. 난이도가
+#: 사라졌으므로 `nuance` 는 **언제나 있다** — 중급 모양이 유일한 모양이 됐다.
+_EXPRESSION_ITEM = {
+    "type": "object",
+    "properties": {
+        "expression": {"type": "string"},
+        "type": {"type": "string", "enum": EXPRESSION_TYPES},
+        "meaning": {"type": "string"},
+        "nuance": {"type": "string"},
+        "examples": _EXAMPLES,
+    },
+    "required": ["expression", "type", "meaning", "nuance", "examples"],
+    "additionalProperties": False,
+}
 
 # 해설을 한 필드로 두면 구조 이름만 대고 끝내거나 문법 일반론으로 흐른다.
 # 조각을 나눠 required 로 묶으면 각각을 반드시 채워야 한다.
@@ -158,13 +148,11 @@ def _wrap(field: str, value_schema: dict) -> dict:
 #
 # 상한만 난이도를 따른다. 하한은 글 길이에서 계산한다(min_expressions 참고).
 # 난이도로 개수를 늘리면 짧은 글에서 하한을 채우려고 모델이 좋은 다어절 표현을
-# 낱개 단어로 쪼갠다("a blend of" -> "blend"). 난이도는 설명의 깊이를 바꾸는 것이지
-# 개수나 난도를 바꾸는 것이 아니다.
-EXPRESSION_MAX: dict[str, int] = {
-    "beginner": 5,
-    "intermediate": 8,
-    "advanced": 8,
-}
+# 낱개 단어로 쪼갠다("a blend of" -> "blend").
+#
+# **난이도별로 갈리지 않는다** (`M16`). 전에는 초급만 5개였는데, 초급을 없앴으므로
+# 중급 값이 유일한 값이 됐다. `H-010`("초급도 5개는 부담일 수 있다")이 함께 닫힌다.
+EXPRESSION_MAX = 8
 
 # 200자마다 표현 하나. 짧은 글에 억지로 개수를 채우게 하지 않기 위해서다.
 CHARS_PER_EXPRESSION = 200
@@ -187,31 +175,23 @@ def min_expressions(text_length: int, max_items: int) -> int:
 class PartSpec:
     field: str
     title: str
-    # 난이도에 따라 지시가 달라지는 파트는 함수를 넣는다.
-    task: str | Callable[[str], str]
+    # **난이도에 따라 갈리지 않는다** (`M16`). 전에는 지시가 함수일 수 있었고
+    # 항목 스키마도 난이도마다 달랐는데, 중급 하나만 남아 전부 상수가 됐다.
+    task: str
     schema: dict
     model: type
     build_user: Callable[[str, dict[str, Any]], str]
     # 배열 길이를 제한해야 하는 파트만 채운다.
-    max_by_level: dict[str, int] | None = None
-    # 항목 스키마가 난이도에 따라 달라지는 파트만 채운다.
-    item_by_level: Callable[[str], dict] | None = None
+    max_items: int | None = None
 
-    def task_for(self, level: str) -> str:
-        return self.task(level) if callable(self.task) else self.task
-
-    def schema_for(self, level: str, text_length: int) -> dict:
-        """난이도별 항목 스키마·상한과, 글 길이에서 구한 하한을 얹는다."""
-        if self.max_by_level is None and self.item_by_level is None:
+    def schema_for(self, text_length: int) -> dict:
+        """글 길이에서 구한 하한과 상한을 배열에 얹는다."""
+        if self.max_items is None:
             return self.schema
 
         array = dict(self.schema["properties"][self.field])
-        if self.item_by_level is not None:
-            array["items"] = self.item_by_level(level)
-        if self.max_by_level is not None:
-            high = self.max_by_level.get(level, self.max_by_level["intermediate"])
-            array["minItems"] = min_expressions(text_length, high)
-            array["maxItems"] = high
+        array["minItems"] = min_expressions(text_length, self.max_items)
+        array["maxItems"] = self.max_items
 
         return {
             **self.schema,
@@ -288,15 +268,6 @@ _PICK = """- 원문에 실제로 등장한 표현만 고른다. 사전에서 가
   투명한 복합어만 나열하지 않는다. 그 글의 분야 용어를 늘어놓는 것이 목적이 아니라,
   읽다가 막힐 만한 지점을 짚어 주는 것이 목적이다."""
 
-_ADVANCED_PICK = """
-- **다어절 표현을 우선 고른다.** 단일어는 사전을 찾으면 나오지만, 여러 낱말이 모여
-  만들어진 뜻은 찾아도 안 나오거나 갈린다. 거기가 막히는 지점이다.
-  우선: "pass muster", "weigh in on", "take it on the chin", "a blend of"
-- 단일어는 **그 자리에서 사전적 기본 뜻과 다르게 쓰인 경우에만** 넣는다.
-  넣는다: "trumpet"(나팔이 아니라 떠벌리다), "yenmageddon"(그 글에서 만든 조어),
-          "grow"(자라다가 아니라 자산을 늘리다), "indices"(index 의 불규칙 복수)
-  뺀다:   "resilience", "volatility", "significant" 처럼 사전 뜻 그대로인 낱말"""
-
 _TYPE_RULE = """
 [type] — 유형
 - 아래 기준을 위에서부터 차례로 확인해, 처음 맞는 것 하나를 고른다.
@@ -315,15 +286,6 @@ _TYPE_RULE = """
      예: 접미사 -prone 으로 만든 복합 형용사
   7. 고급 어휘 — 위 어디에도 해당하지 않는, 수준 높은 단일 단어."""
 
-_MEANING_BEGINNER = """
-[meaning] — 뜻
-- **한국어 대역어 한두 개만** 쓴다. 설명 문장을 붙이지 않는다.
-  맞다: "대처하다, 감당하다"
-  맞다: "회복력"
-  틀렸다: "대처하다, 감당하다. 힘든 상황을 견디며 버텨낸다는 뜻이다."  ← 설명 문장 금지
-  틀렸다: "어려움에 맞서 그것을 이겨내는 것을 뜻한다"                  ← 풀어쓴 문장 금지
-- 쉼표로 나열하고 마침표로 끝내지 않는다."""
-
 _MEANING_WITH_NUANCE = """
 [meaning] — 뜻
 - **한국어 대역어 한두 개만** 쓴다. 설명은 nuance 칸에 따로 쓴다.
@@ -341,35 +303,48 @@ _MEANING_WITH_NUANCE = """
     예: pass muster 는 meet the standard 보다 "심사자가 있다"는 함의가 강하다
   · 격식/비격식처럼 쓸 자리가 제한된다면 그 점"""
 
-# 생략 조항이 없다. 스키마가 둘 다 필수로 걸고, 프롬프트는 **어떻게 쓰는지**만 말한다.
+# 생략 조항이 없다. 스키마가 셋 다 필수로 걸고, 프롬프트는 **어떻게 쓰는지**만 말한다.
 # 전에는 "조금이라도 헷갈리면 아예 생략" 을 먼저 적어 두었고, 작은 모델이 그것을
 # 언제나 안전한 선택지로 삼았다 (H-019 · H-021).
+#
+# **난이도가 여기로 옮겨 왔다** (`M16`). 분석의 깊이는 "깊게"·"최소한으로" 같은
+# 정도부사로밖에 적을 수 없어 모델도 우리도 기준을 몰랐다(`08 §1`). 예문 난이도는
+# **단어 수와 절 개수로** 적힌다 — 세고 확인할 수 있다.
 _EXAMPLE_RULE = """
-[example] / [example_ko] — 예문과 그 한국어 뜻 (**모든 표현에 반드시 넣는다**)
-- 학습자가 한국어 뜻만 보고 영어 문장을 복원하는 연습에 쓰인다.
-  예문이 없는 표현은 연습할 수 없으므로, 어떤 표현이든 비워 두지 않는다.
-- example 은 원문과 다른 맥락에서 그 표현을 쓴 5~12 단어의 짧은 영어 문장.
-- 원문 문장을 그대로 다시 쓰지 않는다.
+[examples] — 난이도별 예문 셋 (**세 개 모두 반드시 넣는다**)
+학습자가 한국어 뜻만 보고 영어 문장을 복원하는 연습에 쓰인다. 같은 표현을 세 가지
+길이·구조로 써서 학습자가 자기 수준을 고른다. 비워 두면 그 난이도로 연습할 수 없다.
+
+- beginner     5~8 단어. 현재형 또는 과거형 한 문장. **종속절을 넣지 않는다**
+- intermediate 9~14 단어. 종속절(that·which·when·if…)을 **하나까지** 쓴다
+- advanced     13~20 단어. 종속절 둘 이상이거나, 분사구문·도치·가정법 중 하나를 쓴다
+
+세 문장 모두에 해당하는 것:
+- 원문과 **다른 맥락**에서 그 표현을 쓴다. 원문 문장을 그대로 다시 쓰지 않는다.
 - 원어민이 실제로 쓸 법한 자연스러운 문장만 넣는다.
 - **목적어를 사이에 넣을 수 있는 구동사는 어순에 주의한다.**
   "throw many reviews at the film" 은 맞지만 "throw at the film many reviews" 는 틀렸다.
   어순이 헷갈리면 **생략하지 말고**, 목적어를 사이에 넣지 않는 더 단순한 문장으로 쓴다.
-- example_ko 는 그 문장의 한국어 뜻이다.
-  영어 문장의 정보가 빠짐없이 담긴 자연스러운 한국어여야 한다."""
+- 세 문장은 **서로 다른 상황**을 쓴다. 같은 문장을 늘리거나 줄여 셋을 만들지 않는다.
+
+[ko] — 그 문장의 한국어 뜻
+- 영어 문장의 정보가 빠짐없이 담긴 자연스러운 한국어여야 한다.
+- **주어와 인물을 바꾸지 않는다.** `She acted…` 는 "그녀가…" 이고 "그는" 이 아니다.
+  `The country…` 는 "그 나라는" 이고 "그 도시는" 이 아니다. 실제로 그렇게 어긋난
+  대역이 나왔다 (`H-046`)."""
 
 
-def expressions_task(level: str) -> str:
-    """난이도에 따라 지시를 조립한다.
-
-    초급 프롬프트에는 nuance 설명을 **넣지 않는다.** 설명 자리를 알려 주면
-    모델이 meaning 에 섞어 쓴다.
-    """
-    pick = _PICK + (_ADVANCED_PICK if level == "advanced" else "")
-    meaning = _MEANING_BEGINNER if level == "beginner" else _MEANING_WITH_NUANCE
-    return (
-        "이번 작업은 표현 풀이다. 표의 각 칸에 들어갈 내용은 아래와 같다.\n"
-        "\n[expression] — 표현 (영어)\n" + pick + "\n" + _TYPE_RULE + meaning + _EXAMPLE_RULE
-    )
+# 난이도에 따라 갈리지 않는다 (`M16`). 전에는 초급에 nuance 설명을 넣지 않고
+# 상급에만 "다어절 우선" 을 붙였는데, 중급 하나만 남으면서 조립할 것이 없어졌다.
+EXPRESSIONS_TASK = (
+    "이번 작업은 표현 풀이다. 표의 각 칸에 들어갈 내용은 아래와 같다.\n"
+    "\n[expression] — 표현 (영어)\n"
+    + _PICK
+    + "\n"
+    + _TYPE_RULE
+    + _MEANING_WITH_NUANCE
+    + _EXAMPLE_RULE
+)
 
 
 PART_SPECS: tuple[PartSpec, ...] = (
@@ -389,12 +364,11 @@ PART_SPECS: tuple[PartSpec, ...] = (
     PartSpec(
         field="expressions",
         title="표현 풀이",
-        task=expressions_task,
+        task=EXPRESSIONS_TASK,
         schema=_wrap("expressions", {"type": "array", "items": _EXPRESSION_ITEM}),
         model=ExpressionsPart,
         build_user=_plain_user("다음 텍스트에서 학습 가치가 있는 표현을 뽑아라."),
-        max_by_level=EXPRESSION_MAX,
-        item_by_level=expression_item,
+        max_items=EXPRESSION_MAX,
     ),
     PartSpec(
         field="structures",
@@ -507,7 +481,6 @@ PART_FIELDS = tuple(spec.field for spec in PART_SPECS)
 def build_messages(
     spec: PartSpec,
     text: str,
-    level: str = "intermediate",
     state: dict[str, Any] | None = None,
     *,
     retry: bool = False,
@@ -515,15 +488,16 @@ def build_messages(
 ) -> list[ChatMessage]:
     """그 파트의 메시지를 만든다.
 
-    `model` 은 **길들이기 지시를 고르는 데에만** 쓴다. 교육 내용(표현 유형 · 난이도 ·
-    칸별 명세)은 계열과 무관하게 한 벌이다. 지금은 계열별 문구가 전부 같아서 어떤
+    `model` 은 **길들이기 지시를 고르는 데에만** 쓴다. 교육 내용(표현 유형 · 칸별
+    명세)은 계열과 무관하게 한 벌이다. 지금은 계열별 문구가 전부 같아서 어떤
     모델을 줘도 같은 프롬프트가 나오고, 그게 검사로 고정되어 있다 (04 §9).
+
+    **난이도를 받지 않는다** (`M16`). 분석은 한 가지로 돈다.
     """
     variant = variant_for(model)
     system = SHARED_SYSTEM.format(
         output_rules=variant.output_rules,
-        level_guide=LEVEL_GUIDE.get(level, LEVEL_GUIDE["intermediate"]),
-        task=spec.task_for(level),
+        task=spec.task,
     )
     if retry:
         system = f"{system}\n\n{variant.retry_nudge}"

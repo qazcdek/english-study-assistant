@@ -9,16 +9,41 @@ export type ExpressionType =
   | '구어 표현'
   | '전문 용어'
 
+/** 예문 한 쌍 — 영어와 그 한국어 뜻(작문 연습의 제시문). */
+export interface ExamplePair {
+  en: string
+  ko: string
+}
+
+/** 난이도별 예문 셋 (M16).
+ *
+ *  **난이도가 분석에서 여기로 옮겨 왔다.** 분석의 깊이는 정도부사로밖에 적을 수
+ *  없어 판정이 안 됐고(`08 §1`), 예문 난이도는 단어 수와 절 개수로 적힌다.
+ *
+ *  **낡은 기록은 중급 하나만 들고 있다** — 서버가 읽을 때 올려 준다. 빈 쌍이
+ *  올 수 있으므로 화면은 "이 기록에는 없습니다" 를 그릴 수 있어야 한다. */
+export interface Examples {
+  beginner: ExamplePair
+  intermediate: ExamplePair
+  advanced: ExamplePair
+}
+
 export interface Expression {
   expression: string
   type: ExpressionType
   /** 한국어 대역어 한두 개 */
   meaning: string
-  /** 어떤 상황에서 쓰는지·뉘앙스. 초급에서는 비어 있다. */
+  /** 어떤 상황에서 쓰는지·뉘앙스 */
   nuance?: string
-  example?: string | null
-  /** example 의 한국어 뜻. 작문 연습의 제시문으로 쓴다. */
-  example_ko?: string | null
+  examples?: Examples
+}
+
+/** 빈 쌍. 낡은 기록이나 모델이 빠뜨린 자리에 쓴다. */
+export const NO_EXAMPLE: ExamplePair = { en: '', ko: '' }
+
+/** 그 난이도의 예문. 없으면 빈 쌍 — **꾸며 내지 않는다.** */
+export function exampleAt(e: Expression, level: Level): ExamplePair {
+  return e.examples?.[level] ?? NO_EXAMPLE
 }
 
 export interface StructureNote {
@@ -82,8 +107,6 @@ export interface DailyArticle {
   published_at: string
   /** **며칠의 글감인가.** 오늘 것이 아직 없으면 어제 것이 온다 (09 §3.8). */
   picked_for: string
-  /** 미리 분석이 어느 난이도로 준비됐나. **회원이 고른 난이도가 아니다.** */
-  level: Level
   paragraphs: DailyParagraph[]
 }
 
@@ -95,7 +118,6 @@ export interface DailyArticleResponse {
 /** 문단 하나의 미리 분석. 회원 자기 기록(`HistoryDetail`)과 **같은 칸**을 든다. */
 export interface ParagraphAnalysis {
   ordinal: number
-  level: Level
   result: AnalysisResult
   markdown: MarkdownSections
   failed_parts: string[]
@@ -280,7 +302,6 @@ export interface TidySummary {
 export interface HistoryItem {
   id: number
   source_text: string
-  level: Level
   created_at: string
   failed_parts: string[]
 }

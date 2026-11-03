@@ -72,7 +72,7 @@ class AnalyzerService:
         last_error: Exception | None = None
         last_raw = ""
         model = ""
-        wanted = spec.schema_for(request.level, len(request.text))
+        wanted = spec.schema_for(len(request.text))
 
         for attempt in range(2):
             retry = attempt > 0
@@ -80,7 +80,6 @@ class AnalyzerService:
                 build_messages(
                     spec,
                     request.text,
-                    request.level,
                     state,
                     retry=retry,
                     model=self.provider.model,

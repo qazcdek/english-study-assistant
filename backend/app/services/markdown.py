@@ -36,10 +36,12 @@ def render_expressions(expressions: list[Expression]) -> str:
         lines.append("_따로 짚을 만한 표현이 없습니다._")
         return "\n".join(lines)
 
-    has_example = any(e.example for e in expressions)
+    # **표에는 중급 예문 하나만** 넣는다 (M16). 난이도 셋을 칸 셋으로 벌리면 표가
+    # 좁아 깨지고, 복사해 붙이는 쪽에서 읽을 수 없게 된다. 셋 다 보는 곳은 화면이다.
+    has_example = any(e.examples.intermediate.en for e in expressions)
     header = ["표현 (영어)", "유형", "의미 및 설명"]
     if has_example:
-        header.append("예문")
+        header.append("예문 (중급)")
 
     lines.append("| " + " | ".join(header) + " |")
     lines.append("| " + " | ".join(["---"] * len(header)) + " |")
@@ -47,7 +49,7 @@ def render_expressions(expressions: list[Expression]) -> str:
     for e in expressions:
         row = [f"**{_cell(e.expression)}**", _cell(e.type), _cell(e.meaning)]
         if has_example:
-            row.append(_cell(e.example or "—"))
+            row.append(_cell(e.examples.intermediate.en or "—"))
         lines.append("| " + " | ".join(row) + " |")
 
     # 뉘앙스는 길어서 표 칸에 넣으면 좁아 깨진다. 표 아래 목록으로 붙인다.

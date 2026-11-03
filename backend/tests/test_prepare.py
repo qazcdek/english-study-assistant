@@ -105,7 +105,8 @@ async def test_every_paragraph_gets_an_analysis(cloud, monkeypatch):
     assert report.prepared == len(PARAGRAPHS)
     assert report.skipped == 0
     assert report.stopped_at is None
-    assert [r.level for r in rows] == [prepare.JOB_LEVEL] * len(PARAGRAPHS)
+    # 난이도 칸이 사라졌다 (`M16`) — **문단 하나에 분석 하나**다.
+    assert len({r.paragraph_id for r in rows}) == len(PARAGRAPHS)
 
 
 async def test_the_stored_shape_matches_the_members_own_records(cloud, monkeypatch):

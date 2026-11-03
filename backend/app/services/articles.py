@@ -46,15 +46,11 @@
 간다.** 출처 약관을 어디까지 받아들일지가 아직 안 끝났으므로(`M13-T7`) 문을 좁게
 둔다.
 
-### 난이도는 묻지 않는다. 준비된 것을 준다
+### 난이도를 묻지 않는다
 
-`paragraph_analyses` 는 난이도마다 한 행이지만 미리 분석은 **중급 하나만** 돌린다
-(`prepare.JOB_LEVEL` — 셋을 다 채우면 호출이 세 배다). 그래서 **회원이 고른
-난이도를 받지 않는다** — 받아 놓고 없는 것을 찾으면 빈 화면이 되고, 조용히 중급을
-돌려주면 화면이 거짓말을 한다. 어느 난이도인지를 **응답에 실어** 화면이 적게 한다.
-
-질의마다 `level` 을 끼우는 것은 그 하나뿐이라서가 아니다. 안 끼우면 난이도가
-둘이 되는 날 **같은 문단에 행이 둘**이 되어 `one_or_none()` 이 500 을 던진다.
+분석에 난이도가 없다 (`M16`). 문단 하나에 분석 하나이므로 질의에 끼울 것도,
+응답에 실을 것도 없다. 회원이 고르는 난이도는 **예문**에 있고 그건 분석 결과
+안에 셋 다 들어 있다.
 
 ### 분석이 "있다" 의 기준은 행이 있는지다
 
@@ -77,7 +73,7 @@ from sqlalchemy.orm import Session
 
 from app.db import Article, ArticleParagraph, ParagraphAnalysis
 from app.errors import ArticleBodyError, ArticleCreditError, ArticleLengthError
-from app.services import paragraphs, prepare
+from app.services import paragraphs
 
 
 @dataclass(frozen=True)
@@ -230,8 +226,6 @@ class Shown:
     paragraphs: list[ArticleParagraph]
     #: 분석 행이 있는 문단의 `ordinal`. 미리 분석이 중간에 멈췄으면 뒤쪽이 빈다.
     prepared: frozenset[int]
-    #: 그 분석이 어느 난이도로 준비됐나. 화면이 이것을 적는다.
-    level: str
 
 
 def current(db: Session) -> Shown | None:
@@ -264,17 +258,13 @@ def current(db: Session) -> Shown | None:
         ordinal
         for (ordinal,) in db.query(ArticleParagraph.ordinal)
         .join(ParagraphAnalysis, ParagraphAnalysis.paragraph_id == ArticleParagraph.id)
-        .filter(
-            ArticleParagraph.article_id == article.id,
-            ParagraphAnalysis.level == prepare.JOB_LEVEL,
-        )
+        .filter(ArticleParagraph.article_id == article.id)
         .all()
     }
     return Shown(
         article=article,
         paragraphs=rows,
         prepared=frozenset(prepared),
-        level=prepare.JOB_LEVEL,
     )
 
 
@@ -293,7 +283,6 @@ def analysis(db: Session, article_id: int, ordinal: int) -> ParagraphAnalysis | 
             Article.id == article_id,
             Article.picked_for.isnot(None),
             ArticleParagraph.ordinal == ordinal,
-            ParagraphAnalysis.level == prepare.JOB_LEVEL,
         )
         .one_or_none()
     )

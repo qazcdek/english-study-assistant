@@ -1,7 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 
 import { addVocabulary, deleteVocabulary, listVocabulary } from './api'
-import type { Expression, VocabularyItem, VocabularyRemoval } from './types'
+import {
+  exampleAt,
+  type Expression,
+  type Level,
+  type VocabularyItem,
+  type VocabularyRemoval,
+} from './types'
 
 /**
  * 나의 표현 목록. **두 화면이 같은 하나를 본다.**
@@ -18,7 +24,8 @@ export interface VocabularyStore {
   /** 그 표현으로 직접 써본 횟수. **0 이 아니면 제외할 때 한 번 더 묻는다.** */
   practiceCount: (expression: string) => number
   idOf: (expression: string) => number | null
-  add: (expression: Expression, sourceText: string) => Promise<void>
+  /** 세 번째 인자는 **담을 때 보고 있던 예문 난이도**다 (M16). */
+  add: (expression: Expression, sourceText: string, level: Level) => Promise<void>
   remove: (id: number) => Promise<VocabularyRemoval>
   reload: () => Promise<void>
 }
@@ -46,13 +53,16 @@ export function useVocabulary(enabled: boolean): VocabularyStore {
   )
 
   const add = useCallback(
-    async (expression: Expression, sourceText: string) => {
+    async (expression: Expression, sourceText: string, level: Level) => {
+      const pair = exampleAt(expression, level)
       await addVocabulary({
         expression: expression.expression,
         type: expression.type,
         meaning: expression.meaning,
-        example: expression.example ?? '',
-        example_ko: expression.example_ko ?? '',
+        // **보고 있던 난이도의 예문 한 쌍만** 담는다 (M16). 나의 표현은 "내가 고른
+        // 문장" 이므로 셋을 다 끌고 오면 무엇을 고른 것인지 사라진다.
+        example: pair.en,
+        example_ko: pair.ko,
         source_text: sourceText,
       })
       await reload()

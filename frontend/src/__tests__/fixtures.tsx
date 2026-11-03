@@ -2,27 +2,50 @@ import type {
   Account,
   AccountSettings,
   AppConfig,
+  Examples,
   Expression,
+  Level,
   VocabularyItem,
 } from '../lib/types'
 import type { VocabularyStore } from '../lib/useVocabulary'
 
 export const SOURCE = 'We enlist a set of principles and refer to them during training.'
 
+/** 예문 셋을 한 줄로 짓는다. 안 준 난이도는 **빈 쌍**이다 — 낡은 기록이 그 모양이다. */
+export function examples(pairs: Partial<Record<Level, [string, string]>>): Examples {
+  const at = (level: Level) => {
+    const pair = pairs[level]
+    return pair ? { en: pair[0], ko: pair[1] } : { en: '', ko: '' }
+  }
+  return { beginner: at('beginner'), intermediate: at('intermediate'), advanced: at('advanced') }
+}
+
 export const EXPRESSIONS: Expression[] = [
   {
     expression: 'enlist',
     type: '고급 어휘',
     meaning: '(도움·지지를) 얻다, 동원하다',
-    example: 'They enlisted a panel of experts.',
-    example_ko: '그들은 전문가 패널을 동원했다.',
+    // **난이도마다 길이가 다르다** (M16) — 고른 것이 실제로 바뀌는지를 검사가 물을 수 있다.
+    examples: examples({
+      beginner: ['They enlisted a panel.', '그들은 패널을 동원했다.'],
+      intermediate: [
+        'They enlisted a panel of experts who had studied the issue.',
+        '그들은 그 문제를 연구해 온 전문가 패널을 동원했다.',
+      ],
+      advanced: [
+        'Having exhausted every other option, they enlisted a panel of experts whose findings nobody disputed.',
+        '다른 선택지를 모두 소진한 끝에, 그들은 누구도 반박하지 못한 결론을 낸 전문가 패널을 동원했다.',
+      ],
+    }),
   },
   {
     expression: 'refer to',
     type: 'Phrasal Verb',
     meaning: '참조하다',
-    example: 'Please refer to the appendix.',
-    example_ko: '부록을 참조해 주세요.',
+    // **중급만 있는 표현.** 낡은 기록이 올라온 모양이다 — 초급·고급은 비어 있다.
+    examples: examples({
+      intermediate: ['Please refer to the appendix.', '부록을 참조해 주세요.'],
+    }),
   },
 ]
 

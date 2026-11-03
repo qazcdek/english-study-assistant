@@ -77,14 +77,19 @@ def clean_expressions(items: list[Expression]) -> list[Expression]:
         e.expression = _strip(e.expression)
         e.meaning = _strip(e.meaning)
         e.nuance = _strip(e.nuance)
-        e.example = _strip(e.example) if e.example else None
-        e.example_ko = _strip(e.example_ko) if e.example_ko else None
-        # 한국어 제시문이 없으면 그 표현은 **연습만** 못 한다. 예문 자체는 멀쩡하므로
-        # 버리지 않는다 — 화면이 `가려짐` 으로 표시하고, 펼치면 읽을 수 있다.
-        # 전에는 짝을 맞추려고 둘 다 버렸는데, 그러면 모든 표현이 그렇게 될 때
-        # **예문 칸과 연습 입구가 통째로 사라졌다** (H-019).
-        if not e.example:
-            e.example_ko = None
+        # 난이도 셋을 각각 다듬는다 (M16).
+        #
+        # **영어가 없으면 한국어도 버린다.** 한국어 제시문만 남으면 가려 둘 모범
+        # 답안이 없어 연습이 성립하지 않는다. 거꾸로 영어만 있는 것은 **버리지
+        # 않는다** — 그 난이도는 연습만 못 하고 예문으로는 읽을 수 있다. 전에
+        # 짝을 맞추려고 둘 다 버렸더니 모든 표현이 그렇게 되는 날 **예문 칸과
+        # 연습 입구가 통째로 사라졌다** (H-019).
+        for name in ("beginner", "intermediate", "advanced"):
+            pair = getattr(e.examples, name)
+            pair.en = _strip(pair.en)
+            pair.ko = _strip(pair.ko)
+            if not pair.en:
+                pair.ko = ""
 
     return _dedupe(items, lambda e: e.expression)
 

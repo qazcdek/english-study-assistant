@@ -45,7 +45,6 @@ function article(overrides: Partial<Article> = {}): Article {
     section: 'world',
     published_at: '2026-11-01T06:00:00+00:00',
     picked_for: '2026-11-01',
-    level: 'intermediate',
     paragraphs: BODY.map((text, i) => ({ ordinal: i + 1, text, prepared: true })),
     ...overrides,
   }
@@ -80,7 +79,6 @@ const MARKDOWN: MarkdownSections = {
 function analysis(overrides: Record<string, unknown> = {}) {
   return {
     ordinal: 1,
-    level: 'intermediate',
     result: result(),
     markdown: MARKDOWN,
     failed_parts: [],
@@ -90,7 +88,7 @@ function analysis(overrides: Record<string, unknown> = {}) {
 }
 
 function draw(level: 'beginner' | 'intermediate' | 'advanced' = 'intermediate') {
-  render(<DailyArticle vocab={fakeStore()} level={level} />)
+  render(<DailyArticle vocab={fakeStore()} level={level} onLevelChange={() => {}} />)
 }
 
 beforeEach(() => {
@@ -161,14 +159,13 @@ describe('글감 머리', () => {
     expect(note.textContent).toContain('500단어')
   })
 
-  test('**준비된** 난이도를 적는다. 회원이 고른 것이 아니다', async () => {
-    // 미리 분석은 중급 하나만 돌아 있다. 초급을 고른 회원에게도 중급이라고 적는다 —
-    // 회원 난이도로 바꿔 적으면 화면이 거짓말을 한다.
+  test('난이도를 적지 않는다 — 분석에 난이도가 없다 (M16)', async () => {
     draw('beginner')
 
-    const note = await screen.findByText(/으로 미리 분석/)
-    expect(note.textContent).toContain('중급')
-    expect(note.textContent).toContain('문단 3개')
+    const note = await screen.findByText(/문단 3개/)
+    expect(note.textContent).toContain('분석 3개 준비됨')
+    // 전에는 "중급으로 미리 분석" 을 적었다. 그 자리가 사라졌다.
+    expect(note.textContent).not.toContain('미리 분석')
   })
 })
 
@@ -237,7 +234,7 @@ describe('문단', () => {
 
     fireEvent.click(await screen.findByText(BODY[0]))
 
-    expect(await screen.findByText(/중급 분석 · gemini-3.5-flash-lite/)).toBeTruthy()
+    expect(await screen.findByText(/미리 분석 · gemini-3.5-flash-lite/)).toBeTruthy()
     expect(screen.queryByText(/파트별로 분석하는 중/)).toBeNull()
   })
 })

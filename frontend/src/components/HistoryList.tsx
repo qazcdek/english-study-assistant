@@ -1,5 +1,4 @@
 import type { HistoryEntry } from '../lib/history'
-import { LevelDot } from './LevelDot'
 
 function TrashIcon() {
   return (
@@ -43,7 +42,6 @@ export function HistoryList({ entries, activeId, onSelect, onDelete }: Props) {
               }`}
               title={entry.text}
             >
-              <LevelDot level={entry.level} />
               <span className="min-w-0 flex-1 truncate">{entry.text}</span>
             </button>
 

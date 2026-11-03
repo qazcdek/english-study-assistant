@@ -12,13 +12,16 @@
 **제공자와 모델을 고정한다.** 운영자의 활성 선택을 따르지 않는다 — 운영자가 설정
 화면에서 제공자를 바꾸면 모든 회원이 보는 글감 품질이 같이 흔들린다.
 
-### 난이도는 하나다
+### 난이도가 없다
 
-`paragraph_analyses` 는 난이도마다 행을 따로 둘 수 있지만 **지금은 하나만 채운다.**
-값이 안 맞는다 — 기사 한 편이 **문단 수 × 네 파트**이고 Gemini 무료 등급이 일 250
-이다. 실제로 돌려 본 한 편이 16문단 · **64 호출** · 1분 36초였다 (13 §4). 난이도
-셋을 다 채우면 192 가 되어 한 편으로 하루가 끝난다. 영·미 두 곳을 올리려면
-하나여야 한다 (M13-T1 · M13-T3 실측).
+전에는 `paragraph_analyses` 가 난이도마다 행을 따로 두었고 그중 **중급 하나만**
+채웠다 — 셋을 다 채우면 문단 수 × 네 파트 × 3 이 되어 한 편으로 Gemini 무료 등급
+하루(250)가 끝났기 때문이다. `M16` 이 **분석에서 난이도를 걷어내** 그 선택 자체를
+없앴다. 문단 하나에 분석 하나이고, 난이도는 예문으로 옮겨 갔다.
+
+비용은 그대로다 — 실제로 돌려 본 한 편이 16문단 · **64 호출** · 1분 36초였다
+(13 §4). 예문이 셋이 되어 **출력은 늘지만 호출 수는 늘지 않는다** (한 번의 호출이
+배열로 받는다).
 
 ### 사용량을 세지 않는다
 
@@ -38,7 +41,7 @@
 
 **`failed_parts` 가 비어 있지 않으면 재시도 대상이다.** 네 파트 중 일부만 실패한
 문단은 행을 남기되(살아난 파트는 보여줄 수 있다) 다음에 다시 돌린다. 그때
-행을 또 만들지 않고 **같은 행을 덮어쓴다** — `(paragraph_id, level)` 이 유일하므로
+행을 또 만들지 않고 **같은 행을 덮어쓴다** — `paragraph_id` 가 유일하므로
 새로 넣으면 제약에 걸린다 (M13-T4 의 결정).
 
 ### 네 파트가 전부 실패하면 **멈춘다**
@@ -59,12 +62,9 @@ from app.config import Settings
 from app.db import Article, ArticleParagraph, ParagraphAnalysis
 from app.errors import LLMError, OperatorKeyRequiredError
 from app.providers import registry
-from app.schemas import AnalyzeRequest, AnalyzeResponse, Level
+from app.schemas import AnalyzeRequest, AnalyzeResponse
 from app.services import keys, operator, records
 from app.services.analyzer import AnalyzerService
-
-# 미리 분석해 두는 난이도. **하나뿐이다** — 왜인지는 머리말.
-JOB_LEVEL: Level = "intermediate"
 
 
 @dataclass
@@ -132,8 +132,6 @@ async def article(
     target: Article,
     cipher: KeyCipher,
     settings: Settings,
-    *,
-    level: Level = JOB_LEVEL,
 ) -> Report:
     """기사 한 편의 문단을 순서대로 분석해 `paragraph_analyses` 를 채운다.
 
@@ -144,21 +142,21 @@ async def article(
 
     try:
         for paragraph in _paragraphs(db, target.id):
-            done = _stored(db, paragraph.id, level)
+            done = _stored(db, paragraph.id)
             if done is not None and not done.failed_parts:
                 report.skipped += 1
                 continue
 
             try:
                 response = await analyzer.analyze(
-                    AnalyzeRequest(text=paragraph.text, level=level)
+                    AnalyzeRequest(text=paragraph.text)
                 )
             except LLMError:
                 # 네 파트가 전부 실패했다 — 문단 탓이 아니다. 머리말을 본다.
                 report.stopped_at = paragraph.ordinal
                 break
 
-            _store(db, paragraph.id, level, response)
+            _store(db, paragraph.id, response)
             db.commit()
 
             if done is None:
@@ -182,29 +180,26 @@ def _paragraphs(db: Session, article_id: int) -> list[ArticleParagraph]:
     )
 
 
-def _stored(db: Session, paragraph_id: int, level: str) -> ParagraphAnalysis | None:
+def _stored(db: Session, paragraph_id: int) -> ParagraphAnalysis | None:
     return (
         db.query(ParagraphAnalysis)
-        .filter(
-            ParagraphAnalysis.paragraph_id == paragraph_id,
-            ParagraphAnalysis.level == level,
-        )
+        .filter(ParagraphAnalysis.paragraph_id == paragraph_id)
         .one_or_none()
     )
 
 
 def _store(
-    db: Session, paragraph_id: int, level: str, response: AnalyzeResponse
+    db: Session, paragraph_id: int, response: AnalyzeResponse
 ) -> ParagraphAnalysis:
-    """있으면 덮어쓰고 없으면 넣는다. `(paragraph_id, level)` 이 유일하다.
+    """있으면 덮어쓰고 없으면 넣는다. `paragraph_id` 가 유일하다.
 
     저장 모양을 `AnalysisRecord` 와 맞춘다 — 같은 분석기가 만들고 같은 화면이 읽는다.
     `records.stamp` 도 함께 찍는다. 안 찍으면 읽을 때 형식 올리기가 옛 기록으로 보고
     없는 칸을 채우려 든다.
     """
-    row = _stored(db, paragraph_id, level)
+    row = _stored(db, paragraph_id)
     if row is None:
-        row = ParagraphAnalysis(paragraph_id=paragraph_id, level=level)
+        row = ParagraphAnalysis(paragraph_id=paragraph_id)
         db.add(row)
 
     row.result = records.stamp(response.result.model_dump())

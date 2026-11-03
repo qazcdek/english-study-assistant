@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useState } from 'react'
 
 import { ApiError, listPracticeHistory } from '../lib/api'
-import type {
-  Expression,
-  ExpressionType,
-  Level,
-  PracticeHistoryItem,
-  VocabularyItem,
+import {
+  NO_EXAMPLE,
+  type Expression,
+  type ExpressionType,
+  type Level,
+  type PracticeHistoryItem,
+  type VocabularyItem,
 } from '../lib/types'
 import type { VocabularyStore } from '../lib/useVocabulary'
 import { ConfirmDialog } from './ConfirmDialog'
@@ -40,10 +41,18 @@ export function asExpression(item: VocabularyItem): Expression {
     expression: item.expression,
     type: (item.type || '고급 어휘') as ExpressionType,
     meaning: item.meaning,
-    example: item.example,
-    example_ko: item.example_ko,
+    // **나의 표현은 예문을 한 쌍만 든다** (담을 때 고른 것이다). 분석 화면과 같은
+    // 모양으로 맞추려고 중급 자리에 넣는다 — `MY_LEVEL` 이 그 자리를 가리킨다.
+    examples: {
+      beginner: NO_EXAMPLE,
+      intermediate: { en: item.example, ko: item.example_ko },
+      advanced: NO_EXAMPLE,
+    },
   }
 }
+
+/** 나의 표현이 예문을 담아 두는 자리. 난이도 선택이 없으므로 **고정이다.** */
+export const MY_LEVEL: Level = 'intermediate'
 
 /** 예문과 한국어 제시문이 둘 다 있어야 연습할 수 있다 — 분석 화면과 같은 조건이다. */
 function canPractice(item: VocabularyItem): boolean {
