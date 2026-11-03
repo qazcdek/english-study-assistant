@@ -564,3 +564,127 @@ async def test_a_retry_does_not_go_back_to_the_source(cloud, monkeypatch):
     with session_scope() as db:
         assert db.query(Article).count() == 1  # 새 기사를 앉히지도 않았다
         assert daily.incomplete(db, TODAY) is False  # 분석은 이어서 채웠다
+
+
+# ------------------------------- 낡은 파이프라인은 버리고 다시 받는다 (M13-T15)
+
+
+def test_an_article_from_an_older_pipeline_is_stale(cloud):
+    """`store()` 는 **문단을 다시 쪼개지 않으므로**(분석이 문단 id 에 붙어 있다)
+    다시 앉혀도 안 바뀐다 — 버리고 다시 받는 길이 따로 있어야 한다."""
+    with session_scope() as db:
+        article = make_article(db, _cipher(), picked_for=TODAY)
+        assert daily.stale(db, TODAY) is None  # 지금 세대다
+
+        db.get(Article, article.id).pipeline = articles.PIPELINE - 1
+        db.commit()
+
+        assert daily.stale(db, TODAY) == article.id
+
+
+async def test_a_stale_article_runs_again_even_when_it_is_complete(cloud, monkeypatch):
+    """**사용자가 이걸로 막혔다.** `incomplete` 만 보면 구버전이 온전한 채로 영원히
+    남아 새 규칙이 적용되지 않는다."""
+    from tests.helpers_prepare import run_prepare
+
+    with session_scope() as db:
+        article = make_article(db, _cipher(), picked_for=TODAY)
+        await run_prepare(db, article, monkeypatch)
+        assert daily.incomplete(db, TODAY) is False
+        assert daily.should_run(db, settings_with_key(), day=TODAY) is False
+
+        db.get(Article, article.id).pipeline = articles.PIPELINE - 1
+        db.commit()
+
+        assert daily.incomplete(db, TODAY) is False  # 분석은 그대로 온전하다
+        assert daily.should_run(db, settings_with_key(), day=TODAY) is True
+
+
+def test_discarding_takes_the_article_its_paragraphs_and_its_analyses(cloud):
+    """**기사 행째로 지운다.** 문단만 갈아 끼우면 `picked_for` 가 남아 `_pick()` 이
+    "이미 쓴 기사" 로 넘기고, 그러면 그날 뉴스가 아예 없어진다."""
+    with session_scope() as db:
+        article = make_article(db, _cipher(), picked_for=TODAY)
+        rows = (
+            db.query(ArticleParagraph)
+            .filter(ArticleParagraph.article_id == article.id)
+            .all()
+        )
+        for row in rows:
+            db.add(
+                ParagraphAnalysis(
+                    paragraph_id=row.id,
+                    result={"schema_version": 4},
+                    markdown={"full": ""},
+                    failed_parts=[],
+                    model="fake",
+                )
+            )
+        db.commit()
+        article_id = article.id
+
+        articles.discard(db, article_id)
+        db.commit()
+
+        assert db.get(Article, article_id) is None
+        assert db.query(ArticleParagraph).count() == 0
+        assert db.query(ParagraphAnalysis).count() == 0
+
+
+async def test_a_full_run_replaces_the_stale_article(cloud, monkeypatch):
+    """낡은 것을 버리고 **새로 받아 다시 분석한다.**"""
+    from app.services import prepare
+    from app.services.analyzer import AnalyzerService
+    from tests.fake_provider import FakeProvider
+
+    with session_scope() as db:
+        old = make_article(db, _cipher(), source_id="world/old", picked_for=TODAY)
+        db.get(Article, old.id).pipeline = articles.PIPELINE - 1
+        db.commit()
+
+    async def candidates(*a, **k):
+        return [draft(source_id="world/fresh")]
+
+    monkeypatch.setattr(guardian, "candidates", candidates)
+    monkeypatch.setattr(
+        prepare, "analyzer_for", lambda *a, **k: AnalyzerService(FakeProvider())
+    )
+
+    await daily.run(settings_with_key(), day=TODAY)
+
+    with session_scope() as db:
+        # **id 로 묻지 않는다.** 비워진 id 를 SQLite 가 새 행에 다시 주므로
+        # `get(Article, old_id)` 가 **새 기사**를 찾는다 — 그걸로 한 번 속았다.
+        assert db.query(Article).filter(Article.source_id == "world/old").count() == 0, (
+            "낡은 기사가 남았다"
+        )
+        fresh = db.query(Article).one()
+        assert fresh.source_id == "world/fresh"
+        assert fresh.pipeline == articles.PIPELINE
+        assert daily.incomplete(db, TODAY) is False
+
+
+def test_storing_stamps_the_current_pipeline(cloud):
+    """다시 앉히는 길을 지났으면 **지금 규칙으로 선 것이다** — 이미 있던 행에도 덮는다."""
+    with session_scope() as db:
+        stored = articles.store(db, draft(), picked_for=TODAY)
+        assert stored.article.pipeline == articles.PIPELINE
+
+        db.get(Article, stored.article.id).pipeline = 0
+        db.commit()
+
+        again = articles.store(db, draft(), picked_for=TODAY)
+        assert again.article.pipeline == articles.PIPELINE
+
+
+def test_yesterdays_stale_article_is_left_alone(cloud):
+    """**오늘 것만 다시 받는다.** 지난 기사까지 받으면 하루에 수십 편 × 스무 번
+    호출이고, 운영자 목록의 지난 기사는 그때의 기록으로 남는 것이 맞다."""
+    with session_scope() as db:
+        old = make_article(
+            db, _cipher(), source_id="world/yesterday", picked_for=TODAY - timedelta(days=1)
+        )
+        db.get(Article, old.id).pipeline = 0
+        db.commit()
+
+        assert daily.stale(db, TODAY) is None
