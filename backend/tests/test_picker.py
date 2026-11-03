@@ -89,12 +89,31 @@ def test_today_is_the_korean_date_not_utc():
     식을 옮겨 적지 않고 **그 함수를 부른다.** 처음에는 `(now + KST).date()` 를
     검사에 베껴 썼는데, 함수를 UTC 로 되돌려도 검사가 통과했다 — 깨뜨려 보고 알았다.
     """
-    # 한국은 이미 11월 4일인데 UTC 는 아직 11월 3일인 시각.
+    # 한국은 이미 11월 4일 오전 8시인데 UTC 는 아직 11월 3일인 시각.
     assert daily.today(datetime(2026, 11, 3, 23, 0, tzinfo=UTC)) == date(2026, 11, 4)
-    # 한국 자정 직전은 아직 같은 날이다 (UTC 로는 14:59).
-    assert daily.today(datetime(2026, 11, 4, 14, 59, tzinfo=UTC)) == date(2026, 11, 4)
-    # 한국 자정을 넘기면 다음 날이다.
-    assert daily.today(datetime(2026, 11, 4, 15, 0, tzinfo=UTC)) == date(2026, 11, 5)
+    # 한국 한낮은 그날이다 (UTC 로는 03:00).
+    assert daily.today(datetime(2026, 11, 4, 3, 0, tzinfo=UTC)) == date(2026, 11, 4)
+
+
+def test_the_day_turns_over_at_six_in_the_morning_not_at_midnight():
+    """**자정에 바꾸면 밤늦게 읽던 사람이 글을 잃는다** — 23시 50분에 읽던 글이
+    10분 뒤에 어제 것이 된다. 6시로 밀면 밤 공부는 같은 글로 끝나고 새벽 공부는
+    그 시각부터 새 글을 받는다."""
+    # 한국 23:59 — 자정을 안 넘겼다.
+    assert daily.today(datetime(2026, 11, 3, 14, 59, tzinfo=UTC)) == date(2026, 11, 3)
+    # 한국 00:00 — **자정에는 안 바뀐다.** 밤 공부가 같은 글로 끝난다.
+    assert daily.today(datetime(2026, 11, 3, 15, 0, tzinfo=UTC)) == date(2026, 11, 3)
+    # 한국 05:59 — 아직 어제다.
+    assert daily.today(datetime(2026, 11, 3, 20, 59, tzinfo=UTC)) == date(2026, 11, 3)
+    # 한국 06:00 — 여기서 넘어간다.
+    assert daily.today(datetime(2026, 11, 3, 21, 0, tzinfo=UTC)) == date(2026, 11, 4)
+
+
+def test_the_boundary_is_a_separate_decision_from_the_timezone():
+    """`KST` 는 **어디에 있나**, `DAY_STARTS_AT` 은 **하루를 어디서 끊나**다.
+    한 값에 섞으면 시간대를 고칠 때 경계가 따라 움직인다."""
+    assert daily.KST == timedelta(hours=9)
+    assert daily.DAY_STARTS_AT == timedelta(hours=6)
 
 
 def test_an_article_with_zero_paragraphs_never_counts_as_done(cloud):
