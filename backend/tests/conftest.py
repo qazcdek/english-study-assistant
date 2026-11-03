@@ -1,9 +1,61 @@
 from collections.abc import Iterator
 
+import httpx
 import pytest
 from fastapi.testclient import TestClient
 
 from app.config import get_settings
+
+# 검사가 나가도 되는 호스트. 로컬 모델 서버뿐이다.
+ALLOWED_HOSTS = frozenset({"127.0.0.1", "localhost", "::1", ""})
+
+# **진짜로 선을 타는 전송.** `MockTransport`(응답을 꽂는 검사)와 `ASGITransport`
+# (`TestClient`)는 네트워크를 타지 않으므로 막지 않는다 — 막으면 멀쩡한 검사가
+# 전부 깨진다. 실제로 그렇게 짰다가 프로바이더 검사 수십 개가 깨졌다.
+REAL_TRANSPORTS = (httpx.HTTPTransport, httpx.AsyncHTTPTransport)
+
+
+class OutboundCallInTest(RuntimeError):
+    """검사가 **외부로 HTTP 를 보냈다.**
+
+    규약은 하나다 — **검사는 실제 LLM 을 부르지 않는다.** 운영자 키의 무료 등급을
+    검사가 조용히 깎기 때문이다. `H-048` 에서 실제로 그런 일이 있었다: 검사 설정이
+    개발 `.env` 의 가디언 키를 들고 있어서, 운영자 플래그가 켜진 검사가
+    `/api/articles/current` 를 칠 때마다 뒤에서 **진짜로 가디언과 Gemini 를** 불렀다.
+    뒤에서 돌고 실패해도 쿨다운 표에만 적히므로 **검사는 통과하고 한도만 깎였다**
+    (검사 시간 45초 → 27초가 그 차이였다).
+
+    그래서 주의력에 맡기지 않고 **여기서 막는다** (`11 §2` 원리 ③ — 선언이 아니라
+    장치로). 실제 응답으로 확인해야 하는 일은 **운영자에게 요청한다.**
+
+    LLM 을 타는 검사는 `tests/fake_provider.py` 를 쓴다. 출처 호출을 보는 검사는
+    `httpx.MockTransport` 로 응답을 꽂는다 (`test_grouping.py` · `test_picker.py`).
+    """
+
+
+@pytest.fixture(autouse=True)
+def no_outbound_http(monkeypatch):
+    """검사 중 외부 호스트로 나가는 HTTP 를 거부한다 (H-049).
+
+    `httpx` 의 **보내는 한 지점**을 막는다 — 프로바이더와 가디언이 둘 다 `httpx` 를
+    쓰므로 출처가 늘어도 이 장치는 그대로다. 막는 것은 **실제 전송뿐**이다:
+    `MockTransport` 로 꽂은 응답과 `TestClient` 의 ASGI 호출은 선을 타지 않는다.
+    """
+    for client in (httpx.Client, httpx.AsyncClient):
+        original = client.send
+
+        def guard(self, request, *args, _original=original, **kwargs):
+            host = request.url.host
+            transport = getattr(self, "_transport", None)
+            if isinstance(transport, REAL_TRANSPORTS) and host not in ALLOWED_HOSTS:
+                raise OutboundCallInTest(
+                    f"검사가 {host} 로 HTTP 를 보냈다. 검사는 외부 API 를 부르지 않는다 — "
+                    "가짜 프로바이더나 httpx.MockTransport 를 쓰고, 실물 확인은 "
+                    "운영자에게 요청한다."
+                )
+            return _original(self, request, *args, **kwargs)
+
+        monkeypatch.setattr(client, "send", guard)
 
 
 @pytest.fixture
