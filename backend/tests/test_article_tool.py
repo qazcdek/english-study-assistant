@@ -98,3 +98,34 @@ def test_the_published_time_keeps_its_zone(tmp_path):
     draft = article.read_draft(path)
 
     assert draft.published_at == datetime(2026, 11, 1, 17, 20, 18, tzinfo=UTC)
+
+
+# ------------------------------------- 약관 상한이 한 일을 말해 준다 (M13-T9)
+
+
+def test_nothing_is_said_when_nothing_was_cut():
+    """평범한 기사에 군말을 붙이지 않는다."""
+    assert article.cut_notes(skipped=0, trimmed=0, limit=500) == []
+
+
+def test_the_skipped_paragraphs_are_reported_with_the_limit():
+    """**조용히 자르면 안 된다.** 몇 단어 상한에 걸렸는지도 함께 말한다."""
+    notes = article.cut_notes(skipped=5, trimmed=0, limit=500)
+
+    assert len(notes) == 1
+    assert "500단어" in notes[0]
+    assert "5문단" in notes[0]
+
+
+def test_deleting_already_stored_paragraphs_says_the_analyses_went_too():
+    """지운 쪽은 **분석까지 사라진다** — 그걸 안 말하면 운영자가 모른다."""
+    notes = article.cut_notes(skipped=0, trimmed=2, limit=500)
+
+    assert len(notes) == 1
+    assert "2문단" in notes[0]
+    assert "분석" in notes[0]
+
+
+def test_both_can_happen_at_once():
+    """본문은 잘리고, 전에 넣어 둔 꼬리도 지워지는 경우다."""
+    assert len(article.cut_notes(skipped=5, trimmed=2, limit=500)) == 2

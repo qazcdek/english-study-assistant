@@ -95,6 +95,21 @@ def read_draft(path: Path):
     )
 
 
+def cut_notes(skipped: int, trimmed: int, limit: int) -> list[str]:
+    """약관 상한(`M13-T9`)이 한 일을 말로 옮긴다. 한 일이 없으면 빈 목록.
+
+    **조용히 자르면 안 된다.** 16문단짜리 기사를 넣었는데 11문단이 되는 것은 눈으로
+    보고 넘어갈 일이고, 지운 쪽은 **분석까지 사라진다.** `main()` 안에 두면 검사가
+    출력을 떠야만 물을 수 있어서 밖으로 꺼냈다.
+    """
+    notes = []
+    if skipped:
+        notes.append(f"약관 상한({limit}단어)을 넘겨 {skipped}문단 안 썼다")
+    if trimmed:
+        notes.append(f"이미 들어 있던 {trimmed}문단을 지웠다 — 그 분석도 함께 사라졌다")
+    return notes
+
+
 def where(database_url: str) -> str:
     """어느 DB 인지 **비밀값 없이** 한 줄로. 자격증명은 `@` 앞에 있다."""
     return database_url.rsplit("@", 1)[-1] if "@" in database_url else database_url
@@ -138,7 +153,7 @@ def main(argv: list[str] | None = None) -> int:
     from app.config import get_settings
     from app.db.session import init_engine, session_scope
     from app.errors import AppError
-    from app.services import articles, prepare
+    from app.services import articles, paragraphs, prepare
 
     settings = get_settings()
     draft = read_draft(args.path)
@@ -158,6 +173,9 @@ def main(argv: list[str] | None = None) -> int:
             f"#{stored.article.id} {stored.article.title}"
         )
         print(f"문단 {stored.paragraphs} · 글감 날짜 {stored.article.picked_for or '(후보)'}")
+
+        for note in cut_notes(stored.skipped, stored.trimmed, paragraphs.WORD_LIMIT):
+            print(note)
 
         if not args.prepare:
             print(f"미리 분석은 --prepare 로. 호출 {stored.paragraphs * 4}번쯤 든다")

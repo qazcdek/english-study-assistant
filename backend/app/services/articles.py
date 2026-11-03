@@ -65,15 +65,17 @@
 
 [문서] plan/DONE.md M13-T6
 [문서] plan/DONE.md M13-T8
+[문서] plan/DONE.md M13-T9
 """
 
 from dataclasses import dataclass
 from datetime import date, datetime
 
+from sqlalchemy import delete
 from sqlalchemy.orm import Session
 
 from app.db import Article, ArticleParagraph, ParagraphAnalysis
-from app.errors import ArticleBodyError
+from app.errors import ArticleBodyError, ArticleLengthError
 from app.services import paragraphs, prepare
 
 
@@ -101,6 +103,10 @@ class Stored:
     article: Article
     paragraphs: int
     created: bool
+    #: 본문에서 **버린** 문단 수. 약관 상한을 넘겨 안 쓴 것 + 시작점 앞의 것.
+    skipped: int = 0
+    #: 이미 들어 있던 것 중 상한을 넘겨 **지운** 문단 수. 그 분석도 함께 사라졌다.
+    trimmed: int = 0
 
 
 def store(db: Session, draft: Draft, *, picked_for: date | None = None) -> Stored:
@@ -108,6 +114,13 @@ def store(db: Session, draft: Draft, *, picked_for: date | None = None) -> Store
     texts = paragraphs.split(draft.body)
     if not texts:
         raise ArticleBodyError(detail=f"{draft.source}/{draft.source_id}")
+
+    # 약관 상한 안에 드는 토막만 쓴다 (M13-T9). **보여줄 때가 아니라 여기서 자른다** —
+    # 자르지 않고 앉히면 전문이 DB 와 응답에 남고, 미리 분석이 **버릴 문단까지 돈다.**
+    cut = paragraphs.excerpt(texts)
+    if not cut:
+        raise ArticleLengthError(detail=f"{draft.source}/{draft.source_id}")
+    kept = texts[cut.start : cut.stop]
 
     row = (
         db.query(Article)
@@ -130,16 +143,63 @@ def store(db: Session, draft: Draft, *, picked_for: date | None = None) -> Store
     if picked_for is not None:
         row.picked_for = picked_for
 
-    stored = (
-        db.query(ArticleParagraph).filter(ArticleParagraph.article_id == row.id).count()
+    existing = (
+        db.query(ArticleParagraph)
+        .filter(ArticleParagraph.article_id == row.id)
+        .order_by(ArticleParagraph.ordinal)
+        .all()
     )
-    if stored == 0:
-        for ordinal, text in enumerate(texts, start=1):
+    trimmed = 0
+    if existing:
+        # **이미 들어 있는 것도 상한을 지켜야 한다.** 상한이 생기기 전에 앉힌
+        # 기사가 그대로 약관을 넘긴 채 남는 것은 선택지가 아니다. 머리말의
+        # "문단을 다시 쪼개지 않는다" 는 상한 **안쪽**에만 적용된다.
+        trimmed = trim(db, existing)
+        stored = len(existing) - trimmed
+    else:
+        for ordinal, text in enumerate(kept, start=1):
             db.add(ArticleParagraph(article_id=row.id, ordinal=ordinal, text=text))
-        stored = len(texts)
+        stored = len(kept)
 
     db.commit()
-    return Stored(article=row, paragraphs=stored, created=created)
+    return Stored(
+        article=row,
+        paragraphs=stored,
+        created=created,
+        skipped=len(texts) - len(kept),
+        trimmed=trimmed,
+    )
+
+
+def trim(db: Session, rows: list[ArticleParagraph]) -> int:
+    """저장된 문단 중 약관 상한을 넘기는 것을 지운다. 지운 수를 돌려준다.
+
+    `store()` 가 부른다. **상한이 생기기 전에 앉힌 기사를 규약에 맞추는 길**도
+    이것이다 — 본문 JSON 이 없어도 저장된 문단만으로 돈다.
+
+    **분석을 직접 지운다. `ON DELETE CASCADE` 에 기대지 않는다** — 표에 걸려
+    있기는 하지만 그건 **운영(Postgres)에서만 도는 동작**이다. 검사가 도는
+    SQLite 는 외래키 강제가 기본으로 꺼져 있어(`H-032` 의 엔진 차이) 분석 행이
+    주인 없이 남는다. 검사에서 안 도는 삭제는 믿을 수 없으므로 문장을 던진다.
+    `account.py` 의 탈퇴도 같은 이유로 자식을 먼저 지운다.
+
+    상한 안쪽은 한 줄도 건드리지 않는다 — 기사 하나에서 꼬리 몇 개만 가므로
+    **남은 문단의 분석은 그대로 쓰인다.**
+
+    `ordinal` 은 **다시 매기지 않는다.** 바꾸면 남은 문단의 분석이 다른 번호에
+    붙은 것처럼 보이고, 화면이 문단 번호로 분석을 찾는다 (`M13-T6`).
+    """
+    cut = paragraphs.excerpt([row.text for row in rows])
+    doomed = rows[: cut.start] + rows[cut.stop :]
+    if not doomed:
+        return 0
+
+    ids = [row.id for row in doomed]
+    db.execute(delete(ParagraphAnalysis).where(ParagraphAnalysis.paragraph_id.in_(ids)))
+    db.execute(delete(ArticleParagraph).where(ArticleParagraph.id.in_(ids)))
+    # 세션이 들고 있는 관계가 낡았다 — 위에서 문장으로 지웠다.
+    db.expire_all()
+    return len(doomed)
 
 
 @dataclass(frozen=True)

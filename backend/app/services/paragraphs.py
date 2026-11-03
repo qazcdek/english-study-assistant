@@ -56,14 +56,29 @@
 안 빼놓고 다 잡으므로 그 규칙이 단독으로 잡는 경우는 **102편에서 0개**였다.
 추측으로 둔 한 겹이었고, 지웠다.
 
+### 쪼개는 것과 **얼마나 쓸 것인가**는 다른 규칙이다
+
+위의 모든 규칙은 "무엇이 문단인가" 를 가린다. 그 문단들 중 **몇 개까지 쓸 수 있는가**
+는 출처 약관이 정하고, 그건 `excerpt()` 가 든다 (`M13-T9`). 둘을 나눠 둔 이유는
+고르는 쪽(`M13-T4`)이 **앉히기 전에** 후보를 재야 하기 때문이다 — 쓸 수 있는 토막이
+안 나오는 기사는 넣지 않고 다음 후보로 넘어간다.
+
 [문서] plan/DONE.md M13-T3
+[문서] plan/DONE.md M13-T9
 """
 
 import html
 import re
+from dataclasses import dataclass
 
 # 50자 미만은 길어도 한 문장이라 네 파트가 쓸 것이 없다. 근거는 머리말.
 MIN_CHARS = 50
+
+# **출처 약관이 허용하는 인용 분량.** 공백으로 가른 낱말로 센다 (가디언, 2026-11-03).
+#
+# **설정값으로 두지 않는다.** 운영자가 올릴 수 있는 손잡이로 만들면 약관을 넘기는
+# 길을 하나 두는 셈이다. 출처가 둘이 되는 날 출처별 값으로 옮긴다 (`M13-T7`).
+WORD_LIMIT = 500
 
 # **통째로 버리는 블록.** 안에 `<p>` 가 있어도 본문이 아니다.
 # `gu-atom` 은 가디언이 임베드에 쓰는 자체 태그다.
@@ -97,3 +112,58 @@ def clean(raw: str) -> str:
     text = _TAG_RE.sub("", text)
     text = html.unescape(text)
     return re.sub(r"\s+", " ", text).strip()
+
+
+@dataclass(frozen=True)
+class Excerpt:
+    """쓸 수 있는 문단 구간. **이어진 한 토막이다.**
+
+    끊어 쓰지 않는 이유는 산문이기 때문이다 — 상한을 넘긴 문단만 빼고 뒤를 이어
+    붙이면 대명사가 가리킬 것을 잃고 "그러나" 가 앞 문장 없이 시작한다.
+
+    `stop` 은 **끝 다음**이다(파이썬 슬라이스와 같게). 빈 구간은 거짓이므로
+    `if not cut:` 으로 "쓸 수 없는 기사" 를 가린다.
+    """
+
+    start: int
+    stop: int
+    words: int
+
+    def __bool__(self) -> bool:
+        return self.stop > self.start
+
+
+def words(text: str) -> int:
+    """낱말 수. **공백으로 가른다** — 약관이 세는 방식이 그것이다."""
+    return len(text.split())
+
+
+def excerpt(texts: list[str]) -> Excerpt:
+    """쓸 수 있는 문단 구간을 고른다. 없으면 빈 구간 (M13-T9).
+
+    ```
+    1. 앞에서부터 누적이 상한을 넘지 않는 문단까지
+    2. 첫 문단 하나가 이미 상한을 넘으면 그것을 버리고 다음 문단을 시작점으로
+    3. 모든 문단이 상한을 넘으면 빈 구간 — 고르는 쪽이 다음 후보로 넘어간다
+    ```
+
+    **2번은 시작점을 찾는 규칙이지 건너뛰는 규칙이 아니다.** 시작점을 정한 뒤에는
+    1번이 그대로 돌아 거기서부터 이어진 토막을 낸다.
+
+    3번은 **닿지 않는 가지로 보인다** — `M13-T1` 의 실측에서 문단 최댓값이
+    1,021자(≈170단어)였다. 그래도 검사를 단다. 안 달면 나중에 "왜 이 분기에
+    검사가 없지" 가 되고, 출처가 바뀌면 그때 진짜로 닿는다.
+    """
+    for start in range(len(texts)):
+        if words(texts[start]) > WORD_LIMIT:
+            continue  # 이 문단 하나가 벌써 상한을 넘는다 — 시작점이 될 수 없다
+        total = 0
+        stop = start
+        for text in texts[start:]:
+            count = words(text)
+            if total + count > WORD_LIMIT:
+                break
+            total += count
+            stop += 1
+        return Excerpt(start=start, stop=stop, words=total)
+    return Excerpt(start=0, stop=0, words=0)

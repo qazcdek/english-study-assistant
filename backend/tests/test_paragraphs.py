@@ -7,7 +7,7 @@
 규칙을 왜 그렇게 정했는지는 `app/services/paragraphs.py` 머리말.
 """
 
-from app.services.paragraphs import MIN_CHARS, clean, split
+from app.services.paragraphs import MIN_CHARS, WORD_LIMIT, clean, excerpt, split, words
 
 # 50자를 넘기는 평범한 문단. 길이 하한에 걸리지 않게 둔다.
 LONG = (
@@ -163,3 +163,96 @@ def test_attributes_on_the_paragraph_tag_do_not_matter():
     body = f'<p class="block-element" data-x="1">{LONG}</p>'
 
     assert split(body) == [LONG]
+
+
+# ------------------------------------------- 약관이 허용하는 분량만 쓴다 (M13-T9)
+
+
+def para(count: int, mark: str = "w") -> str:
+    """`count` 낱말짜리 문단 하나. **공백으로 가른 수**가 그대로 `count` 다."""
+    return " ".join([mark] * count)
+
+
+def test_a_short_article_is_taken_whole():
+    """상한 안에 다 들면 **아무것도 자르지 않는다.**"""
+    cut = excerpt([para(100), para(100), para(100)])
+
+    assert (cut.start, cut.stop, cut.words) == (0, 3, 300)
+    assert bool(cut) is True
+
+
+def test_accumulation_stops_before_the_paragraph_that_crosses_the_limit():
+    """**누적**으로 센다. 넘기는 문단은 넣지 않는다 — 넣고 나서 줄이지 않는다."""
+    cut = excerpt([para(300), para(150), para(100), para(10)])
+
+    # 300+150=450 까지. 셋째를 넣으면 550 이라 거기서 멈춘다.
+    assert (cut.start, cut.stop, cut.words) == (0, 2, 450)
+
+
+def test_a_paragraph_landing_exactly_on_the_limit_is_taken():
+    """경계는 **이내**다. 500 은 넘은 것이 아니다."""
+    cut = excerpt([para(400), para(100), para(1)])
+
+    assert (cut.start, cut.stop, cut.words) == (0, 2, 500)
+
+
+def test_crossing_at_the_second_paragraph_leaves_only_the_first():
+    """사용자가 든 예 그대로 — 2번째까지 넘으면 1번째까지."""
+    cut = excerpt([para(400), para(200)])
+
+    assert (cut.start, cut.stop) == (0, 1)
+
+
+def test_an_oversized_first_paragraph_moves_the_start_instead_of_failing():
+    """첫 문단 하나가 벌써 상한을 넘으면 **그것을 버리고 다음을 시작점으로.**"""
+    cut = excerpt([para(WORD_LIMIT + 1), para(80), para(90)])
+
+    assert (cut.start, cut.stop, cut.words) == (1, 3, 170)
+
+
+def test_the_start_search_walks_past_every_oversized_paragraph():
+    """시작점을 찾을 때까지 **계속** 넘긴다 — 한 번만 넘기고 포기하지 않는다."""
+    cut = excerpt([para(600), para(700), para(80)])
+
+    assert (cut.start, cut.stop) == (2, 3)
+
+
+def test_the_excerpt_is_one_unbroken_run():
+    """**중간을 건너뛰지 않는다.** 상한을 넘긴 문단 뒤의 짧은 문단을 당겨오면
+    산문이 끊기고 대명사가 가리킬 것을 잃는다. 시작점을 찾는 규칙은 *앞*에만 돈다."""
+    cut = excerpt([para(80), para(600), para(80)])
+
+    # 2번(600단어)에서 멈춘다. 3번을 당겨와 (0,1)+(2,3) 으로 만들지 않는다.
+    assert (cut.start, cut.stop, cut.words) == (0, 1, 80)
+
+
+def test_an_article_whose_every_paragraph_is_oversized_is_unusable():
+    """**닿지 않는 가지로 보이지만 검사를 단다** — 근거는 `paragraphs.py` 머리말.
+    고르는 쪽(`M13-T4`)이 이걸 보고 다음 인기 기사로 넘어간다."""
+    cut = excerpt([para(600), para(700)])
+
+    assert bool(cut) is False
+    assert (cut.start, cut.stop, cut.words) == (0, 0, 0)
+
+
+def test_no_paragraphs_at_all_is_also_unusable():
+    """`split()` 이 빈 목록을 낼 수 있다 — 사진 기사가 그렇다."""
+    assert bool(excerpt([])) is False
+
+
+def test_words_are_counted_by_whitespace_because_that_is_what_the_terms_count():
+    """약관이 세는 방식이다. 문장부호나 하이픈으로 가르지 않는다."""
+    assert words("state-of-the-art naval vessels") == 3
+    assert words("Hello,  world!") == 2
+    assert words("  ") == 0
+
+
+def test_the_real_article_is_cut_where_it_was_measured():
+    """개발 DB 의 기사 #1 을 **실제로 재서** 나온 숫자다 (M13-T9 의 ONGOING).
+    16문단 688단어 → **1~11문단 455단어.** 12번(60단어)이 515가 되어 탈락한다."""
+    measured = [35, 41, 23, 48, 24, 51, 45, 47, 56, 52, 33, 60, 32, 29, 50, 62]
+    assert sum(measured) == 688
+
+    cut = excerpt([para(n) for n in measured])
+
+    assert (cut.start, cut.stop, cut.words) == (0, 11, 455)
