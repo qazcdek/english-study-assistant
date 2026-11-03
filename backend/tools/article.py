@@ -47,7 +47,8 @@ import asyncio
 import json
 import os
 import sys
-from datetime import UTC, date, datetime
+from collections.abc import Callable
+from datetime import date, datetime
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -108,6 +109,23 @@ def read_draft(path: Path):
     )
 
 
+def pick_date(arg: str, today: Callable[[], date]) -> date | None:
+    """`--pick` 값을 날짜로. `none` 이면 후보로만 둔다는 뜻이라 `None`.
+
+    **"오늘" 을 여기서 세지 않고 받는다** (`daily.today` — 한국 날짜다). 전에는
+    이 자리에서 UTC 로 셌고, 그래서 **한국 시간 11월 2일에 넣은 기사가 11월 1일
+    글감으로 찍혔다.** 자동 선정과 같은 답이 나와야 하므로 두 곳에 적지 않는다.
+
+    `main()` 안에 두면 검사가 **환경 파일과 DB 를 세워야만** 물을 수 있어서 밖으로
+    꺼냈다.
+    """
+    if arg == "none":
+        return None
+    if arg == "today":
+        return today()
+    return date.fromisoformat(arg)
+
+
 def cut_notes(skipped: int, trimmed: int, limit: int) -> list[str]:
     """약관 상한(`M13-T9`)이 한 일을 말로 옮긴다. 한 일이 없으면 빈 목록.
 
@@ -150,23 +168,14 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     load_env(args.env_file)
 
-    # **"오늘" 이 어느 시간대인가는 아직 결정이 아니다.** 표의 다른 시각들과 같은
-    # UTC 로 둔다 (`db/models.py` 의 `utcnow`). 회원은 한국에 있으므로 자동 선정
-    # (`M13-T4`)이 이걸 정면으로 정해야 한다 — 손으로 넣을 때는 `--pick` 으로 적는다.
-    picked: date | None
-    picked = (
-        None
-        if args.pick == "none"
-        else datetime.now(UTC).date()
-        if args.pick == "today"
-        else date.fromisoformat(args.pick)
-    )
-
+    # 앱 쪽 import 는 환경 파일을 **읽은 뒤에** 한다 — `Settings` 가 그때 만들어진다.
     from app.auth.crypto import KeyCipher
     from app.config import get_settings
     from app.db.session import init_engine, session_scope
     from app.errors import AppError
-    from app.services import articles, paragraphs, prepare
+    from app.services import articles, daily, paragraphs, prepare
+
+    picked = pick_date(args.pick, daily.today)
 
     settings = get_settings()
     draft = read_draft(args.path)

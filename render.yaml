@@ -40,6 +40,10 @@ services:
       - key: SENTRY_DSN
         sync: false
 
+      # 공용 글감 출처. **비어 있으면 글감 고르기만 꺼진다** — 앱은 정상으로 뜬다.
+      - key: GUARDIAN_API_KEY
+        sync: false
+
       - key: SESSION_SECRET
         generateValue: true
       # Fernet 키는 형식이 정해져 있어 직접 만들어 넣는다.

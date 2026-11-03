@@ -274,7 +274,36 @@ class ParagraphAnalysis(Base):
     paragraph: Mapped[ArticleParagraph] = relationship()
 
 
+class PickAttempt(Base):
+    """글감 고르기가 **실패한 기록** — 쿨다운의 근거 (M13-T4).
+
+    **메모리에 두면 안 된다.** Render 무료 티어는 15분 미사용이면 잠들고, 깨어날
+    때마다 쿨다운을 잊고 즉시 재시도한다 — **막으려던 바로 그 상황에서 안 막힌다.**
+    그래서 DB 에 남긴다.
+
+    `(picked_for, source)` 마다 한 줄이다. 성공한 날에는 지우지 않는다 — 그날
+    몇 번 넘어졌는지가 기록으로 남고, 오늘 글감이 이미 있으면 쿨다운은 읽히지도
+    않는다.
+
+    **하루 시도 상한이 아니라 쿨다운이다.** 상한은 다 쓰면 그날은 포기이고 문제가
+    10분 만에 풀려도 내일까지 글감이 없다. 쿨다운은 풀리는 순간 저절로 회복된다.
+    """
+
+    __tablename__ = "article_pick_attempts"
+    __table_args__ = (
+        UniqueConstraint("picked_for", "source", name="uq_pick_attempt_day_source"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    picked_for: Mapped[date] = mapped_column(Date, index=True)
+    source: Mapped[str] = mapped_column(String(20))
+    failed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    failures: Mapped[int] = mapped_column(Integer, default=0)
+    #: 마지막 실패 이유. **로그를 뒤지지 않고** 왜 글감이 없는지 알 수 있게 둔다.
+    reason: Mapped[str] = mapped_column(Text, default="")
+
+
 # 공용 표의 목록. **`user_id` 가 없어도 되는 표는 여기 적힌 것뿐이다.**
 # 새 표가 여기에도 없고 `user_id` 도 없으면 검사가 거부한다 — 일부러 공용인 것과
 # 회원 소유로 만들려다 `user_id` 를 빠뜨린 것을 **생김새로는 구별할 수 없어서**다.
-SHARED = (Article, ArticleParagraph, ParagraphAnalysis)
+SHARED = (Article, ArticleParagraph, ParagraphAnalysis, PickAttempt)
