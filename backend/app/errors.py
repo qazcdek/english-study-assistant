@@ -137,3 +137,18 @@ class ArticleLengthError(ArticleBodyError):
 
     code = "article_length"
     message = "약관이 허용하는 분량 안에 드는 문단이 없습니다."
+
+
+class ArticleCreditError(ArticleBodyError):
+    """기자 크레딧이 없다 (M13-T10).
+
+    출처 약관이 **기자 이름과 원문 출처를 명확히 적으라고** 요구하므로, 크레딧이
+    빈 기사는 보여줄 수 없다. 빈 칸으로 앉혀 두면 화면이 **크레딧 없이 번역을
+    내보내는 쪽**으로 조용히 기운다.
+
+    `ArticleLengthError` 와 같은 이유로 `ArticleBodyError` 를 물려받는다 —
+    원인은 셋이 다르지만 할 일은 하나다: 이 기사를 버리고 다음 후보로.
+    """
+
+    code = "article_credit"
+    message = "기사에 기자 크레딧이 없습니다."

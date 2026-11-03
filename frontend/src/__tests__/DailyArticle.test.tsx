@@ -24,7 +24,7 @@ vi.mock('../lib/api', () => ({
   },
 }))
 
-const { DailyArticle, dayLabel } = await import('../components/DailyArticle')
+const { DailyArticle, dayLabel, sourceLabel } = await import('../components/DailyArticle')
 const { ApiError } = await import('../lib/api')
 const { finishedState } = await import('../lib/analysis')
 const { EXPRESSIONS, fakeStore } = await import('./fixtures')
@@ -41,6 +41,7 @@ function article(overrides: Partial<Article> = {}): Article {
     source: 'guardian',
     url: 'https://www.theguardian.com/world/2026/nov/01/example',
     title: 'Ukraine defies Trump to resume attacks on Russian oil refineries',
+    byline: 'Luke Harding in Kyiv',
     section: 'world',
     published_at: '2026-11-01T06:00:00+00:00',
     picked_for: '2026-11-01',
@@ -125,13 +126,39 @@ describe('글감 머리', () => {
     expect(await screen.findByText(/11월 1일 글감/)).toBeTruthy()
   })
 
-  test('원문으로 나가는 길을 둔다', async () => {
+  test('원문 백링크를 위아래 둘 다 둔다', async () => {
+    // **약관이 요구한다** — 번역 본문 상단이나 하단에 원문으로 가는 링크를 반드시
+    // 건다. 문단 아코디언이라 번역이 화면 중간에서 펼쳐지므로 둘 다 둔다 (M13-T10).
     draw()
 
-    const link = (await screen.findByText(/원문 보기/)) as HTMLAnchorElement
-    expect(link.getAttribute('href')).toBe(article().url)
-    // 글감을 읽다가 앱을 떠나지 않게 새 탭으로 연다.
-    expect(link.getAttribute('target')).toBe('_blank')
+    await screen.findByText(/11월 1일 글감/)
+    const links = screen.getAllByText(/원문 보기/) as HTMLAnchorElement[]
+
+    expect(links.length).toBe(2)
+    for (const link of links) {
+      expect(link.getAttribute('href')).toBe(article().url)
+      // 글감을 읽다가 앱을 떠나지 않게 새 탭으로 연다.
+      expect(link.getAttribute('target')).toBe('_blank')
+    }
+  })
+
+  test('기자 크레딧과 출처를 적는다', async () => {
+    // **약관이 요구한다** — 기자 이름과 원문 출처를 명확히. `guardian` 이 아니라
+    // 약관이 쓰는 이름(`The Guardian`)으로 적는다.
+    draw()
+
+    const credits = await screen.findAllByText(/Luke Harding in Kyiv/)
+
+    expect(credits.length).toBe(2) // 머리와 바닥
+    for (const credit of credits) expect(credit.textContent).toContain('The Guardian')
+  })
+
+  test('발췌임을 숨기지 않는다', async () => {
+    // 전문이 아니라 500단어 이내의 토막이다 (M13-T9). 전문처럼 보이게 두지 않는다.
+    draw()
+
+    const note = await screen.findByText(/발췌해 번역했습니다/)
+    expect(note.textContent).toContain('500단어')
   })
 
   test('**준비된** 난이도를 적는다. 회원이 고른 것이 아니다', async () => {
@@ -229,6 +256,17 @@ describe('이미 끝난 분석을 화면 상태로', () => {
     const state = finishedState(result(), MARKDOWN)
 
     expect(Object.values(state.status).every((s) => s.state === 'done')).toBe(true)
+  })
+})
+
+describe('출처 이름', () => {
+  test('약관이 쓰는 이름으로 적는다', () => {
+    expect(sourceLabel('guardian')).toBe('The Guardian')
+  })
+
+  test('모르는 출처는 받은 값을 그대로 둔다', () => {
+    // 꾸며 내면 크레딧이 틀린다. 출처가 늘 때 **여기서 걸려** 눈에 띄는 쪽이 낫다.
+    expect(sourceLabel('npr')).toBe('npr')
   })
 })
 

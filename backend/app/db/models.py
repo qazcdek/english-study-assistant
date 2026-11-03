@@ -210,6 +210,10 @@ class Article(Base):
     source_id: Mapped[str] = mapped_column(String(500))
     url: Mapped[str] = mapped_column(Text)
     title: Mapped[str] = mapped_column(Text)
+    # 기자 크레딧. **출처 약관이 요구한다** (M13-T10) — 쪼개 담지 않고 출처가 준
+    # 한 줄을 그대로 둔다 (`Luke Harding in Kyiv` · `Jon Henley Europe correspondent`).
+    # 이름만 뽑으려 파싱하면 크레딧이 원문과 달라진다.
+    byline: Mapped[str] = mapped_column(Text, default="")
     section: Mapped[str] = mapped_column(String(50), default="")
     published_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
     # 어느 날짜의 글감으로 골랐나. **비어 있으면 아직 안 고른 후보다.**

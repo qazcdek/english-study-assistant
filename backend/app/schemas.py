@@ -429,12 +429,16 @@ class ArticleOut(BaseModel):
 
     **`picked_for` 를 숨기지 않는다.** 오늘 것이 아직 없으면 어제 것을 보여주는
     것이 규정이므로(09 §3.8), 며칠 글감인지는 회원이 보고 알아야 한다.
+
+    **`byline` 과 `url` 은 선택이 아니다.** 출처 약관이 기자 크레딧과 원문 백링크를
+    요구하므로(M13-T10) 화면이 둘 다 적는다.
     """
 
     id: int
     source: str
     url: str
     title: str
+    byline: str
     section: str
     published_at: str
     picked_for: str

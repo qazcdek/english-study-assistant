@@ -63,6 +63,7 @@
 행이 있으면 된다. 한 파트가 고집스럽게 실패하면 그날 글감이 아예 안 나오는 쪽이
 더 나쁘다. 화면은 `failed_parts` 를 받아 빈 자리를 표시한다.
 
+[문서] plan/DONE.md M13-T10
 [문서] plan/DONE.md M13-T6
 [문서] plan/DONE.md M13-T8
 [문서] plan/DONE.md M13-T9
@@ -75,7 +76,7 @@ from sqlalchemy import delete
 from sqlalchemy.orm import Session
 
 from app.db import Article, ArticleParagraph, ParagraphAnalysis
-from app.errors import ArticleBodyError, ArticleLengthError
+from app.errors import ArticleBodyError, ArticleCreditError, ArticleLengthError
 from app.services import paragraphs, prepare
 
 
@@ -87,6 +88,8 @@ class Draft:
     source_id: str
     url: str
     title: str
+    #: 출처가 준 기자 크레딧 한 줄. **약관이 요구한다** (M13-T10).
+    byline: str
     section: str
     published_at: datetime
     body: str
@@ -115,6 +118,11 @@ def store(db: Session, draft: Draft, *, picked_for: date | None = None) -> Store
     if not texts:
         raise ArticleBodyError(detail=f"{draft.source}/{draft.source_id}")
 
+    # 크레딧 없는 기사는 **앉히지도 않는다** (M13-T10). 빈 칸으로 들어오면 화면이
+    # 크레딧 없이 번역을 내보내는 쪽으로 조용히 기운다.
+    if not draft.byline.strip():
+        raise ArticleCreditError(detail=f"{draft.source}/{draft.source_id}")
+
     # 약관 상한 안에 드는 토막만 쓴다 (M13-T9). **보여줄 때가 아니라 여기서 자른다** —
     # 자르지 않고 앉히면 전문이 DB 와 응답에 남고, 미리 분석이 **버릴 문단까지 돈다.**
     cut = paragraphs.excerpt(texts)
@@ -139,6 +147,13 @@ def store(db: Session, draft: Draft, *, picked_for: date | None = None) -> Store
         )
         db.add(row)
         db.flush()
+
+    # **크레딧은 새 행이든 이미 있는 행이든 여기 한 줄에서 들어간다.** 위 생성자에도
+    # 적어 뒀더니 이 줄이 바로 덮어써서 **아무 일도 하지 않는 줄**이었다 — 깨뜨려
+    # 보고 알았다. 이미 있는 행에도 덮는 이유는 문단과 달리 아무것도 매달려 있지
+    # 않고(`picked_for` 와 같은 사정), 크레딧 칸이 생기기 전에 앉힌 기사를
+    # 다시 넣어 채우는 길이 이것뿐이기 때문이다.
+    row.byline = draft.byline.strip()
 
     if picked_for is not None:
         row.picked_for = picked_for

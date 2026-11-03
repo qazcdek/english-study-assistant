@@ -318,6 +318,7 @@ local 은 llama-server 와 cloud LLM 전부를, cloud 는 cloud LLM 만 고를 �
     "source": "guardian",
     "url": "https://www.theguardian.com/world/2026/nov/01/...",
     "title": "Ukraine defies Trump to resume attacks on Russian oil refineries",
+    "byline": "Luke Harding in Kyiv",
     "section": "world",
     "published_at": "2026-11-01T17:30:00+00:00",
     "picked_for": "2026-11-01",
@@ -343,6 +344,11 @@ local 은 llama-server 와 cloud LLM 전부를, cloud 는 cloud LLM 만 고를 �
   500단어이므로 **앞에서부터 누적 500단어를 넘지 않는 이어진 문단까지**만 들어
   있다. 가디언 본문은 665~976단어라(`M13-T1` 실측) **거의 모든 기사가 잘린다** —
   예외가 아니라 상례다. 자르는 자리는 앉힐 때이므로 **이 경로에는 분기가 없다.**
+- **`byline` 과 `url` 은 장식이 아니다** (`M13-T10`). 출처 약관이 **기자 크레딧과
+  원문 백링크를 요구한다.** 그래서 ① 크레딧이 빈 기사는 앉혀지지 않고
+  (`article_credit`) ② 화면이 머리와 바닥 **두 곳에** 크레딧과 링크를 적는다 —
+  문단 아코디언이라 번역이 화면 중간에서 펼쳐지고, 그때 머리의 링크는 스크롤
+  밖이다.
 - **`level` 은 회원이 고른 난이도가 아니다.** 미리 분석이 어느 난이도로 준비됐는지
   (지금은 중급 하나)를 알려주는 값이고, 화면이 그렇다고 적는다.
 - **본문과 분석을 함께 주지 않는다.** 16문단 한 편의 분석이 128KB 라서다 — 읽는

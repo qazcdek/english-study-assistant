@@ -23,6 +23,7 @@ GOOD = {
     "source_id": "world/2026/nov/01/example",
     "url": "https://www.theguardian.com/world/2026/nov/01/example",
     "title": "An example article",
+    "byline": "Luke Harding in Kyiv",
     "section": "world",
     "published_at": "2026-11-01T17:20:18Z",
     "body": "<p>Long enough to pass the fifty character floor in paragraphs.py.</p>",
