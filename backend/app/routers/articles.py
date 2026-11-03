@@ -9,6 +9,16 @@ LLM 을 부르지 않고, 그래서 동의·키·사용량과 아무 상관이 �
 사용량도 세지 않는다. 세는 이유는 회원 각자의 LLM 한도를 쓰기 때문인데
 (09 §3.3), 글감은 운영자 키로 미리 돈 것이다.
 
+### 읽는 요청이 **방아쇠**다
+
+오늘 글감이 온전하지 않으면 고르기를 `BackgroundTasks` 로 던지고 **기다리지 않고**
+어제 것을 돌려준다 (`09 §3.8`). 고르기+분석은 문단 수만큼 LLM 호출이라 수십 초다 —
+응답 경로에서 돌리면 **첫 방문자가 그 시간을 전부 기다린다.**
+
+시계에 걸 수 없어서 이렇게 한다. cron 도 상주 프로세스도 Render 무료 티어에서는
+못 믿는다(15분 미사용이면 잠든다). 판단 자체는 `daily.should_run` 이 들고, 여기서는
+**부르기만** 한다 — 그 판단을 라우터 안에 두면 검사가 HTTP 를 떠야만 물을 수 있다.
+
 ### 모드 분기를 두지 않는다
 
 공용 글감은 cloud 전용이지만(09 §3.8) **여기에 `is_cloud` 를 적지 않는다.**
@@ -20,9 +30,9 @@ LLM 을 부르지 않고, 그래서 동의·키·사용량과 아무 상관이 �
 [문서] plan/DONE.md M13-T6
 """
 
-from fastapi import APIRouter
+from fastapi import APIRouter, BackgroundTasks
 
-from app.deps import DbDep, SessionUser
+from app.deps import DbDep, SessionUser, SettingsDep
 from app.errors import NotFoundError
 from app.schemas import (
     ArticleOut,
@@ -30,14 +40,29 @@ from app.schemas import (
     ParagraphAnalysisOut,
     ParagraphOut,
 )
-from app.services import articles, records
+from app.services import articles, daily, records
 
 router = APIRouter(prefix="/api/articles", tags=["articles"])
 
 
 @router.get("/current", response_model=DailyArticleResponse)
-def current_article(_user: SessionUser, db: DbDep) -> DailyArticleResponse:
-    """지금 보여줄 글감 한 편과 그 문단들. 고른 것이 없으면 `article: null`."""
+def current_article(
+    _user: SessionUser,
+    db: DbDep,
+    tasks: BackgroundTasks,
+    settings: SettingsDep,
+) -> DailyArticleResponse:
+    """지금 보여줄 글감 한 편과 그 문단들. 고른 것이 없으면 `article: null`.
+
+    오늘 것이 아직 없으면 **뒤에서 고르기를 시작하고 어제 것을 돌려준다.**
+    """
+    if daily.should_run(db, settings):
+        # **암호 도구를 의존성으로 받지 않는다.** `CipherDep` 은 `ENCRYPTION_KEY` 가
+        # 없으면 거부하므로(`deps.get_cipher`) 그걸 여기 걸면 **llama-server 만 쓰는
+        # local 에서 읽기 경로가 막힌다.** 실제로 그렇게 짰다가 검사가 400 으로 잡았다.
+        # 키가 필요한 자리는 분석 하나뿐이고, 거긴 cloud 에서만 닿는다.
+        tasks.add_task(daily.run, settings)
+
     shown = articles.current(db)
     if shown is None:
         return DailyArticleResponse(article=None)

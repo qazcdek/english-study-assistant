@@ -9,7 +9,7 @@
 
 import json
 import os
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 
 import pytest
 
@@ -130,3 +130,28 @@ def test_deleting_already_stored_paragraphs_says_the_analyses_went_too():
 def test_both_can_happen_at_once():
     """본문은 잘리고, 전에 넣어 둔 꼬리도 지워지는 경우다."""
     assert len(article.cut_notes(skipped=5, trimmed=2, limit=500)) == 2
+
+
+# ------------------------------------- `--pick` 날짜 해석 (M13-T4)
+
+
+def test_today_comes_from_the_shared_clock_not_from_here():
+    """**두 곳에 적으면 갈린다.** 전에 이 자리가 UTC 로 셌고, 그래서 한국 시간
+    11월 2일에 넣은 기사가 11월 1일 글감으로 찍혔다."""
+    called = []
+
+    def clock():
+        called.append(True)
+        return date(2026, 11, 4)
+
+    assert article.pick_date("today", clock) == date(2026, 11, 4)
+    assert called == [True]  # 직접 세지 않고 받아 썼다
+
+
+def test_none_means_a_candidate_not_a_pick():
+    """`picked_for` 가 비면 아직 안 고른 후보다 — 화면에 안 나온다."""
+    assert article.pick_date("none", date.today) is None
+
+
+def test_an_explicit_day_is_taken_as_given():
+    assert article.pick_date("2026-01-09", date.today) == date(2026, 1, 9)

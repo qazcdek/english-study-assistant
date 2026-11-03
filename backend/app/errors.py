@@ -152,3 +152,20 @@ class ArticleCreditError(ArticleBodyError):
 
     code = "article_credit"
     message = "기사에 기자 크레딧이 없습니다."
+
+
+class ArticleSourceError(AppError):
+    """출처에서 후보를 가져오지 못했다 (M13-T4).
+
+    키가 비었거나, HTTP 가 실패했거나, 응답에 쓸 기사가 없을 때다. **위 셋과
+    형제가 아니다** — `ArticleBodyError` 는 "이 기사를 버리고 다음 후보로" 이고,
+    이것은 **후보 목록 자체가 없다**는 뜻이라 넘어갈 다음이 없다. 고르는 쪽이
+    이것을 보고 쿨다운을 적는다.
+
+    `detail` 에 **키를 담지 않는다.** `httpx` 의 오류 문구에는 요청 URL 이 들어가고
+    거기에 `api-key` 가 붙어 있다 — 그대로 적으면 DB 와 화면에 키가 남는다.
+    """
+
+    code = "article_source"
+    http_status = 502
+    message = "글감 출처에서 기사를 가져오지 못했습니다."
