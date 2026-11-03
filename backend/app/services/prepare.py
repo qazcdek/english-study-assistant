@@ -62,6 +62,7 @@ from app.config import Settings
 from app.db import Article, ArticleParagraph, ParagraphAnalysis
 from app.errors import LLMError, OperatorKeyRequiredError
 from app.providers import registry
+from app.providers.base import LLMProvider
 from app.schemas import AnalyzeRequest, AnalyzeResponse
 from app.services import keys, operator, records
 from app.services.analyzer import AnalyzerService
@@ -91,11 +92,13 @@ class Report:
         return self.prepared + self.retried
 
 
-def analyzer_for(db: Session, cipher: KeyCipher, settings: Settings) -> AnalyzerService:
-    """운영자 키로 도는 분석기. **회원 키를 쓰지 않는다.**
+def provider_for(db: Session, cipher: KeyCipher, settings: Settings) -> LLMProvider:
+    """운영자 키로 도는 프로바이더. **회원 키를 쓰지 않는다.**
 
     운영자가 없거나 그 키가 없으면 여기서 멈춘다 — 빈 키로 호출을 시작하면
-    문단마다 한 번씩 실패하면서 72번을 헛돈다.
+    문단마다 한 번씩 실패하면서 수십 번을 헛돈다.
+
+    분석기 밖에서도 쓴다 — 문단 묶기(`M13-T11`)가 같은 키로 경계를 묻는다.
     """
     owner = operator.find(db)
     if owner is None:
@@ -122,9 +125,12 @@ def analyzer_for(db: Session, cipher: KeyCipher, settings: Settings) -> Analyzer
             "공용 글감용 모델이 제공자 목록에 없습니다.",
             detail=f"{operator.JOB_PROVIDER}/{operator.JOB_MODEL}",
         )
-    return AnalyzerService(
-        registry.build(info.id, operator.JOB_MODEL, api_key, settings)
-    )
+    return registry.build(info.id, operator.JOB_MODEL, api_key, settings)
+
+
+def analyzer_for(db: Session, cipher: KeyCipher, settings: Settings) -> AnalyzerService:
+    """운영자 키로 분석기를 세운다. 프로바이더 고르기는 `provider_for` 가 든다."""
+    return AnalyzerService(provider_for(db, cipher, settings))
 
 
 async def article(

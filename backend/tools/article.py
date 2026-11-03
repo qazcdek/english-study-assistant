@@ -173,7 +173,7 @@ def main(argv: list[str] | None = None) -> int:
     from app.config import get_settings
     from app.db.session import init_engine, session_scope
     from app.errors import AppError
-    from app.services import articles, daily, paragraphs, prepare
+    from app.services import articles, daily, grouping, paragraphs, prepare
 
     picked = pick_date(args.pick, daily.today)
 
@@ -184,8 +184,29 @@ def main(argv: list[str] | None = None) -> int:
     init_engine(settings.database_url, create_all=False)
 
     with session_scope() as db:
+        # **묶기도 자동 경로와 같은 것을 탄다** (M13-T11). 주제 경계는 운영자 키로
+        # 묻고, 키가 없거나 못 믿을 답이 오면 단어 예산으로 떨어진다 — 손으로 넣어
+        # 확인한 문단이 자동 경로의 문단과 달라지면 확인한 뜻이 없다.
         try:
-            stored = articles.store(db, draft, picked_for=picked)
+            texts, cut = articles.gates(draft)
+        except AppError as exc:
+            print(f"{exc.message} ({exc.detail})", file=sys.stderr)
+            return 1
+
+        try:
+            provider = prepare.provider_for(db, KeyCipher(settings.encryption_key), settings)
+        except AppError:
+            provider = None
+        try:
+            groups = asyncio.run(
+                grouping.by_topic(texts[cut.start : cut.stop], provider)
+            )
+        finally:
+            if provider is not None:
+                asyncio.run(provider.aclose())
+
+        try:
+            stored = articles.store(db, draft, picked_for=picked, groups=groups)
         except AppError as exc:
             print(f"{exc.message} ({exc.detail})", file=sys.stderr)
             return 1
@@ -196,6 +217,8 @@ def main(argv: list[str] | None = None) -> int:
         )
         print(f"문단 {stored.paragraphs} · 글감 날짜 {stored.article.picked_for or '(후보)'}")
 
+        if stored.pieces != stored.paragraphs:
+            print(f"토막 {stored.pieces}개를 {stored.paragraphs}문단으로 묶었다")
         for note in cut_notes(stored.skipped, stored.trimmed, paragraphs.WORD_LIMIT):
             print(note)
 

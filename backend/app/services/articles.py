@@ -106,10 +106,20 @@ class Stored:
     skipped: int = 0
     #: 이미 들어 있던 것 중 상한을 넘겨 **지운** 문단 수. 그 분석도 함께 사라졌다.
     trimmed: int = 0
+    #: 묶기 전 토막 수. `paragraphs` 와 다르면 **묶였다**는 뜻이다 (M13-T11).
+    pieces: int = 0
 
 
-def store(db: Session, draft: Draft, *, picked_for: date | None = None) -> Stored:
-    """기사와 문단을 넣는다. **몇 번 불러도 같다** — 이유는 머리말."""
+def gates(draft: Draft) -> tuple[list[str], paragraphs.Excerpt]:
+    """앉힐 수 있는 기사인가. 쪼갠 토막 전체와 쓸 구간을 돌려준다.
+
+    **DB 를 타지 않는다.** 묶기(`M13-T11`)가 LLM 을 부르므로 관문과 앉히기 사이에
+    끼어야 하고, 그러려면 관문이 따로 불릴 수 있어야 한다. `store()` 도 이것을
+    부르므로 **문은 하나다** — 손으로 넣는 길과 자동 경로가 같은 것을 지난다.
+
+    셋 다 `ArticleBodyError` 의 자손을 던진다. 고르는 쪽이 하나만 잡아도 **다음
+    후보로 넘어가는 것을 빼먹을 수 없다.**
+    """
     texts = paragraphs.split(draft.body)
     if not texts:
         raise ArticleBodyError(detail=f"{draft.source}/{draft.source_id}")
@@ -124,7 +134,37 @@ def store(db: Session, draft: Draft, *, picked_for: date | None = None) -> Store
     cut = paragraphs.excerpt(texts)
     if not cut:
         raise ArticleLengthError(detail=f"{draft.source}/{draft.source_id}")
-    kept = texts[cut.start : cut.stop]
+    return texts, cut
+
+
+def store(
+    db: Session,
+    draft: Draft,
+    *,
+    picked_for: date | None = None,
+    groups: list[list[int]] | None = None,
+) -> Stored:
+    """기사와 문단을 넣는다. **몇 번 불러도 같다** — 이유는 머리말.
+
+    `groups` 는 **묶음별 자리 번호**다 (`paragraphs.group()` 과 같은 모양). 주지
+    않으면 단어 예산으로 묶는다 — 그래서 **부르는 쪽이 묶기를 빼먹어도 한 문장씩
+    앉지 않는다** (`M13-T11`). 주제 경계를 쓰려면 `services/grouping.py` 가 낸
+    번호를 넘긴다.
+
+    **번호를 받는 이유는 본문이 바뀌지 않게 하려는 것이다.** 글을 받으면 중간에서
+    한 글자가 달라졌는지 알 수 없고, 그러면 기자 크레딧을 붙여 고친 글을 내보내는
+    셈이 된다 (`M13-T10`).
+    """
+    texts, cut = gates(draft)
+    inside = texts[cut.start : cut.stop]
+
+    # **묶고 나서 앉힌다** (M13-T11). 가디언 `<p>` 는 한 문장일 때가 절반을 넘어서
+    # (실측 58%) 그대로 앉히면 한 문장에 네 번씩 분석을 부른다.
+    #
+    # 꼬리에 `…` 는 **뒤에 안 쓴 문단이 있을 때만** 붙인다. 추측이 아니라
+    # `excerpt()` 가 알려 준 사실이다 — 표시 없이 내보내면 기사가 거기서 끝난 줄 안다.
+    spans = groups if groups is not None else paragraphs.group(inside)
+    kept = paragraphs.joined(inside, spans, more=cut.stop < len(texts))
 
     row = (
         db.query(Article)
@@ -177,7 +217,11 @@ def store(db: Session, draft: Draft, *, picked_for: date | None = None) -> Store
         article=row,
         paragraphs=stored,
         created=created,
-        skipped=len(texts) - len(kept),
+        # **약관 상한에 걸려 안 쓴 토막 수다** (M13-T9). 묶어서 줄어든 것과 섞지
+        # 않는다 — `len(kept)` 는 묶음 수이므로 그것으로 세면 "묶었다" 가 "버렸다"
+        # 로 보고된다.
+        skipped=len(texts) - (cut.stop - cut.start),
+        pieces=cut.stop - cut.start,
         trimmed=trimmed,
     )
 

@@ -71,7 +71,8 @@ from app.db import (
     session_scope,
 )
 from app.errors import AppError, ArticleBodyError
-from app.services import articles, guardian, operator, prepare
+from app.providers.base import LLMProvider
+from app.services import articles, grouping, guardian, operator, prepare
 
 #: 읽는 사람의 시간대. `picked_for` 가 이 날짜로 찍힌다 — 이유는 머리말.
 KST = timedelta(hours=9)
@@ -197,11 +198,20 @@ async def run(settings: Settings, *, day: date | None = None) -> None:
             return
 
         with session_scope() as db:
+            # 문단 묶기가 쓸 프로바이더. **없으면 단어 예산으로 묶인다** — 주제
+            # 경계는 더 나은 것이고 없어도 되는 것이다 (`services/grouping.py`).
             try:
-                target = _pick(db, drafts, day)
+                provider = prepare.provider_for(db, cipher, settings)
+            except AppError:
+                provider = None
+            try:
+                target = await _pick(db, drafts, day, provider)
             except AppError as exc:
                 _note(db, day, f"{exc.code}: {exc.detail or exc.message}")
                 return
+            finally:
+                if provider is not None:
+                    await provider.aclose()
 
     # **분석은 세션을 따로 쓴다.** 문단마다 커밋하며 몇 분을 돌므로(`prepare`)
     # 고르기와 한 트랜잭션에 묶으면 그 사이 다른 요청이 오늘 글감을 못 읽는다.
@@ -233,7 +243,12 @@ def _todays(db: Session, day: date) -> int | None:
     )
 
 
-def _pick(db: Session, drafts: list[articles.Draft], day: date) -> int:
+async def _pick(
+    db: Session,
+    drafts: list[articles.Draft],
+    day: date,
+    provider: LLMProvider | None = None,
+) -> int:
     """후보를 인기 순서대로 앉혀 본다. 성공한 기사의 id.
 
     **관문을 `store()` 가 든다.** 분량(`M13-T9`)과 크레딧(`M13-T10`)과 쪼개기
@@ -256,10 +271,16 @@ def _pick(db: Session, drafts: list[articles.Draft], day: date) -> int:
         )
         if used is not None:
             continue
+        # **관문을 먼저 지나고 나서 묶는다** (M13-T11). 묶기가 LLM 을 부르므로
+        # 못 쓸 기사에까지 호출을 쓰면 낭비다 — `gates()` 가 DB 를 안 타는 이유다.
         try:
-            stored = articles.store(db, draft, picked_for=day)
+            texts, cut = articles.gates(draft)
         except ArticleBodyError:
             continue  # 쪼개지지 않거나 · 500단어 토막이 없거나 · 크레딧이 없다
+
+        groups = await grouping.by_topic(texts[cut.start : cut.stop], provider)
+        try:
+            stored = articles.store(db, draft, picked_for=day, groups=groups)
         except IntegrityError:
             # `uq_article_day_source` 다 — **다른 요청이 먼저 앉혔다.** 제약이 그대로
             # 잠금 역할을 한다(동시 요청을 막는 장치가 따로 없는 이유다). 실패가

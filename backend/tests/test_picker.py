@@ -340,9 +340,9 @@ def draft(**over) -> articles.Draft:
     return articles.Draft(**{**base, **over})
 
 
-def test_the_top_candidate_is_used_when_it_passes(cloud):
+async def test_the_top_candidate_is_used_when_it_passes(cloud):
     with session_scope() as db:
-        article_id = daily._pick(db, [draft(), draft(source_id="second")], TODAY)
+        article_id = await daily._pick(db, [draft(), draft(source_id="second")], TODAY)
 
         row = db.get(Article, article_id)
         assert row.source_id == "world/2026/nov/04/example"
@@ -358,11 +358,11 @@ def test_the_top_candidate_is_used_when_it_passes(cloud):
     ],
     ids=["쪼개지지-않는다", "500단어-토막이-없다", "크레딧이-없다"],
 )
-def test_a_candidate_that_fails_a_gate_is_skipped_for_the_next(cloud, broken):
+async def test_a_candidate_that_fails_a_gate_is_skipped_for_the_next(cloud, broken):
     """**관문은 `store()` 하나다.** 셋 다 `ArticleBodyError` 의 자손이므로
     `except ArticleBodyError` 하나로 빼먹을 수 없다 (`M13-T9` · `M13-T10`)."""
     with session_scope() as db:
-        article_id = daily._pick(
+        article_id = await daily._pick(
             db,
             [draft(source_id="bad", **broken), draft(source_id="good")],
             TODAY,
@@ -371,33 +371,33 @@ def test_a_candidate_that_fails_a_gate_is_skipped_for_the_next(cloud, broken):
         assert db.get(Article, article_id).source_id == "good"
 
 
-def test_an_article_already_used_as_a_pick_is_skipped(cloud):
+async def test_an_article_already_used_as_a_pick_is_skipped(cloud):
     """**어제 1위가 오늘도 1위다.** `store()` 는 `picked_for` 를 덮어쓰므로
     걸러 주지 않으면 같은 글이 또 온다."""
     with session_scope() as db:
         make_article(db, _cipher(), source_id="yesterday", picked_for=TODAY - timedelta(days=1))
 
-        article_id = daily._pick(
+        article_id = await daily._pick(
             db, [draft(source_id="yesterday"), draft(source_id="fresh")], TODAY
         )
 
         assert db.get(Article, article_id).source_id == "fresh"
 
 
-def test_a_stored_candidate_that_was_never_picked_can_still_be_used(cloud):
+async def test_a_stored_candidate_that_was_never_picked_can_still_be_used(cloud):
     """`picked_for` 가 빈 행은 **후보**다. 쓴 적이 없으므로 넘기지 않는다."""
     with session_scope() as db:
         make_article(db, _cipher(), source_id="candidate", picked_for=None)
 
-        article_id = daily._pick(db, [draft(source_id="candidate")], TODAY)
+        article_id = await daily._pick(db, [draft(source_id="candidate")], TODAY)
 
         assert db.get(Article, article_id).source_id == "candidate"
 
 
-def test_when_every_candidate_fails_the_picker_says_so(cloud):
+async def test_when_every_candidate_fails_the_picker_says_so(cloud):
     """쿨다운이 적히고 5분 뒤 다시 본다. **조용히 성공으로 두지 않는다.**"""
     with session_scope() as db, pytest.raises(ArticleBodyError):
-        daily._pick(db, [draft(body="<p>Short.</p>")], TODAY)
+        await daily._pick(db, [draft(body="<p>Short.</p>")], TODAY)
 
 
 # --------------------------------------------- 뒤에서 도는 한 바퀴
@@ -426,7 +426,9 @@ async def test_a_full_run_stands_up_todays_article_with_its_analyses(cloud, monk
         assert db.query(PickAttempt).count() == 0
         shown = articles.current(db)
         assert shown.article.picked_for == TODAY
-        assert len(shown.prepared) == len(PARAGRAPHS)
+        # **문단이 묶였다** (M13-T11) — 세 토막이 120낱말 안이라 한 문단이다.
+        assert len(shown.paragraphs) == 1
+        assert len(shown.prepared) == len(shown.paragraphs)
 
 
 async def test_a_failing_source_leaves_a_cooldown_and_throws_nothing(cloud, monkeypatch):
@@ -493,7 +495,7 @@ async def test_a_run_that_stops_mid_analysis_keeps_what_it_got(cloud, monkeypatc
 # --------------------------------------------- 방아쇠는 읽는 요청이다
 
 
-def test_the_read_request_throws_the_pick_behind_it(cloud, monkeypatch):
+async def test_the_read_request_throws_the_pick_behind_it(cloud, monkeypatch):
     """**요청을 막지 않는다.** 고르기+분석은 수십 초다 — 응답 경로에서 돌리면
     첫 방문자가 그 시간을 전부 기다린다 (`09 §3.8`)."""
     from fastapi.testclient import TestClient
