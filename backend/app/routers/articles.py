@@ -31,7 +31,9 @@ LLM 을 부르지 않고, 그래서 동의·키·사용량과 아무 상관이 �
 """
 
 from fastapi import APIRouter, BackgroundTasks
+from sqlalchemy.orm import Session
 
+from app.config import Settings
 from app.deps import DbDep, OperatorUser, SessionUser, SettingsDep
 from app.errors import NotFoundError
 from app.schemas import (
@@ -57,12 +59,7 @@ def current_article(
 
     오늘 것이 아직 없으면 **뒤에서 고르기를 시작하고 어제 것을 돌려준다.**
     """
-    if daily.should_run(db, settings):
-        # **암호 도구를 의존성으로 받지 않는다.** `CipherDep` 은 `ENCRYPTION_KEY` 가
-        # 없으면 거부하므로(`deps.get_cipher`) 그걸 여기 걸면 **llama-server 만 쓰는
-        # local 에서 읽기 경로가 막힌다.** 실제로 그렇게 짰다가 검사가 400 으로 잡았다.
-        # 키가 필요한 자리는 분석 하나뿐이고, 거긴 cloud 에서만 닿는다.
-        tasks.add_task(daily.run, settings)
+    _arm(tasks, db, settings)
 
     shown = articles.current(db)
     if shown is None:
@@ -71,7 +68,12 @@ def current_article(
 
 
 @router.get("/picked", response_model=ArticleListResponse)
-def picked_articles(_user: OperatorUser, db: DbDep) -> ArticleListResponse:
+def picked_articles(
+    _user: OperatorUser,
+    db: DbDep,
+    tasks: BackgroundTasks,
+    settings: SettingsDep,
+) -> ArticleListResponse:
     """그동안 고른 뉴스를 **최신순으로.** 운영자만 볼 수 있다 (M13-T13).
 
     **회원은 오늘 것만 본다.** 지난 뉴스를 쌓아 보여주는 것은 운영자가 품질을
@@ -79,8 +81,29 @@ def picked_articles(_user: OperatorUser, db: DbDep) -> ArticleListResponse:
 
     `current` 에 분기를 더하지 않은 이유는 **다른 물음**이기 때문이다 — 섞으면
     응답 모양이 회원마다 달라져 화면이 둘을 다 그려야 한다.
+
+    **방아쇠는 여기에도 있다.** 운영자 화면은 이 경로만 부르므로(`DailyArticle` 이
+    `isOperator` 면 `picked` 로 간다) 없으면 **운영자는 영원히 기다린다** —
+    실제로 그렇게 짜서 낡은 기사가 안 바뀌었다 (`H-050`).
     """
+    _arm(tasks, db, settings)
     return ArticleListResponse(articles=[_out(s) for s in articles.picked(db)])
+
+
+def _arm(tasks: BackgroundTasks, db: Session, settings: Settings) -> None:
+    """돌릴 이유가 있으면 고르기를 뒤로 던진다. **읽는 경로마다 부른다.**
+
+    `11 §2` 원리 ② — **진입 지점은 하나가 아니다.** 방아쇠를 `current` 한 곳에만
+    두었더니 운영자 목록(`picked`)이 생기면서 그 사람만 조용히 빠졌다. 한 함수로
+    모아 두면 경로가 늘 때 **빼먹은 것이 눈에 보인다.**
+
+    **암호 도구를 의존성으로 받지 않는다.** `CipherDep` 은 `ENCRYPTION_KEY` 가
+    없으면 거부하므로(`deps.get_cipher`) 그걸 걸면 **llama-server 만 쓰는 local 에서
+    읽기 경로가 막힌다.** 실제로 그렇게 짰다가 검사가 400 으로 잡았다. 키가 필요한
+    자리는 분석 하나뿐이고, 거긴 cloud 에서만 닿는다.
+    """
+    if daily.should_run(db, settings):
+        tasks.add_task(daily.run, settings)
 
 
 def _out(shown: articles.Shown) -> ArticleOut:
