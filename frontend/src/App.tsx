@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 
 import { AccountBar } from './components/AccountBar'
+import { DailyArticle } from './components/DailyArticle'
 import { DataMenu } from './components/DataMenu'
 import { Gate } from './components/Gate'
 import { HistoryList } from './components/HistoryList'
@@ -14,7 +15,7 @@ import { Toast } from './components/Toast'
 import { legalReady } from './legal/operator'
 import { Privacy } from './legal/Privacy'
 import { Terms } from './legal/Terms'
-import { initialState, reduce, type AnalysisState } from './lib/analysis'
+import { finishedState, initialState, reduce, type AnalysisState } from './lib/analysis'
 import {
   ApiError,
   analyzeStream,
@@ -24,7 +25,7 @@ import {
   listHistory,
 } from './lib/api'
 import type { HistoryEntry } from './lib/history'
-import { pathOf, routeOf, type Route, type View } from './lib/routes'
+import { pathOf, routeOf, tabsFor, type Route, type View } from './lib/routes'
 import { useIsWide } from './lib/useIsWide'
 import { useSession } from './lib/useSession'
 import { useVocabulary } from './lib/useVocabulary'
@@ -181,17 +182,10 @@ export default function App() {
       try {
         const detail = await getHistoryDetail(Number(id))
         setText(detail.source_text)
-        setAnalysis({
-        result: detail.result,
-          markdown: detail.markdown,
-          fullMarkdown: detail.markdown.full,
-          status: {
-            translation: { state: 'done' },
-            expressions: { state: 'done' },
-            structures: { state: 'done' },
-            overview: { state: 'done' },
-          },
-        })
+        // 글감 문단을 펼칠 때와 **같은 함수**다 (`lib/analysis.ts`). 전에는 여기서
+        // 네 파트를 전부 `done` 으로 칠했는데, 그러면 **실패한 파트가 빈 결과처럼
+        // 보인다** — 기록은 어느 파트가 실패했는지 들고 있다.
+        setAnalysis(finishedState(detail.result, detail.markdown, detail.failed_parts))
       } catch (e) {
         // 서버가 무엇이 틀렸는지 말해 준다 — `not_found` 면 "찾을 수 없습니다" 다.
         // 전부 같은 문구로 덮으면 404 를 구별해 준 의미가 없어진다 (H-012).
@@ -299,12 +293,9 @@ export default function App() {
         </p>
         <div className="ml-auto flex flex-wrap items-center justify-end gap-2 sm:gap-3">
           <nav className="flex items-center gap-1 rounded-lg bg-stone-100 p-0.5 text-xs dark:bg-stone-800">
-            {(
-              [
-                ['analyze', '분석'],
-                ['mine', '나의 표현'],
-              ] as const
-            ).map(([key, label]) => (
+            {/* 어느 탭이 뜨나는 `lib/routes.ts` 가 정한다 — 글감은 cloud 에만
+                있다 (09 §3.8). 백엔드에는 그 분기를 두지 않는다. */}
+            {tabsFor(cloud).map(([key, label]) => (
               <button
                 key={key}
                 type="button"
@@ -346,7 +337,9 @@ export default function App() {
 
       <div className="grid gap-6 lg:grid-cols-[1fr_200px]">
         <main className="flex min-w-0 flex-col gap-4">
-          {view === 'mine' ? (
+          {view === 'article' ? (
+            <DailyArticle vocab={vocab} level={level} />
+          ) : view === 'mine' ? (
             <MyExpressions vocab={vocab} level={level} />
           ) : (
             <>

@@ -2,11 +2,13 @@ import type {
   Account,
   AccountSettings,
   AppConfig,
+  DailyArticleResponse,
   DeletionSummary,
   HealthResponse,
   HistoryDetail,
   HistoryItem,
   Level,
+  ParagraphAnalysis,
   PracticeHistoryItem,
   PracticeRequest,
   PracticeResponse,
@@ -198,6 +200,17 @@ export const tidyHistory = () => request<TidySummary>('/api/history/tidy', { met
 export const getHistoryDetail = (id: number) => request<HistoryDetail>(`/api/history/${id}`)
 export const deleteHistory = (id: number) =>
   request<{ ok: boolean }>(`/api/history/${id}`, { method: 'DELETE' })
+
+// --- 공용 글감 (M13) ---
+//
+// **키가 필요 없다.** 미리 분석이 끝나 있어 LLM 을 부르지 않는다 — 키 없는 회원도
+// 읽는다 (H-041 과 같은 이유). 한 편을 통째로 받지 않는 이유는 값이다: 전체가
+// 128KB 라 본문만 먼저 받고 분석은 펼칠 때 하나씩 가져온다.
+
+export const getDailyArticle = () => request<DailyArticleResponse>('/api/articles/current')
+
+export const getParagraphAnalysis = (articleId: number, ordinal: number) =>
+  request<ParagraphAnalysis>(`/api/articles/${articleId}/paragraphs/${ordinal}`)
 
 // --- 나의 표현 (서버에서는 vocabulary) ---
 

@@ -412,6 +412,63 @@ class PracticeHistoryItem(BaseModel):
     created_at: str
 
 
+# --------------------------------------------------------------------------- 공용 글감
+
+
+class ParagraphOut(BaseModel):
+    """글감의 문단 하나. **본문만** 담는다 — 분석은 펼칠 때 따로 가져온다."""
+
+    ordinal: int
+    text: str
+    #: 미리 분석이 있나. 미리 분석이 중간에 멈추면 뒤쪽 문단이 `false` 로 남는다.
+    prepared: bool
+
+
+class ArticleOut(BaseModel):
+    """지금 보여줄 글감 한 편.
+
+    **`picked_for` 를 숨기지 않는다.** 오늘 것이 아직 없으면 어제 것을 보여주는
+    것이 규정이므로(09 §3.8), 며칠 글감인지는 회원이 보고 알아야 한다.
+    """
+
+    id: int
+    source: str
+    url: str
+    title: str
+    section: str
+    published_at: str
+    picked_for: str
+    #: 미리 분석이 어느 난이도로 준비됐나. **회원이 고른 난이도가 아니다.**
+    level: Level
+    paragraphs: list[ParagraphOut]
+
+
+class DailyArticleResponse(BaseModel):
+    """글감이 없을 수 있다. **그것은 오류가 아니라 정상 상태다** — 첫 배포 직후와
+    고르기가 실패하고 있는 동안이 그렇다. 404 로 두면 화면이 정상 상태에 오류 옷을
+    입힌다.
+    """
+
+    article: ArticleOut | None = None
+
+
+class ParagraphAnalysisOut(BaseModel):
+    """문단 하나의 미리 분석.
+
+    **`HistoryDetail` 과 같은 칸을 든다** — 같은 분석기가 만들고 같은 화면이 읽는다
+    (`db/models.py` 의 `ParagraphAnalysis`). 다른 것은 주인이 없다는 것뿐이다.
+    문단 본문은 `result.source_text` 에 이미 들어 있으므로 따로 담지 않는다.
+    """
+
+    ordinal: int
+    level: Level
+    result: AnalysisResult
+    markdown: MarkdownSections
+    failed_parts: list[str] = Field(default_factory=list)
+    #: 어느 모델이 만들었나. 회원 기록과 달리 **운영자 키로** 돌았다.
+    model: str = ""
+
+
 class ErrorBody(BaseModel):
     code: str
     message: str

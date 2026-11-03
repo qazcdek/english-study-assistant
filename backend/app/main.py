@@ -10,7 +10,7 @@ from app.config import get_settings
 from app.errors import AppError, LLMError
 from app.observability import init_sentry
 from app.providers.llama_server import LlamaServerProvider
-from app.routers import account, analyze, auth
+from app.routers import account, analyze, articles, auth
 
 
 @asynccontextmanager
@@ -103,6 +103,9 @@ def create_app() -> FastAPI:
     app.include_router(analyze.router)
     # 히스토리·단어장·연습 기록은 두 모드 모두 쓴다.
     app.include_router(account.router)
+    # 공용 글감도 **두 모드에 등록한다.** cloud 전용 기능이지만 모드 분기를 두지
+    # 않는다 — local 은 표가 비어 있어 "글감 없음" 이 나온다 (09 §3.8).
+    app.include_router(articles.router)
     if settings.is_cloud:
         app.include_router(auth.router)
 

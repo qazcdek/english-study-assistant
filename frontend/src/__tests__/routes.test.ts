@@ -1,9 +1,9 @@
 import { describe, expect, test } from 'vitest'
 
-import { PATHS, pathOf, routeOf } from '../lib/routes'
+import { PATHS, pathOf, routeOf, tabsFor } from '../lib/routes'
 
 describe('주소와 화면은 서로 되돌아간다', () => {
-  test('매개변수 없는 화면 넷', () => {
+  test('매개변수 없는 화면들', () => {
     for (const view of Object.keys(PATHS) as (keyof typeof PATHS)[]) {
       const path = PATHS[view]
       expect(pathOf({ view, recordId: null })).toBe(path)
@@ -30,5 +30,29 @@ describe('주소와 화면은 서로 되돌아간다', () => {
 
   test('모르는 주소는 분석 화면이다', () => {
     expect(routeOf('/nope')).toEqual({ view: 'analyze', recordId: null })
+  })
+})
+
+describe('머리의 탭', () => {
+  test('글감은 cloud 에만 있다', () => {
+    // 공용 글감은 cloud 전용이다 (09 §3.8). local 은 표가 늘 비어 있으므로
+    // 아무것도 없는 화면으로 가는 문을 달지 않는다.
+    expect(tabsFor(true).map(([view]) => view)).toContain('article')
+    expect(tabsFor(false).map(([view]) => view)).not.toContain('article')
+  })
+
+  test('분석과 나의 표현은 두 모드에 다 있다', () => {
+    for (const cloud of [true, false]) {
+      const views = tabsFor(cloud).map(([view]) => view)
+      expect(views).toContain('analyze')
+      expect(views).toContain('mine')
+    }
+  })
+
+  test('탭마다 갈 주소가 있다', () => {
+    // 주소 없는 탭을 누르면 `pathOf` 가 undefined 를 밀어 넣어 주소가 깨진다.
+    for (const [view] of tabsFor(true)) {
+      expect(PATHS[view]).toBeTruthy()
+    }
   })
 })
