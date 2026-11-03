@@ -19,7 +19,7 @@ from sqlalchemy.orm import Session
 
 from app.auth.crypto import KeyCipher
 from app.db import Article, ArticleParagraph, User
-from app.services import keys, operator
+from app.services import articles, keys, operator
 
 PARAGRAPHS = (
     (
@@ -90,6 +90,9 @@ def make_article(
         section="world",
         published_at=datetime(2026, 10, 22, 6, 0, tzinfo=UTC),
         picked_for=picked_for,
+        # **지금 세대로 세운다** (M13-T15). 안 적으면 0 이 되어 "낡은 기사" 가 되고,
+        # 다시 받기가 돌아 검사가 세운 기사를 버린다.
+        pipeline=articles.PIPELINE,
     )
     db.add(article)
     db.flush()

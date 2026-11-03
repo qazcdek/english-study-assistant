@@ -218,6 +218,9 @@ class Article(Base):
     # 어느 날짜의 뉴스로 골랐나. **비어 있으면 아직 안 고른 후보다.**
     picked_for: Mapped[date | None] = mapped_column(Date, index=True, default=None)
     fetched_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    # **어느 파이프라인이 만들었나** (M13-T15). 지금 값보다 낮으면 문단 묶음이나
+    # 발췌 범위가 낡은 것이므로 **버리고 다시 받는다.** 0 은 이 칸이 생기기 전이다.
+    pipeline: Mapped[int] = mapped_column(Integer, default=0)
 
     paragraphs: Mapped[list["ArticleParagraph"]] = relationship(
         back_populates="article", cascade="all, delete-orphan", order_by="ArticleParagraph.ordinal"

@@ -52,9 +52,11 @@ local 의 `.env` 에 가디언 키가 있어도 **한 번도 호출하지 않는
 **행이 있는지로만 보면 안 된다.** 세 파트만 성공한 행이 "이미 됐음" 으로 읽혀
 총평이 영영 빈 문단이 **모든 회원에게 고정된다.**
 
+[문서] plan/DONE.md M13-T15
 [문서] plan/DONE.md M13-T4
 """
 
+import logging
 from datetime import UTC, date, datetime, timedelta
 
 from sqlalchemy import func
@@ -73,6 +75,8 @@ from app.db import (
 from app.errors import AppError, ArticleBodyError
 from app.providers.base import LLMProvider
 from app.services import articles, grouping, guardian, operator, prepare
+
+log = logging.getLogger(__name__)
 
 #: 읽는 사람의 시간대. `picked_for` 가 이 날짜로 찍힌다 — 이유는 머리말.
 KST = timedelta(hours=9)
@@ -137,6 +141,31 @@ def incomplete(db: Session, day: date) -> bool:
     return paragraphs == 0 or done < paragraphs
 
 
+def stale(db: Session, day: date) -> int | None:
+    """그날 기사가 **낡은 파이프라인으로 만들어졌나.** 낡았으면 그 기사 id.
+
+    문단 묶음이나 발췌 범위가 바뀌면 이미 앉힌 기사는 그 전 규칙으로 선 것이다.
+    `store()` 는 **문단을 다시 쪼개지 않으므로**(분석이 문단 id 에 붙어 있다) 다시
+    앉혀도 안 바뀐다 — 그래서 **버리고 다시 받는 길**이 따로 있어야 한다.
+
+    **추측하지 않는다.** 문단 수나 글자 수로 낡음을 재면 경계에 걸린 멀쩡한 기사를
+    버린다. `articles.PIPELINE` 은 우리가 규칙을 바꿀 때만 올라간다.
+
+    **오늘 것만 본다.** 지난 기사까지 다시 받으면 하루에 수십 편 × 스무 번
+    호출이고, 운영자 목록의 지난 기사는 그때의 기록으로 남는 것이 맞다.
+    """
+    row = (
+        db.query(Article.id, Article.pipeline)
+        .filter(Article.picked_for == day)
+        .order_by(Article.id.desc())
+        .first()
+    )
+    if row is None:
+        return None
+    article_id, pipeline = row
+    return article_id if pipeline < articles.PIPELINE else None
+
+
 def resting(db: Session, day: date, *, now: datetime | None = None) -> bool:
     """쿨다운 중인가. 마지막 실패로부터 `COOLDOWN` 이 안 지났으면 참."""
     row = (
@@ -164,7 +193,9 @@ def should_run(db: Session, settings: Settings, *, day: date | None = None) -> b
     if operator.find(db) is None:
         return False
     day = day or today()
-    if not incomplete(db, day):
+    # **낡은 기사는 온전해도 다시 받는다** (M13-T15). `incomplete` 만 보면 구버전이
+    # 온전한 채로 영원히 남아 새 규칙이 적용되지 않는다 — 사용자가 그걸로 막혔다.
+    if not incomplete(db, day) and stale(db, day) is None:
         return False
     return not resting(db, day)
 
@@ -187,6 +218,12 @@ async def run(settings: Settings, *, day: date | None = None) -> None:
     # 2위를 앉히려다 `uq_article_day_source` 에 걸린다. 실제 응답으로 돌려 보고
     # 발견한 자리다.
     with session_scope() as db:
+        # **낡은 것은 먼저 버린다.** 남겨 두면 `_todays()` 가 그것을 찾아 분석만
+        # 이어 돌고, 문단은 영원히 구버전으로 남는다.
+        doomed = stale(db, day)
+        if doomed is not None:
+            articles.discard(db, doomed)
+            log.info("낡은 파이프라인의 기사를 버렸다: #%s", doomed)
         target = _todays(db, day)
 
     if target is None:

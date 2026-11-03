@@ -61,6 +61,7 @@
 
 [문서] plan/DONE.md M13-T10
 [문서] plan/DONE.md M13-T13
+[문서] plan/DONE.md M13-T15
 [문서] plan/DONE.md M13-T6
 [문서] plan/DONE.md M13-T8
 [문서] plan/DONE.md M13-T9
@@ -75,6 +76,22 @@ from sqlalchemy.orm import Session
 from app.db import Article, ArticleParagraph, ParagraphAnalysis
 from app.errors import ArticleBodyError, ArticleCreditError, ArticleLengthError
 from app.services import paragraphs
+
+#: **이 파이프라인의 세대** (M13-T15). 기사에 적어 두고, 이보다 낮은 기사는
+#: 버리고 다시 받는다.
+#:
+#: **올려야 하는 것은 "읽을 때 메울 수 없는 것" 뿐이다.** 분석 결과 스키마는
+#: `records.upgrade()` 가 읽을 때 올리므로(`14 §3.5`) 여기 해당하지 않는다.
+#: 올리는 것은 이런 것들이다:
+#:
+#: - 문단을 가르는 규칙 (`paragraphs.split` · `excerpt` · `group`)
+#: - 발췌 분량 (`WORD_LIMIT`)
+#: - 프롬프트가 **새로 요구하는 칸** (빈 칸으로 메우면 그 난이도로 연습할 수 없다)
+#:
+#: ```
+#: 1   M13-T11 — 토막을 주제 단위로 묶기 시작했다. 그 전 기사는 한 문장씩이다
+#: ```
+PIPELINE = 1
 
 
 @dataclass(frozen=True)
@@ -185,6 +202,10 @@ def store(
         db.add(row)
         db.flush()
 
+    # **이 파이프라인이 만들었다고 적는다.** 이미 있던 행에도 덮는다 — 다시 앉히는
+    # 길을 지났으면 지금 규칙으로 선 것이다.
+    row.pipeline = PIPELINE
+
     # **크레딧은 새 행이든 이미 있는 행이든 여기 한 줄에서 들어간다.** 위 생성자에도
     # 적어 뒀더니 이 줄이 바로 덮어써서 **아무 일도 하지 않는 줄**이었다 — 깨뜨려
     # 보고 알았다. 이미 있는 행에도 덮는 이유는 문단과 달리 아무것도 매달려 있지
@@ -225,6 +246,32 @@ def store(
         pieces=cut.stop - cut.start,
         trimmed=trimmed,
     )
+
+
+def discard(db: Session, article_id: int) -> None:
+    """기사와 그 문단·분석을 **전부 지운다** (M13-T15).
+
+    파이프라인이 바뀌어 문단 묶음이 낡았을 때 쓴다. 문단만 갈아 끼우지 않는 이유는
+    `picked_for` 다 — 남겨 두면 `_pick()` 이 "이미 쓴 기사" 로 넘겨서 **그날 뉴스가
+    아예 없어진다.**
+
+    `trim()` 과 같은 이유로 분석을 **직접** 지운다. `ON DELETE CASCADE` 는 운영
+    (Postgres)에서만 도는 동작이고 검사가 도는 SQLite 는 외래키 강제가 꺼져 있다
+    (`H-032`).
+    """
+    ids = [
+        pid
+        for (pid,) in db.query(ArticleParagraph.id).filter(
+            ArticleParagraph.article_id == article_id
+        )
+    ]
+    if ids:
+        db.execute(
+            delete(ParagraphAnalysis).where(ParagraphAnalysis.paragraph_id.in_(ids))
+        )
+        db.execute(delete(ArticleParagraph).where(ArticleParagraph.id.in_(ids)))
+    db.execute(delete(Article).where(Article.id == article_id))
+    db.expire_all()
 
 
 def trim(db: Session, rows: list[ArticleParagraph]) -> int:
