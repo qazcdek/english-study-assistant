@@ -5,12 +5,12 @@
 
 ### 운영자 한 명의 키로 돈다
 
-공용 글감은 누구의 것도 아니지만 만드는 데는 LLM 키가 필요하다. 회원 키를 쓸 수는
+공용 뉴스는 누구의 것도 아니지만 만드는 데는 LLM 키가 필요하다. 회원 키를 쓸 수는
 없다 — 자기 분석에 쓰라고 등록한 것이다. 그래서 운영자 키로 돌린다
 (`services/operator.py` 가 왜 그런지와 플래그가 어떻게 켜지는지를 든다).
 
 **제공자와 모델을 고정한다.** 운영자의 활성 선택을 따르지 않는다 — 운영자가 설정
-화면에서 제공자를 바꾸면 모든 회원이 보는 글감 품질이 같이 흔들린다.
+화면에서 제공자를 바꾸면 모든 회원이 보는 뉴스 품질이 같이 흔들린다.
 
 ### 난이도가 없다
 
@@ -26,8 +26,8 @@
 ### 사용량을 세지 않는다
 
 `usage.check_and_increment` 는 **회원 각자의 하루 한도**다 (09 §3.3). 여기는 회원
-요청이 아니라 서버 일이므로 세지 않는다. 세면 글감을 한 번 만든 날 운영자가 자기
-계정으로 아무것도 못 한다 — 글감 때문에 한도를 다 쓴 것이 된다.
+요청이 아니라 서버 일이므로 세지 않는다. 세면 뉴스를 한 번 만든 날 운영자가 자기
+계정으로 아무것도 못 한다 — 뉴스 때문에 한도를 다 쓴 것이 된다.
 
 대신 **양이 저절로 막혀 있다.** 한 번에 기사 한 편이고 문단 수만큼만 돈다.
 
@@ -110,7 +110,7 @@ def provider_for(db: Session, cipher: KeyCipher, settings: Settings) -> LLMProvi
     api_key = keys.decrypt(db, owner.id, operator.JOB_PROVIDER, cipher)
     if not api_key:
         raise OperatorKeyRequiredError(
-            "운영자의 공용 글감용 키가 등록되지 않았습니다. 설정 화면에서 등록해야 합니다.",
+            "운영자의 공용 뉴스용 키가 등록되지 않았습니다. 설정 화면에서 등록해야 합니다.",
             detail=f"provider={operator.JOB_PROVIDER}",
         )
 
@@ -122,7 +122,7 @@ def provider_for(db: Session, cipher: KeyCipher, settings: Settings) -> LLMProvi
     # 자리가 하나다 (`operator.JOB_MODEL` — 왜 그 모델인지도 거기 있다).
     if operator.JOB_MODEL not in info.models:
         raise OperatorKeyRequiredError(
-            "공용 글감용 모델이 제공자 목록에 없습니다.",
+            "공용 뉴스용 모델이 제공자 목록에 없습니다.",
             detail=f"{operator.JOB_PROVIDER}/{operator.JOB_MODEL}",
         )
     return registry.build(info.id, operator.JOB_MODEL, api_key, settings)

@@ -22,6 +22,7 @@ from app.errors import (
     AppError,
     AuthRequiredError,
     ConsentRequiredError,
+    ForbiddenError,
 )
 from app.providers import registry
 from app.providers.base import LLMProvider
@@ -129,8 +130,24 @@ def active_user(request: Request, settings: SettingsDep, db: DbDep) -> User:
     return ready_user(current_user(request, settings, db), db, settings)
 
 
+def operator_user(user: "SessionUser") -> User:
+    """운영자 전용 경로의 주인 (M13-T13).
+
+    **`operator.find()` 를 쓰지 않는다.** 그 함수는 "키를 빌릴 사람" 을 찾는 것이고
+    이것은 "이 사람이 볼 수 있나" 다. 둘을 같은 함수로 묶으면 **운영자가 하나뿐이라는
+    사실에 권한이 매달린다** — 둘이 되는 날 아무나 남의 자격으로 통과한다.
+
+    local 에는 운영자가 없다 (`services/operator.py` — 부트스트랩 사용자에게 플래그를
+    켜지 않는다). 그래서 local 에서 이 경로는 403 이다.
+    """
+    if not user.is_operator:
+        raise ForbiddenError(detail="운영자만 쓸 수 있습니다")
+    return user
+
+
 SessionUser = Annotated[User, Depends(session_user)]
 ActiveUser = Annotated[User, Depends(active_user)]
+OperatorUser = Annotated[User, Depends(operator_user)]
 
 
 async def get_provider(request: Request, settings: SettingsDep) -> AsyncIterator[LLMProvider]:

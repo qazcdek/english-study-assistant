@@ -46,7 +46,7 @@ class User(Base):
     # 동의 없이는 분석을 시작할 수 없다.
     consented_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), default=None)
 
-    # **공용 글감을 만드는 키의 주인인가.** 권한이므로 구글이 검증한 이메일에서만
+    # **공용 뉴스를 만드는 키의 주인인가.** 권한이므로 구글이 검증한 이메일에서만
     # 켜지고, 로그인할 때마다 다시 맞춰진다 — 이메일이 바뀌면 꺼진다.
     # 어느 이메일이 운영자인지는 `app/services/operator.py`.
     is_operator: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
@@ -178,7 +178,7 @@ class UsageCounter(Base):
 # ------------------------------------------------------------------ 공용 데이터
 #
 # **회원 것이 아닌 첫 데이터다.** 지금까지 표는 둘로만 갈렸다 — `users` 와
-# `user_id` 를 든 표. 서버가 골라 와 **모든 회원이 같은 것을 보는** 글감은 셋째다.
+# `user_id` 를 든 표. 서버가 골라 와 **모든 회원이 같은 것을 보는** 뉴스는 셋째다.
 #
 # 공용 표는 `user_id` 를 들지 않는다. 그래서 **"깜빡 빠뜨린 표" 와 생김새가 같다.**
 # 그 둘을 가르는 것이 아래 `SHARED` 이고, 적지 않으면 검사가 거부한다.
@@ -215,7 +215,7 @@ class Article(Base):
     byline: Mapped[str] = mapped_column(Text, default="")
     section: Mapped[str] = mapped_column(String(50), default="")
     published_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
-    # 어느 날짜의 글감으로 골랐나. **비어 있으면 아직 안 고른 후보다.**
+    # 어느 날짜의 뉴스로 골랐나. **비어 있으면 아직 안 고른 후보다.**
     picked_for: Mapped[date | None] = mapped_column(Date, index=True, default=None)
     fetched_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
@@ -275,18 +275,18 @@ class ParagraphAnalysis(Base):
 
 
 class PickAttempt(Base):
-    """글감 고르기가 **실패한 기록** — 쿨다운의 근거 (M13-T4).
+    """뉴스 고르기가 **실패한 기록** — 쿨다운의 근거 (M13-T4).
 
     **메모리에 두면 안 된다.** Render 무료 티어는 15분 미사용이면 잠들고, 깨어날
     때마다 쿨다운을 잊고 즉시 재시도한다 — **막으려던 바로 그 상황에서 안 막힌다.**
     그래서 DB 에 남긴다.
 
     `(picked_for, source)` 마다 한 줄이다. 성공한 날에는 지우지 않는다 — 그날
-    몇 번 넘어졌는지가 기록으로 남고, 오늘 글감이 이미 있으면 쿨다운은 읽히지도
+    몇 번 넘어졌는지가 기록으로 남고, 오늘 뉴스가 이미 있으면 쿨다운은 읽히지도
     않는다.
 
     **하루 시도 상한이 아니라 쿨다운이다.** 상한은 다 쓰면 그날은 포기이고 문제가
-    10분 만에 풀려도 내일까지 글감이 없다. 쿨다운은 풀리는 순간 저절로 회복된다.
+    10분 만에 풀려도 내일까지 뉴스가 없다. 쿨다운은 풀리는 순간 저절로 회복된다.
     """
 
     __tablename__ = "article_pick_attempts"
@@ -299,7 +299,7 @@ class PickAttempt(Base):
     source: Mapped[str] = mapped_column(String(20))
     failed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     failures: Mapped[int] = mapped_column(Integer, default=0)
-    #: 마지막 실패 이유. **로그를 뒤지지 않고** 왜 글감이 없는지 알 수 있게 둔다.
+    #: 마지막 실패 이유. **로그를 뒤지지 않고** 왜 뉴스가 없는지 알 수 있게 둔다.
     reason: Mapped[str] = mapped_column(Text, default="")
 
 

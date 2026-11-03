@@ -1,4 +1,4 @@
-"""운영자 — 공용 글감을 만드는 키의 주인 (M13-T5).
+"""운영자 — 공용 뉴스를 만드는 키의 주인 (M13-T5).
 
 규약은 `app/services/operator.py` 머리말. **cloud 전용 기능**이라
 local 부트스트랩 사용자에게는 플래그가 켜지지 않는다 (09-mode-matrix.md §3.8).
@@ -26,7 +26,7 @@ def test_the_legal_file_can_actually_be_read():
 
 def test_the_backend_and_the_legal_documents_name_the_same_operator():
     """법적 문서의 연락처와 백엔드의 운영자가 어긋나면,
-    **약관에 적힌 사람과 공용 글감 키의 주인이 달라진다.**"""
+    **약관에 적힌 사람과 공용 뉴스 키의 주인이 달라진다.**"""
     found = re.search(r"연락처:\s*'([^']+)'", LEGAL.read_text(encoding="utf-8"))
 
     assert found, "operator.ts 에서 연락처를 못 읽었다"
@@ -34,7 +34,7 @@ def test_the_backend_and_the_legal_documents_name_the_same_operator():
 
 
 def test_the_job_provider_is_one_we_actually_have():
-    """목록에 없는 제공자 이름을 적어 두면 **공용 글감을 만들려는 순간** 터진다."""
+    """목록에 없는 제공자 이름을 적어 두면 **공용 뉴스를 만들려는 순간** 터진다."""
     assert operator.JOB_PROVIDER in {p.id for p in registry.PROVIDERS}
 
 
@@ -68,7 +68,7 @@ def test_an_empty_email_is_not_the_operator():
 
 
 def test_with_no_operator_there_is_nobody_to_borrow_a_key_from(cloud):
-    """`None` 은 "공용 글감을 만들 수 없다" 는 뜻이다. 조용히 아무 회원이나 집으면 안 된다."""
+    """`None` 은 "공용 뉴스를 만들 수 없다" 는 뜻이다. 조용히 아무 회원이나 집으면 안 된다."""
     with session_scope() as db:
         db.add(User(google_sub="s1", email="a@b.c"))
         db.commit()

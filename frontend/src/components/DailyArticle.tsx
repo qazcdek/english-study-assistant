@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 
 import { finishedState, type AnalysisState } from '../lib/analysis'
-import { ApiError, getDailyArticle, getParagraphAnalysis } from '../lib/api'
+import { ApiError, getDailyArticle, getParagraphAnalysis, getPickedArticles } from '../lib/api'
 import type { DailyArticle as Article, DailyParagraph, Level } from '../lib/types'
 import type { VocabularyStore } from '../lib/useVocabulary'
 import { ResultView } from './ResultView'
@@ -15,7 +15,16 @@ interface Prepared {
 }
 
 /**
- * 오늘의 글감 — **모든 회원이 같은 문단별 분석을 본다** (M13-T6).
+ * 데일리 뉴스 화면 — **모든 회원이 같은 문단별 분석을 본다** (M13-T6).
+ *
+ * ### 회원은 오늘 것만, 운영자는 쌓인 목록을
+ *
+ * 하루 한 편이 전제인 화면이다 (`01` · `09 §3.8`). 그런데 운영자는 **품질을 훑어야**
+ * 하므로 지난 뉴스가 보여야 한다 (`M13-T13`). 그래서 **받아 오는 경로만 갈리고
+ * 그리는 것은 한 벌이다** — 두 응답의 모양을 같게 맞춰 둔 이유가 그것이다.
+ *
+ * `isOperator` 는 **보여줄지 말지에만** 쓴다. 권한은 서버가 본다 — 이 값을 고쳐도
+ * `/api/articles/picked` 는 403 이다.
  *
  * ### 본문과 분석을 따로 가져온다
  *
@@ -25,8 +34,8 @@ interface Prepared {
  *
  * ### 날짜를 숨기지 않는다
  *
- * 오늘 것이 아직 없으면 어제 것이 온다 (09 §3.8). 그러니 "오늘의 글감" 이라고
- * 적고 **적힌 날짜를 함께** 보여준다 — 언제 것인지 모르고 읽는 쪽이 나쁘다.
+ * 오늘 것이 아직 없으면 어제 것이 온다 (09 §3.8). 그러니 **적힌 날짜를 함께**
+ * 보여준다 — 언제 것인지 모르고 읽는 쪽이 나쁘다.
  *
  * ### 난이도는 예문에만 있다
  *
@@ -37,32 +46,32 @@ export function DailyArticle({
   vocab,
   level,
   onLevelChange,
+  isOperator = false,
 }: {
   vocab: VocabularyStore
   /** 예문 난이도. 표에서 고른 것을 그대로 흘려보낸다 (M16). */
   level: Level
   onLevelChange: (level: Level) => void
+  /** 운영자면 지난 뉴스까지 받는다 (M13-T13). */
+  isOperator?: boolean
 }) {
-  const [article, setArticle] = useState<Article | null>(null)
+  const [list, setList] = useState<Article[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<ApiError | null>(null)
-  // 펼쳐 둔 문단. 하나씩만 펼친다 — 읽는 순서가 하나라서다.
-  const [open, setOpen] = useState<number | null>(null)
-  // 가져온 분석. **접어도 버리지 않는다** — 다시 펴면 또 묻게 된다.
-  const [analyses, setAnalyses] = useState<Record<number, Prepared>>({})
-  const [pending, setPending] = useState<number | null>(null)
-  const [partError, setPartError] = useState<{ ordinal: number; message: string } | null>(null)
 
   useEffect(() => {
     let alive = true
-    getDailyArticle()
-      .then((body) => {
-        if (!alive) return
-        setArticle(body.article)
+    const fetching = isOperator
+      ? getPickedArticles().then((body) => body.articles)
+      : getDailyArticle().then((body) => (body.article ? [body.article] : []))
+
+    fetching
+      .then((articles) => {
+        if (alive) setList(articles)
       })
       .catch((e) => {
         if (!alive) return
-        setError(e instanceof ApiError ? e : new ApiError('unknown', '글감을 불러오지 못했습니다.'))
+        setError(e instanceof ApiError ? e : new ApiError('unknown', '뉴스를 불러오지 못했습니다.'))
       })
       .finally(() => {
         if (alive) setLoading(false)
@@ -70,7 +79,76 @@ export function DailyArticle({
     return () => {
       alive = false
     }
-  }, [])
+  }, [isOperator])
+
+  if (loading) {
+    return <p className="p-10 text-center text-sm text-stone-400">뉴스를 불러오는 중…</p>
+  }
+
+  if (error) {
+    return (
+      <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700 dark:border-red-900 dark:bg-red-950/40 dark:text-red-300">
+        <p className="font-medium">{error.message}</p>
+      </div>
+    )
+  }
+
+  if (list.length === 0) {
+    // **오류가 아니다.** 아직 한 편도 안 골랐거나 고르는 중에 실패한 상태다.
+    return (
+      <div className="rounded-2xl border border-dashed border-stone-300 p-10 text-center text-sm text-stone-400 dark:border-stone-700">
+        아직 준비된 뉴스가 없습니다. 하루 한 편이 준비되면 여기에 표시됩니다.
+      </div>
+    )
+  }
+
+  return (
+    <div className="flex flex-col gap-4">
+      {isOperator && (
+        <p className="text-xs text-stone-400">
+          운영자에게는 지난 뉴스가 쌓입니다 — 최신순 {list.length}편
+        </p>
+      )}
+      {list.map((article, index) => (
+        <ArticleCard
+          key={article.id}
+          article={article}
+          // **가장 최근 것만 펼친 채로 시작한다.** 회원에게는 그 한 편뿐이므로
+          // 누르지 않아도 바로 읽히고, 운영자의 목록은 훑을 수 있게 접혀 있다.
+          startOpen={index === 0}
+          level={level}
+          onLevelChange={onLevelChange}
+          vocab={vocab}
+        />
+      ))}
+    </div>
+  )
+}
+
+/** 뉴스 한 편. **문단 목록을 접고 펼 수 있다** (M13-T12).
+ *
+ *  분석 캐시가 카드마다 따로다 — 문단 번호로 담으므로 한 곳에 모으면 **다른 기사의
+ *  같은 번호와 섞인다.** */
+function ArticleCard({
+  article,
+  startOpen,
+  level,
+  onLevelChange,
+  vocab,
+}: {
+  article: Article
+  startOpen: boolean
+  level: Level
+  onLevelChange: (level: Level) => void
+  vocab: VocabularyStore
+}) {
+  const [listOpen, setListOpen] = useState(startOpen)
+  // 펼쳐 둔 문단. 하나씩만 펼친다 — 읽는 순서가 하나라서다.
+  const [open, setOpen] = useState<number | null>(null)
+  // 가져온 분석. **접어도 버리지 않는다** — 다시 펴면 또 묻게 된다.
+  const [analyses, setAnalyses] = useState<Record<number, Prepared>>({})
+  const [pending, setPending] = useState<number | null>(null)
+  const [partError, setPartError] = useState<{ ordinal: number; message: string } | null>(null)
 
   const toggle = useCallback(
     async (paragraph: DailyParagraph) => {
@@ -81,7 +159,7 @@ export function DailyArticle({
       setOpen(paragraph.ordinal)
       setPartError(null)
       // 아직 준비되지 않은 문단은 **묻지 않는다.** 404 가 날 것을 알고 있다.
-      if (!paragraph.prepared || analyses[paragraph.ordinal] || !article) return
+      if (!paragraph.prepared || analyses[paragraph.ordinal]) return
 
       setPending(paragraph.ordinal)
       try {
@@ -102,38 +180,17 @@ export function DailyArticle({
         setPending(null)
       }
     },
-    [analyses, article, open],
+    [analyses, article.id, open],
   )
-
-  if (loading) {
-    return <p className="p-10 text-center text-sm text-stone-400">글감을 불러오는 중…</p>
-  }
-
-  if (error) {
-    return (
-      <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700 dark:border-red-900 dark:bg-red-950/40 dark:text-red-300">
-        <p className="font-medium">{error.message}</p>
-      </div>
-    )
-  }
-
-  if (!article) {
-    // **오류가 아니다.** 아직 한 편도 안 골랐거나 고르는 중에 실패한 상태다.
-    return (
-      <div className="rounded-2xl border border-dashed border-stone-300 p-10 text-center text-sm text-stone-400 dark:border-stone-700">
-        아직 준비된 글감이 없습니다. 하루 한 편이 준비되면 여기에 표시됩니다.
-      </div>
-    )
-  }
 
   const ready = article.paragraphs.filter((p) => p.prepared).length
 
   return (
-    <div className="flex flex-col gap-4">
+    <section className="flex flex-col gap-4">
       <header className="flex flex-col gap-2 rounded-2xl border border-stone-200 p-5 dark:border-stone-800">
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-stone-400">
           <span className="font-medium text-stone-500 dark:text-stone-400">
-            {dayLabel(article.picked_for)} 글감
+            {dayLabel(article.picked_for)} 뉴스
           </span>
           <span aria-hidden>·</span>
           <span>{sourceLabel(article.source)}</span>
@@ -155,79 +212,98 @@ export function DailyArticle({
           {article.byline} · {sourceLabel(article.source)}
         </p>
 
-        <p className="text-xs text-stone-400">
-          문단 {article.paragraphs.length}개 · 분석 {ready}개 준비됨
-        </p>
+        {/* **문단 수가 곧 여는 버튼이다** (M13-T12). 전에는 그냥 글자였고 아래로
+            문단이 늘 펼쳐져 있었다 — 뉴스가 쌓이면 그 목록을 훑을 수 없다. */}
+        <button
+          type="button"
+          onClick={() => {
+            setListOpen((was) => !was)
+            setOpen(null)
+          }}
+          aria-expanded={listOpen}
+          className="-mx-1 flex items-center gap-1.5 self-start rounded-md px-1 py-0.5 text-xs text-stone-400 transition hover:bg-stone-100 hover:text-stone-600 dark:hover:bg-stone-800 dark:hover:text-stone-300"
+        >
+          <span>
+            문단 {article.paragraphs.length}개 · 분석 {ready}개 준비됨
+          </span>
+          <span aria-hidden>{listOpen ? '▴' : '▾'}</span>
+        </button>
       </header>
 
-      <ol className="flex flex-col gap-3">
-        {article.paragraphs.map((paragraph) => {
-          const expanded = open === paragraph.ordinal
-          const analysis = analyses[paragraph.ordinal]
-          return (
-            <li
-              key={paragraph.ordinal}
-              className="min-w-0 rounded-2xl border border-stone-200 dark:border-stone-800"
-            >
-              <button
-                type="button"
-                onClick={() => void toggle(paragraph)}
-                aria-expanded={expanded}
-                className="flex w-full items-start gap-3 p-4 text-left transition hover:bg-stone-50 dark:hover:bg-stone-900"
-              >
-                <span className="shrink-0 pt-0.5 font-mono text-xs text-stone-400">
-                  {paragraph.ordinal}
-                </span>
-                <span className="min-w-0 flex-1 leading-relaxed text-stone-700 dark:text-stone-200">
-                  {paragraph.text}
-                </span>
-                <span className="shrink-0 pt-0.5 text-xs text-stone-400">
-                  {paragraph.prepared ? (expanded ? '접기 ▴' : '분석 보기 ▾') : '준비 중'}
-                </span>
-              </button>
+      {listOpen && (
+        <>
+          <ol className="flex flex-col gap-3">
+            {article.paragraphs.map((paragraph) => {
+              const expanded = open === paragraph.ordinal
+              const analysis = analyses[paragraph.ordinal]
+              return (
+                <li
+                  key={paragraph.ordinal}
+                  className="min-w-0 rounded-2xl border border-stone-200 dark:border-stone-800"
+                >
+                  <button
+                    type="button"
+                    onClick={() => void toggle(paragraph)}
+                    aria-expanded={expanded}
+                    className="flex w-full items-start gap-3 p-4 text-left transition hover:bg-stone-50 dark:hover:bg-stone-900"
+                  >
+                    <span className="shrink-0 pt-0.5 font-mono text-xs text-stone-400">
+                      {paragraph.ordinal}
+                    </span>
+                    <span className="min-w-0 flex-1 leading-relaxed text-stone-700 dark:text-stone-200">
+                      {paragraph.text}
+                    </span>
+                    <span className="shrink-0 pt-0.5 text-xs text-stone-400">
+                      {paragraph.prepared ? (expanded ? '접기 ▴' : '분석 보기 ▾') : '준비 중'}
+                    </span>
+                  </button>
 
-              {expanded && (
-                <div className="border-t border-stone-100 p-4 dark:border-stone-800">
-                  {!paragraph.prepared ? (
-                    <p className="text-sm text-stone-400">
-                      이 문단은 아직 분석이 준비되지 않았습니다.
-                    </p>
-                  ) : partError?.ordinal === paragraph.ordinal ? (
-                    <p className="text-sm text-red-600 dark:text-red-400">{partError.message}</p>
-                  ) : pending === paragraph.ordinal || !analysis ? (
-                    <p className="text-sm text-stone-400">분석을 불러오는 중…</p>
-                  ) : (
-                    <ResultView
-                      state={analysis.state}
-                      level={level}
-                      onLevelChange={onLevelChange}
-                      vocab={vocab}
-                      // **난이도와 모델을 적는다.** 미리 분석에는 소요 시간이 없어
-                      // (`meta` 를 들지 않는다) 비워 두면 `ResultView` 가 끝난 분석을
-                      // "진행 중" 으로 읽는다.
-                      caption={caption(analysis)}
-                    />
+                  {expanded && (
+                    <div className="border-t border-stone-100 p-4 dark:border-stone-800">
+                      {!paragraph.prepared ? (
+                        <p className="text-sm text-stone-400">
+                          이 문단은 아직 분석이 준비되지 않았습니다.
+                        </p>
+                      ) : partError?.ordinal === paragraph.ordinal ? (
+                        <p className="text-sm text-red-600 dark:text-red-400">
+                          {partError.message}
+                        </p>
+                      ) : pending === paragraph.ordinal || !analysis ? (
+                        <p className="text-sm text-stone-400">분석을 불러오는 중…</p>
+                      ) : (
+                        <ResultView
+                          state={analysis.state}
+                          level={level}
+                          onLevelChange={onLevelChange}
+                          vocab={vocab}
+                          // **모델을 적는다.** 미리 분석에는 소요 시간이 없어
+                          // (`meta` 를 들지 않는다) 비워 두면 `ResultView` 가 끝난
+                          // 분석을 "진행 중" 으로 읽는다.
+                          caption={caption(analysis)}
+                        />
+                      )}
+                    </div>
                   )}
-                </div>
-              )}
-            </li>
-          )
-        })}
-      </ol>
+                </li>
+              )
+            })}
+          </ol>
 
-      {/* **바닥에도 크레딧과 링크를 둔다.** 약관은 "상단이나 하단" 이라 하나면
-          되지만, 문단 아코디언이라 **번역은 화면 중간에서 펼쳐진다** — 머리의
-          링크가 스크롤 밖으로 나간 채 번역을 읽게 되므로 아래에도 둔다. */}
-      <footer className="flex flex-col gap-1 rounded-2xl border border-stone-200 p-4 text-xs text-stone-500 dark:border-stone-800 dark:text-stone-400">
-        <p>
-          {article.byline} · {sourceLabel(article.source)}
-        </p>
-        <p className="text-stone-400">
-          원문에서 {EXCERPT_WORDS}단어 이내로 발췌해 번역했습니다.{' '}
-          <OriginalLink url={article.url} />
-        </p>
-      </footer>
-    </div>
+          {/* **바닥에도 크레딧과 링크를 둔다.** 약관은 "상단이나 하단" 이라 하나면
+              되지만, 문단 아코디언이라 **번역은 화면 중간에서 펼쳐진다** — 머리의
+              링크가 스크롤 밖으로 나간 채 번역을 읽게 되므로 아래에도 둔다. */}
+          <footer className="flex flex-col gap-1 rounded-2xl border border-stone-200 p-4 text-xs text-stone-500 dark:border-stone-800 dark:text-stone-400">
+            <p>
+              {article.byline} · {sourceLabel(article.source)}
+            </p>
+            <p className="text-stone-400">
+              원문에서 {EXCERPT_WORDS}단어 이내로 발췌해 번역했습니다.{' '}
+              <OriginalLink url={article.url} />
+            </p>
+          </footer>
+        </>
+      )}
+    </section>
   )
 }
 

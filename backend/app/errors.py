@@ -93,8 +93,21 @@ class UsageLimitError(AppError):
     message = "오늘 사용 한도를 모두 썼습니다. 내일 다시 이용해 주세요."
 
 
+class ForbiddenError(AppError):
+    """로그인은 했지만 **그 일을 할 자격이 없다** (M13-T13).
+
+    401 이 아니다 — 다시 로그인해도 달라지지 않는다. 404 로 숨기지도 않는다:
+    지난 뉴스 목록은 **비밀이 아니라 운영자용 도구**이고, 404 로 두면 경로가
+    썩었는지 자격이 없는지 운영자 자신도 구별하지 못한다.
+    """
+
+    code = "forbidden"
+    http_status = 403
+    message = "이 작업을 할 권한이 없습니다."
+
+
 class OperatorKeyRequiredError(AppError):
-    """공용 글감을 만들 수 없다 — 운영자가 없거나 그 키가 없다 (M13-T5).
+    """공용 뉴스를 만들 수 없다 — 운영자가 없거나 그 키가 없다 (M13-T5).
 
     `ApiKeyRequiredError` 와 **다르다.** 그쪽은 회원이 자기 키를 등록하면 풀리지만,
     이것은 **회원이 할 수 있는 일이 없다.** 그래서 문구에 "등록해 주세요" 를 넣지
@@ -112,7 +125,7 @@ class ArticleBodyError(AppError):
     `<p>` 가 없거나 전부 50자 미만일 때다 — 사진 기사나 라이브블로그가 그렇다
     (`services/paragraphs.py` 의 하한).
 
-    **그냥 넣고 넘어가면 안 된다.** 문단이 0개인 기사를 앉히면 화면에 빈 글감이
+    **그냥 넣고 넘어가면 안 된다.** 문단이 0개인 기사를 앉히면 화면에 빈 뉴스이
     뜨고, 더 나쁘게는 **미리 분석이 영원히 "다 됐다" 로 읽힌다** — 돌 문단이
     없으므로 `prepare.article()` 이 아무 일도 하지 않고 성공한다. 고르는 쪽
     (`M13-T4`)은 이것을 보고 다음 후보로 넘어가야 한다.
@@ -168,4 +181,4 @@ class ArticleSourceError(AppError):
 
     code = "article_source"
     http_status = 502
-    message = "글감 출처에서 기사를 가져오지 못했습니다."
+    message = "뉴스 출처에서 기사를 가져오지 못했습니다."

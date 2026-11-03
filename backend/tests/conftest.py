@@ -31,6 +31,15 @@ def isolated_settings(monkeypatch, db_url):
     cloud 테스트는 이 위에서 APP_MODE 등을 다시 덮어쓴다.
     """
     monkeypatch.setenv("DATABASE_URL", db_url)
+
+    # **출처 키를 비운다** (H-048). 개발 `.env` 에 실제 가디언 키가 있어서, 운영자
+    # 플래그가 켜진 검사가 `/api/articles/current` 를 치면 뒤에서 도는 고르기가
+    # **진짜로 가디언과 Gemini 를 불렀다.** 검사가 돈을 쓰고, 응답에 실제 기사가
+    # 섞여 들어와 단정이 깨졌다.
+    #
+    # 키가 비면 `daily.should_run()` 이 첫 관문에서 멈춘다 — 끄는 장치를 그대로
+    # 쓰는 것이다. 고르기를 검사하는 쪽은 `settings_with_key()` 로 일부러 채운다.
+    monkeypatch.setenv("GUARDIAN_API_KEY", "")
     get_settings.cache_clear()
     yield
     get_settings.cache_clear()

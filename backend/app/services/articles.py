@@ -1,4 +1,4 @@
-"""공용 글감 — 표에 **앉히고**(M13-T8), 화면에 **읽어 준다**(M13-T6).
+"""공용 뉴스 — 표에 **앉히고**(M13-T8), 화면에 **읽어 준다**(M13-T6).
 
 둘을 한 파일에 둔 이유는 같은 표 셋을 쥐기 때문이다 — `articles` ·
 `article_paragraphs` · `paragraph_analyses`. 넣는 규칙과 읽는 규칙이 갈리면
@@ -6,7 +6,7 @@
 
 ## 앉히는 쪽
 
-**가져오는 쪽과 가르는 자리다.** 지금 글감이 들어오는 길은 손(`tools/article.py`)
+**가져오는 쪽과 가르는 자리다.** 지금 뉴스가 들어오는 길은 손(`tools/article.py`)
 하나뿐이고, 가디언에서 골라 오는 쪽은 아직 없다 (`M13-T4`). 두 길이 하는 일 중
 **같은 것은 여기 있다** — 본문 HTML 을 문단으로 쪼개 `articles` 와
 `article_paragraphs` 에 넣는 것. 이걸 도구 쪽에 두면 `M13-T4` 가 같은 코드를 다시
@@ -22,8 +22,8 @@
 
 ### 고른 날은 덮어쓴다
 
-문단과 반대다. `picked_for` 는 "어느 날의 글감인가" 이고 **같은 기사를 다른 날의
-글감으로 다시 쓸 수 있다.** 비싼 것은 분석이고 그건 문단에 붙어 있으므로, 날짜를
+문단과 반대다. `picked_for` 는 "어느 날의 뉴스인가" 이고 **같은 기사를 다른 날의
+뉴스로 다시 쓸 수 있다.** 비싼 것은 분석이고 그건 문단에 붙어 있으므로, 날짜를
 바꿔도 아무것도 버려지지 않는다.
 
 ## 읽는 쪽
@@ -32,7 +32,7 @@
 
 `09-mode-matrix.md §3.8` 이 규정한다 — **오늘 것이 없으면 그동안 어제 것을
 보여준다.** 그러므로 보여주는 쪽이 할 일은 날짜를 따지는 것이
-아니라 **가장 최근에 고른 한 편을 꺼내는 것**이고, 며칠 글감인지는 `picked_for`
+아니라 **가장 최근에 고른 한 편을 꺼내는 것**이고, 며칠 뉴스인지는 `picked_for`
 를 그대로 화면에 찍어 회원이 읽게 한다.
 
 이렇게 두면 **"오늘" 이 어느 시간대인가**(`M13-T4` 의 미해결 결정)를 이 쪽이
@@ -56,10 +56,11 @@
 
 파트 하나가 실패한 행도 **보여준다** — 그 기준은 `M13-T4` 에서 이미 갈라 두었다.
 건너뛰기(재시도 대상인가)는 `failed_parts` 가 비어 있을 때만이고, 보여주기는
-행이 있으면 된다. 한 파트가 고집스럽게 실패하면 그날 글감이 아예 안 나오는 쪽이
+행이 있으면 된다. 한 파트가 고집스럽게 실패하면 그날 뉴스가 아예 안 나오는 쪽이
 더 나쁘다. 화면은 `failed_parts` 를 받아 빈 자리를 표시한다.
 
 [문서] plan/DONE.md M13-T10
+[문서] plan/DONE.md M13-T13
 [문서] plan/DONE.md M13-T6
 [문서] plan/DONE.md M13-T8
 [문서] plan/DONE.md M13-T9
@@ -273,7 +274,7 @@ class Shown:
 
 
 def current(db: Session) -> Shown | None:
-    """지금 보여줄 글감. 고른 것이 하나도 없으면 `None`.
+    """지금 보여줄 뉴스. 고른 것이 하나도 없으면 `None`.
 
     **`None` 은 오류가 아니다.** 첫 배포 직후와 고르기가 실패하고 있는 동안의
     정상 상태다 — 라우터가 404 로 바꾸지 않는 이유가 그것이다.
@@ -290,7 +291,11 @@ def current(db: Session) -> Shown | None:
     )
     if article is None:
         return None
+    return _shown(db, article)
 
+
+def _shown(db: Session, article: Article) -> Shown:
+    """기사 하나를 화면이 읽는 모양으로. `current()` 와 `picked()` 가 **같은 것을 쓴다.**"""
     rows = (
         db.query(ArticleParagraph)
         .filter(ArticleParagraph.article_id == article.id)
@@ -310,6 +315,26 @@ def current(db: Session) -> Shown | None:
         paragraphs=rows,
         prepared=frozenset(prepared),
     )
+
+
+def picked(db: Session, *, limit: int = 60) -> list[Shown]:
+    """고른 뉴스를 **최신순으로** (M13-T13). 운영자만 본다.
+
+    `current()` 와 달리 여러 편이다. 분기를 `current()` 에 더하지 않은 이유는
+    **다른 물음**이기 때문이다 — 그쪽은 "지금 보여줄 한 편" 이고 이쪽은 "그동안
+    뭐가 쌓였나" 다. 섞으면 응답 모양이 회원마다 달라져 화면이 둘을 다 그린다.
+
+    상한을 두는 이유는 하루 한 편이 쌓이기 때문이다. 60편이면 두 달이고, 그보다
+    옛것을 보려면 그때 넘기기를 만든다.
+    """
+    rows = (
+        db.query(Article)
+        .filter(Article.picked_for.isnot(None))
+        .order_by(Article.picked_for.desc(), Article.id.desc())
+        .limit(limit)
+        .all()
+    )
+    return [_shown(db, row) for row in rows]
 
 
 def analysis(db: Session, article_id: int, ordinal: int) -> ParagraphAnalysis | None:

@@ -51,7 +51,7 @@ async def candidates(
 
     `ArticleSourceError` 는 출처가 대답하지 않았다는 뜻이다 — 고르는 쪽이 이것을
     보고 쿨다운을 적는다. 후보가 **0개인 것도** 오류로 본다: 응답은 왔지만 쓸 것이
-    없으면 글감을 만들 수 없고, 조용히 성공으로 두면 왜 글감이 없는지 아무도 모른다.
+    없으면 뉴스를 만들 수 없고, 조용히 성공으로 두면 왜 뉴스가 없는지 아무도 모른다.
     """
     if not settings.guardian_api_key:
         raise ArticleSourceError(detail="GUARDIAN_API_KEY 가 비어 있습니다")

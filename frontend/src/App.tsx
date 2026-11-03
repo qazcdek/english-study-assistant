@@ -183,7 +183,7 @@ export default function App() {
       try {
         const detail = await getHistoryDetail(Number(id))
         setText(detail.source_text)
-        // 글감 문단을 펼칠 때와 **같은 함수**다 (`lib/analysis.ts`). 전에는 여기서
+        // 뉴스 문단을 펼칠 때와 **같은 함수**다 (`lib/analysis.ts`). 전에는 여기서
         // 네 파트를 전부 `done` 으로 칠했는데, 그러면 **실패한 파트가 빈 결과처럼
         // 보인다** — 기록은 어느 파트가 실패했는지 들고 있다.
         setAnalysis(finishedState(detail.result, detail.markdown, detail.failed_parts))
@@ -294,7 +294,7 @@ export default function App() {
         </p>
         <div className="ml-auto flex flex-wrap items-center justify-end gap-2 sm:gap-3">
           <nav className="flex items-center gap-1 rounded-lg bg-stone-100 p-0.5 text-xs dark:bg-stone-800">
-            {/* 어느 탭이 뜨나는 `lib/routes.ts` 가 정한다 — 글감은 cloud 에만
+            {/* 어느 탭이 뜨나는 `lib/routes.ts` 가 정한다 — 뉴스는 cloud 에만
                 있다 (09 §3.8). 백엔드에는 그 분기를 두지 않는다. */}
             {tabsFor(cloud).map(([key, label]) => (
               <button
@@ -339,7 +339,12 @@ export default function App() {
       <div className="grid gap-6 lg:grid-cols-[1fr_200px]">
         <main className="flex min-w-0 flex-col gap-4">
           {view === 'article' ? (
-            <DailyArticle vocab={vocab} level={level} onLevelChange={setLevel} />
+            <DailyArticle
+              vocab={vocab}
+              level={level}
+              onLevelChange={setLevel}
+              isOperator={session.account?.is_operator === true}
+            />
           ) : view === 'mine' ? (
             <MyExpressions vocab={vocab} level={level} />
           ) : (

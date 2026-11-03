@@ -14,7 +14,7 @@
 #   ./dev.sh docs         문서 계층 점검 (그래프 · 주소 · 머리말 · 색인 · 태그)
 #   ./dev.sh ptr          문서 → 코드 포인터 점검 (--write 로 코드 쪽을 갱신)
 #   ./dev.sh refs         한 문서(또는 절)로 들어오는 참조를 센다 — 옮기기 전에 본다
-#   ./dev.sh article      글감 한 편을 손으로 넣는다 (--prepare 로 미리 분석까지)
+#   ./dev.sh article      뉴스 한 편을 손으로 넣는다 (--prepare 로 미리 분석까지)
 #   ./dev.sh check        llama-server 연결만 확인하고 종료
 #
 # 모드는 앞에 붙여도 된다: ./dev.sh cloud backend
@@ -384,8 +384,8 @@ main() {
       (cd "$BACKEND" && .venv/bin/python tools/refs.py "$@")
       ;;
     article)
-      # 글감 한 편을 손으로 넣는다 (M13-T8). **환경 파일은 언제나 cloud 쪽이다** —
-      # 공용 글감은 cloud 전용이고(09 §3.8), local 의 .env 를 쓰면 같은 명령이
+      # 뉴스 한 편을 손으로 넣는다 (M13-T8). **환경 파일은 언제나 cloud 쪽이다** —
+      # 공용 뉴스는 cloud 전용이고(09 §3.8), local 의 .env 를 쓰면 같은 명령이
       # 조용히 **다른 DB** 에 기사를 앉힌다. 도구가 파일을 직접 읽으므로
       # 셸은 비밀값을 보지 않는다.
       [[ -x "$BACKEND/.venv/bin/python" ]] || die "먼저 ./dev.sh backend 로 의존성을 설치하세요."

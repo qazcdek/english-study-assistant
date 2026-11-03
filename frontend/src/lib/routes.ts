@@ -30,9 +30,9 @@ export type View = keyof typeof PATHS
 const RECORD_PREFIX = '/analysis/'
 
 /**
- * 머리에 띄우는 탭. **글감은 cloud 에만 있다** (09 §3.8).
+ * 머리에 띄우는 탭. **뉴스는 cloud 에만 있다** (09 §3.8).
  *
- * 공용 글감은 cloud 전용이라 local 에서는 표가 늘 비어 있다 — 아무것도 없는
+ * 공용 뉴스는 cloud 전용이라 local 에서는 표가 늘 비어 있다 — 아무것도 없는
  * 화면으로 가는 문을 달아 둘 이유가 없다. 이 판단을 JSX 안에 두면 **검사가
  * 화면을 띄워야만** 물을 수 있어서, 주소 해석과 같은 자리로 꺼냈다.
  *
@@ -41,7 +41,9 @@ const RECORD_PREFIX = '/analysis/'
 export function tabsFor(cloud: boolean): readonly (readonly [View, string])[] {
   return [
     ['analyze', '분석'],
-    ...(cloud ? ([['article', '글감']] as const) : []),
+    // **기능 이름은 `데일리 뉴스` 다** (M13-T14). 산문에서는 보통명사로 `뉴스` 라고
+    // 쓰지만, 탭은 이름을 다는 자리이므로 전체 이름으로 적는다.
+    ...(cloud ? ([['article', '데일리 뉴스']] as const) : []),
     ['mine', '나의 표현'],
   ] as const
 }

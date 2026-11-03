@@ -5,7 +5,7 @@
 
 - **본문이 바뀌지 않는다** — 번호를 받아 원문에서 이어 붙인다
 - **못 믿을 경계는 버린다** — 단어 예산 묶기로 떨어진다
-- **실패가 글감을 없애지 않는다** — 주제 경계는 없어도 되는 것이다
+- **실패가 뉴스를 없애지 않는다** — 주제 경계는 없어도 되는 것이다
 - **꼬리의 `…` 는 버린 토막이 있을 때만** — 추측하지 않는다
 """
 
@@ -152,7 +152,7 @@ async def test_a_usable_boundary_is_used():
     ids=["나쁜-경계", "숫자가-아니다", "비었다", "칸이-없다", "JSON-이-아니다", "호출-실패"],
 )
 async def test_anything_we_cannot_trust_falls_back_to_the_budget(reply):
-    """**이 호출이 터져도 그날 글감이 사라지지 않는다.** 주제 경계는 없어도 되는 것이다."""
+    """**이 호출이 터져도 그날 뉴스가 사라지지 않는다.** 주제 경계는 없어도 되는 것이다."""
     texts = [para(40, f"p{i}") for i in range(6)]
 
     got = await grouping.by_topic(texts, FakeBoundaries(reply))

@@ -37,9 +37,9 @@ class Settings(BaseSettings):
     llm_enable_thinking: bool | None = False
     llm_json_mode: Literal["json_schema", "json_object", "none"] = "json_schema"
 
-    # --- 공용 글감 출처 (cloud) ---
-    # 가디언 Content API 키. **비어 있으면 글감 고르기가 꺼진다** — 앱은 정상으로
-    # 뜨고 "아직 준비된 글감이 없습니다" 가 그대로 나온다. 분기를 하나 더 두는
+    # --- 공용 뉴스 출처 (cloud) ---
+    # 가디언 Content API 키. **비어 있으면 뉴스 고르기가 꺼진다** — 앱은 정상으로
+    # 뜨고 "아직 준비된 뉴스가 없습니다" 가 그대로 나온다. 분기를 하나 더 두는
     # 대신 **데이터가 비어 있게** 하는 09 §3.8 의 방식과 같다.
     #
     # 이 키는 서버 것이다. 회원이 등록하는 LLM 키(`provider_keys`)와 달리 출처는

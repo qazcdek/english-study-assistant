@@ -1,11 +1,11 @@
-"""글감을 회원에게 내주는 길 (M13-T6).
+"""뉴스를 회원에게 내주는 길 (M13-T6).
 
 규약은 `app/services/articles.py` 와 `app/routers/articles.py` 의 머리말.
 여기서 지키는 것은 다섯이다.
 
 - **가장 최근에 고른 한 편**을 준다 — "오늘" 을 이 쪽이 따지지 않는다
 - **안 고른 후보는 안 보인다** — 목록에도, id 를 맞혀도
-- **글감이 없는 것은 오류가 아니다** — 404 가 아니라 `article: null`
+- **뉴스가 없는 것은 오류가 아니다** — 404 가 아니라 `article: null`
 - **저장된 모양이 화면이 읽는 모양과 같다** — 미리 분석을 실제 경로로 돌려 본다
 - **키가 없어도 읽힌다** — LLM 을 부르지 않으므로 (H-041)
 """
@@ -13,10 +13,12 @@
 from datetime import date
 
 import pytest
+from fastapi.testclient import TestClient
 
 from app.auth.crypto import KeyCipher
 from app.config import get_settings
-from app.db import ArticleParagraph, ParagraphAnalysis, session_scope
+from app.db import ArticleParagraph, ParagraphAnalysis, User, session_scope
+from app.main import create_app
 from tests.fake_provider import FakeProvider
 from tests.helpers_prepare import PARAGRAPHS, make_article, run_prepare
 from tests.modes import login, make_cloud_user
@@ -42,7 +44,7 @@ def test_the_most_recently_picked_article_is_the_one_shown(client):
 
 
 def test_a_candidate_that_was_never_picked_is_not_shown(client):
-    """`M13-T4` 는 후보를 여러 편 앉히고 **하나만** 고른다. 나머지는 글감이 아니다."""
+    """`M13-T4` 는 후보를 여러 편 앉히고 **하나만** 고른다. 나머지는 뉴스가 아니다."""
     with session_scope() as db:
         make_article(db, _cipher(), source_id="candidate")
 
@@ -169,8 +171,8 @@ async def test_an_analysis_stored_in_an_older_shape_is_upgraded_on_the_way_out(
 ):
     """14 §3.5 는 **공용 표에도 그대로 적용된다.**
 
-    프롬프트를 손보면 결과 모양이 바뀌는데, 이미 저장된 글감 분석은 그때 모양으로
-    남아 있다. 올리지 않으면 응답 모델이 거부해 **그날 글감이 통째로 500** 이 된다
+    프롬프트를 손보면 결과 모양이 바뀌는데, 이미 저장된 뉴스 분석은 그때 모양으로
+    남아 있다. 올리지 않으면 응답 모델이 거부해 **그날 뉴스가 통째로 500** 이 된다
     (회원 기록에서 한 번 겪었다 — `H-002`).
     """
     with session_scope() as db:
@@ -200,7 +202,7 @@ async def test_an_analysis_stored_in_an_older_shape_is_upgraded_on_the_way_out(
 async def test_a_half_failed_analysis_is_still_handed_over(client, monkeypatch):
     """`M13-T4` 가 갈라 둔 기준이다 — **보여주기는 행이 있으면** 된다.
 
-    한 파트가 고집스럽게 실패하면 그날 글감이 아예 안 나오는 쪽이 더 나쁘다.
+    한 파트가 고집스럽게 실패하면 그날 뉴스가 아예 안 나오는 쪽이 더 나쁘다.
     화면은 `failed_parts` 를 받아 빈 자리를 표시한다.
     """
     with session_scope() as db:
@@ -284,7 +286,7 @@ def test_reading_the_daily_article_needs_a_login_in_cloud(cloud):
 def test_local_has_the_route_but_nothing_in_it(both_modes):
     """**모드 분기를 두지 않은 결과를 확인한다** (09 §3.8).
 
-    local 에도 경로가 있고 404 가 아니다. 다만 공용 글감을 local 에서는 아무도
+    local 에도 경로가 있고 404 가 아니다. 다만 공용 뉴스를 local 에서는 아무도
     채우지 않으므로 늘 비어 있다 — 분기 하나를 빼먹어도 local 에서 안 도는 것이
     그 절이 고른 장치다. 탭을 감추는 것은 화면 쪽이 한다.
     """
@@ -319,3 +321,80 @@ def test_the_helpers_build_what_the_tests_assume(client):
         assert len(PARAGRAPHS) >= 3
 
     assert client.get(CURRENT).json()["article"] is not None
+
+
+# ------------------------------------- 운영자만 지난 뉴스를 본다 (M13-T13)
+
+PICKED = "/api/articles/picked"
+
+
+def test_a_member_cannot_see_the_list_at_all(client):
+    """**회원 화면은 "하루 한 편" 이 전제다** (01 · 09 §3.8). 403 이지 404 가 아니다 —
+    404 로 두면 경로가 썩었는지 자격이 없는지 운영자 자신도 구별하지 못한다."""
+    response = client.get(PICKED)
+
+    assert response.status_code == 403
+    assert response.json()["error"]["code"] == "forbidden"
+
+
+def test_the_operator_sees_every_picked_article_newest_first(cloud):
+    """하루 한 편이 쌓인다. **최신순이어야** 어제 것을 바로 찾는다."""
+
+    with session_scope() as db:
+        for day in (date(2026, 11, 1), date(2026, 11, 3), date(2026, 11, 2)):
+            make_article(
+                db, _cipher(), source_id=f"world/{day.isoformat()}", picked_for=day
+            )
+        # 안 고른 후보도 하나 세운다 — 목록에 끼면 안 된다.
+        make_article(db, _cipher(), source_id="world/candidate", picked_for=None)
+
+    with TestClient(create_app()) as fresh:
+        me = make_cloud_user()
+        with session_scope() as db:
+            db.get(User, me).is_operator = True
+            db.commit()
+        login(fresh, me)
+
+        body = fresh.get(PICKED).json()
+
+    assert [a["picked_for"] for a in body["articles"]] == [
+        "2026-11-03",
+        "2026-11-02",
+        "2026-11-01",
+    ], "최신순이 아니다"
+    assert all(a["paragraphs"] for a in body["articles"]), "문단 본문이 비었다"
+
+
+def test_the_list_carries_the_same_shape_as_the_single_article(cloud):
+    """**목록용으로 줄인 모양을 따로 두지 않는다** — 화면이 두 가지를 그리게 된다."""
+
+    with session_scope() as db:
+        make_article(db, _cipher(), picked_for=date(2026, 11, 1))
+
+    with TestClient(create_app()) as fresh:
+        me = make_cloud_user()
+        with session_scope() as db:
+            db.get(User, me).is_operator = True
+            db.commit()
+        login(fresh, me)
+
+        one = fresh.get(CURRENT).json()["article"]
+        listed = fresh.get(PICKED).json()["articles"][0]
+
+    assert set(one) == set(listed)
+    assert one == listed
+
+
+def test_the_account_tells_the_screen_whether_to_offer_the_list(cloud):
+    """**권한은 서버가 본다.** 이 값은 보여줄지 말지에만 쓴다 — 고쳐도 목록은 안 열린다."""
+
+    with TestClient(create_app()) as fresh:
+        me = make_cloud_user()
+        login(fresh, me)
+        assert fresh.get("/api/auth/me").json()["is_operator"] is False
+
+        with session_scope() as db:
+            db.get(User, me).is_operator = True
+            db.commit()
+
+        assert fresh.get("/api/auth/me").json()["is_operator"] is True

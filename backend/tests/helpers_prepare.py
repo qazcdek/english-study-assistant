@@ -40,7 +40,7 @@ PARAGRAPHS = (
 def operator_with_key(
     db: Session, cipher: KeyCipher, *, active_provider: str = "gemini"
 ) -> User:
-    """공용 글감을 만들 수 있는 상태의 운영자.
+    """공용 뉴스를 만들 수 있는 상태의 운영자.
 
     `active_provider` 를 다르게 줄 수 있다 — **활성 선택을 따르지 않는다**는 것을
     확인하려면 일부러 어긋나게 세워야 한다.

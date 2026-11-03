@@ -47,7 +47,7 @@ def test_an_operator_without_a_key_stops_before_the_first_call(cloud):
 
 
 def test_the_operators_key_builds_the_fixed_provider(cloud):
-    """**운영자의 활성 선택을 따르지 않는다** — 바꾸면 모든 회원의 글감이 흔들린다."""
+    """**운영자의 활성 선택을 따르지 않는다** — 바꾸면 모든 회원의 뉴스가 흔들린다."""
     with session_scope() as db:
         owner = operator_with_key(db, _cipher(), active_provider="openai")
         assert owner.active_provider == "openai"
