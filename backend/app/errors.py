@@ -121,3 +121,19 @@ class ArticleBodyError(AppError):
     code = "article_body"
     http_status = 502
     message = "기사 본문을 문단으로 쪼갤 수 없습니다."
+
+
+class ArticleLengthError(ArticleBodyError):
+    """문단은 쪼개졌는데 **약관 안에 드는 토막이 없다** (M13-T9).
+
+    문단 **하나하나가** 상한을 넘을 때다 (`paragraphs.WORD_LIMIT`). 쪼개기는
+    성공했으므로 위와 원인이 다르지만, **해야 할 일은 같다** — 이 기사를 버리고
+    다음 인기 기사로 넘어간다.
+
+    그래서 `ArticleBodyError` 를 물려받는다. 고르는 쪽(`M13-T4`)이 `except
+    ArticleBodyError` 하나만 적어도 **이 경우를 빼먹을 수 없다.** 둘을 나란한
+    형제로 두면 둘째를 잊은 채 통과하는 길이 열린다.
+    """
+
+    code = "article_length"
+    message = "약관이 허용하는 분량 안에 드는 문단이 없습니다."
