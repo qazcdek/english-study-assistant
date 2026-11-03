@@ -249,12 +249,17 @@ describe('복습', () => {
     const row = item()
 
     // 비슷한 것을 하나 더 만들지 않고 같은 컴포넌트에 같은 모양을 넘긴다.
+    // **담아 둔 한 쌍이 중급 자리에 들어간다** (M16). 나의 표현은 난이도 선택이
+    // 없으므로 `MY_LEVEL` 이 그 자리를 가리킨다.
     expect(asExpression(row)).toEqual({
       expression: row.expression,
       type: row.type,
       meaning: row.meaning,
-      example: row.example,
-      example_ko: row.example_ko,
+      examples: {
+        beginner: { en: '', ko: '' },
+        intermediate: { en: row.example, ko: row.example_ko },
+        advanced: { en: '', ko: '' },
+      },
     })
   })
 

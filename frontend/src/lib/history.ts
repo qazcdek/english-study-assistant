@@ -1,5 +1,4 @@
 import type { AnalysisState } from './analysis'
-import type { Level } from './types'
 
 /**
  * 최근 분석 목록의 한 줄.
@@ -11,5 +10,4 @@ export interface HistoryEntry {
   text: string
   createdAt: number
   state: AnalysisState | null
-  level?: Level
 }

@@ -17,7 +17,6 @@ import pytest
 from app.auth.crypto import KeyCipher
 from app.config import get_settings
 from app.db import ArticleParagraph, ParagraphAnalysis, session_scope
-from app.services import prepare
 from tests.fake_provider import FakeProvider
 from tests.helpers_prepare import PARAGRAPHS, make_article, run_prepare
 from tests.modes import login, make_cloud_user
@@ -122,12 +121,14 @@ def test_an_article_with_no_analysis_at_all_still_shows_its_body(client):
     assert all(p["prepared"] is False for p in article["paragraphs"])
 
 
-def test_the_prepared_level_is_reported_not_the_members_choice(client):
-    """회원이 고른 난이도로 **조용히 바꿔 치지 않는다.** 준비된 것은 중급 하나다."""
+def test_the_response_carries_no_level_at_all(client):
+    """**분석에서 난이도를 걷어냈다** (`M16`). "어느 난이도로 준비됐나" 가 사라졌으므로
+    화면이 그걸 적을 일도 없다 — 칸이 남아 있으면 되살아난다."""
     with session_scope() as db:
         make_article(db, _cipher(), picked_for=date(2026, 11, 1))
 
-    assert client.get(CURRENT).json()["article"]["level"] == prepare.JOB_LEVEL
+    article = client.get(CURRENT).json()["article"]
+    assert "level" not in article
 
 
 # ------------------------------------------------------------- 문단 하나의 분석
@@ -149,7 +150,7 @@ async def test_the_stored_analysis_is_handed_over_in_the_shape_the_screen_reads(
     body = client.get(f"/api/articles/{article_id}/paragraphs/1").json()
 
     assert body["ordinal"] == 1
-    assert body["level"] == prepare.JOB_LEVEL
+    assert "level" not in body
     assert body["result"]["source_text"] == PARAGRAPHS[0]
     assert body["result"]["translation"]
     assert body["result"]["expressions"], "표현 표가 비었다"
@@ -211,30 +212,6 @@ async def test_a_half_failed_analysis_is_still_handed_over(client, monkeypatch):
 
     assert body["failed_parts"] == ["overview"]
     assert body["result"]["translation"], "살아난 파트가 버려졌다"
-
-
-async def test_an_analysis_prepared_for_another_level_does_not_count(client, monkeypatch):
-    """난이도가 둘이 되는 날을 미리 막는다.
-
-    `paragraph_analyses` 는 난이도마다 한 행이므로, 질의에 `level` 을 끼우지 않으면
-    같은 문단에 행이 둘 걸려 **`one_or_none()` 이 500 을 던진다.** 그리고 준비되지
-    않은 난이도의 행을 "준비됨" 으로 세면 화면이 펼쳐 보고서야 404 를 만난다.
-    """
-    with session_scope() as db:
-        article = make_article(db, _cipher(), picked_for=date(2026, 11, 1))
-        await run_prepare(db, article, monkeypatch)
-        article_id = article.id
-
-    with session_scope() as db:
-        # 준비된 난이도가 아닌 것으로 바꿔 끼운다 — 그 행은 없는 것과 같아야 한다.
-        for row in db.query(ParagraphAnalysis).all():
-            row.level = "advanced"
-        db.commit()
-
-    assert all(
-        p["prepared"] is False for p in client.get(CURRENT).json()["article"]["paragraphs"]
-    ), "준비되지 않은 난이도를 준비됨으로 셌다"
-    assert client.get(f"/api/articles/{article_id}/paragraphs/1").status_code == 404
 
 
 async def test_a_paragraph_of_an_unpicked_article_cannot_be_opened_by_id(client, monkeypatch):

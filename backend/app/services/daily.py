@@ -129,10 +129,7 @@ def incomplete(db: Session, day: date) -> bool:
     rows = (
         db.query(ParagraphAnalysis.failed_parts)
         .join(ArticleParagraph, ParagraphAnalysis.paragraph_id == ArticleParagraph.id)
-        .filter(
-            ArticleParagraph.article_id == article.id,
-            ParagraphAnalysis.level == prepare.JOB_LEVEL,
-        )
+        .filter(ArticleParagraph.article_id == article.id)
         .all()
     )
     done = sum(1 for (failed,) in rows if not failed)

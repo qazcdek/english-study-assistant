@@ -41,7 +41,8 @@ async def test_part_events_carry_rendered_markdown():
     by_field = {e.field: e for e in events if isinstance(e, PartEvent)}
 
     assert by_field["translation"].markdown.startswith("### 자연스러운 번역")
-    assert "| 표현 (영어) | 유형 | 의미 및 설명 | 예문 |" in by_field["expressions"].markdown
+    # 표에는 **중급 하나만** 넣는다 (M16) — 셋을 칸 셋으로 벌리면 표가 좁아 깨진다.
+    assert "| 표현 (영어) | 유형 | 의미 및 설명 | 예문 (중급) |" in by_field["expressions"].markdown
     assert "**꼭 챙길 표현**: `across the pond`" in by_field["overview"].markdown
 
 
@@ -143,22 +144,24 @@ async def test_structures_prompt_lists_already_covered_expressions():
     assert "sum up" in prompt
 
 
-def test_expression_max_follows_level_but_floor_follows_length():
-    """개수는 프롬프트 문구가 아니라 스키마로 강제한다. 작은 모델이 하한을 목표로 삼기 때문이다."""
+def test_the_expression_cap_is_one_number_and_the_floor_follows_length():
+    """개수는 프롬프트 문구가 아니라 스키마로 강제한다. 작은 모델이 하한을 목표로 삼기 때문이다.
+
+    **상한은 하나다** (`M16`) — 난이도가 사라져 초급만 5개이던 분기가 없어졌다.
+    """
     from app.prompts.analysis import PART_SPECS
 
     spec = next(s for s in PART_SPECS if s.field == "expressions")
 
-    def limits(level, length):
-        a = spec.schema_for(level, length)["properties"]["expressions"]
+    def limits(length):
+        a = spec.schema_for(length)["properties"]["expressions"]
         return a["minItems"], a["maxItems"]
 
-    # 상한은 난이도를 따른다
-    assert limits("beginner", 800)[1] == 5
-    assert limits("intermediate", 800)[1] == limits("advanced", 800)[1] == 8
+    assert limits(800)[1] == 8
+    assert limits(150)[1] == 8  # 글이 짧아도 상한은 같다
     # 하한은 글 길이를 따른다
-    assert limits("intermediate", 150)[0] == 1
-    assert limits("intermediate", 800)[0] == 3
+    assert limits(150)[0] == 1
+    assert limits(800)[0] == 3
     # 원본 스키마는 건드리지 않는다
     assert "minItems" not in spec.schema["properties"]["expressions"]
 
@@ -194,10 +197,10 @@ def test_key_expressions_are_capped_at_three():
     assert (key["minItems"], key["maxItems"]) == (1, 3)
 
 
-async def test_analyzer_sends_level_specific_schema():
+async def test_the_analyzer_calls_every_part_once():
     provider = FakeProvider()
     service = AnalyzerService(provider)
-    [e async for e in service.stream(AnalyzeRequest(text="hello", level="advanced"))]
+    [e async for e in service.stream(AnalyzeRequest(text="hello"))]
 
     # FakeProvider 가 파트를 스키마로 구분하므로, 호출이 제대로 갈렸다면 네 파트 모두 기록된다
     assert [f for f, _ in provider.calls] == list(PART_FIELDS)
@@ -215,15 +218,39 @@ async def test_structure_markdown_keeps_all_four_parts():
     assert "주의: 한국어에는 형식주어가 없어" in md
 
 
-def test_expression_counts_do_not_grow_with_level():
-    """난이도는 설명의 깊이를 바꾼다. 개수를 늘리면 모델이 다어절 표현을 낱개로 쪼개 하한을 채운다."""
-    from app.prompts.analysis import EXPRESSION_MAX
+def test_the_request_has_no_level_to_send():
+    """**분석에서 난이도를 걷어냈다** (`M16`). 보낼 칸이 없으면 되살아나지 않는다."""
+    from app.schemas import AnalyzeRequest as Req
 
-    assert EXPRESSION_MAX["intermediate"] == EXPRESSION_MAX["advanced"]
-    assert EXPRESSION_MAX["beginner"] <= EXPRESSION_MAX["intermediate"]
+    assert "level" not in Req.model_fields
 
 
-# --------------------------------------------------------------------- 난이도
+def test_the_system_prompt_has_no_level_guide_slot():
+    """`08 §1` 이 적어 둔 문제다 — "깊게"·"최소한으로" 는 모델도 우리도 기준을 모른다.
+    **자리를 없애야** 다시 안 들어온다."""
+    from app.prompts.analysis import SHARED_SYSTEM
+
+    assert "{level_guide}" not in SHARED_SYSTEM
+    assert "level" not in SHARED_SYSTEM
+
+
+def test_no_part_tells_the_model_what_level_the_learner_is():
+    """**조립된 프롬프트를 본다.** 틀에서 자리를 없애도 파트 지시에 다시 적을 수 있다 —
+    실제로 그 구멍을 깨뜨려 보고 알았다.
+
+    분석의 깊이를 난이도로 말하는 어휘를 전부 막는다. 예문 규칙은 `beginner` 같은
+    **칸 이름**으로만 난이도를 말하므로 걸리지 않는다.
+    """
+    from app.prompts.analysis import PART_SPECS, build_messages
+
+    banned = ("학습자는 초급", "학습자는 중급", "학습자는 상급", "설명을 깊게", "난이도가 높")
+    for spec in PART_SPECS:
+        system = build_messages(spec, "hello world")[0].content
+        for word in banned:
+            assert word not in system, f"{spec.field} 에 '{word}' 가 들어왔다"
+
+
+# --------------------------------------------------------------------- 예문 난이도
 
 
 def expressions_spec():
@@ -232,63 +259,78 @@ def expressions_spec():
     return next(s for s in PART_SPECS if s.field == "expressions")
 
 
-def test_beginner_schema_has_no_nuance_field():
-    """초급은 대역어만 쓴다. 프롬프트로 부탁하는 대신 쓸 자리를 없앤다.
+def expression_item():
+    return expressions_spec().schema_for(400)["properties"]["expressions"]["items"]
 
-    additionalProperties: False 이므로 모델이 nuance 를 만들어 낼 수 없다.
-    """
-    item = expressions_spec().schema_for("beginner", 400)["properties"]["expressions"]["items"]
 
-    assert "nuance" not in item["properties"]
-    assert "nuance" not in item["required"]
+def test_nuance_is_always_there_now():
+    """초급 스키마에서 `nuance` 를 빼던 분기가 사라졌다 — 중급 모양이 유일하다."""
+    item = expression_item()
+
+    assert "nuance" in item["properties"]
+    assert "nuance" in item["required"]
     assert item["additionalProperties"] is False
 
 
-def test_intermediate_and_advanced_require_nuance():
-    for level in ("intermediate", "advanced"):
-        item = expressions_spec().schema_for(level, 400)["properties"]["expressions"]["items"]
-        assert "nuance" in item["required"], level
+def test_all_three_difficulties_are_required():
+    """**선택으로 두고 프롬프트로 부탁하면 작은 모델이 생략을 기본값으로 삼는다**
+    (H-019 · H-021). 하나라도 비면 그 난이도로 연습할 수 없다."""
+    examples = expression_item()["properties"]["examples"]
+
+    assert set(examples["properties"]) == {"beginner", "intermediate", "advanced"}
+    assert set(examples["required"]) == {"beginner", "intermediate", "advanced"}
+    assert examples["additionalProperties"] is False
+    for name, pair in examples["properties"].items():
+        assert set(pair["required"]) == {"en", "ko"}, name
+        assert pair["additionalProperties"] is False, name
 
 
-def test_every_level_requires_an_example():
-    """초급도 예문은 남긴다. 작문 연습이 예문에 딸려 있어 빼면 연습도 사라진다.
+def test_the_old_single_example_slot_is_gone():
+    """`example`/`example_ko` 를 남겨 두면 모델이 그 쉬운 자리만 채운다."""
+    props = expression_item()["properties"]
 
-    **선택이 아니라 필수다.** 선택으로 두고 프롬프트로 부탁했더니 작은 모델이
-    생략을 기본값으로 삼아 연습 기능이 통째로 비었다 (H-019 · H-021).
-    """
-    for level in ("beginner", "intermediate", "advanced"):
-        item = expressions_spec().schema_for(level, 400)["properties"]["expressions"]["items"]
-        assert {"example", "example_ko"} <= set(item["properties"]), level
-        assert {"example", "example_ko"} <= set(item["required"]), level
+    assert "example" not in props
+    assert "example_ko" not in props
+
+
+def test_each_difficulty_is_defined_by_counting_not_by_adjectives():
+    """**`08 §1` 의 교훈이다** — "깊게"·"최소한으로" 는 판정할 수 없다.
+    예문 난이도는 단어 수와 절 개수로 적혀서 세어 확인할 수 있다."""
+    from app.prompts.analysis import _EXAMPLE_RULE
+
+    assert "[examples]" in _EXAMPLE_RULE, "규칙 덩이를 잘못 집었다"
+    for name in ("beginner", "intermediate", "advanced"):
+        assert name in _EXAMPLE_RULE, name
+    # 세 난이도마다 단어 수 범위가 적혀 있다.
+    import re
+
+    ranges = re.findall(r"(\d+)~(\d+) 단어", _EXAMPLE_RULE)
+    assert len(ranges) == 3, ranges
+    lows = [int(low) for low, _ in ranges]
+    assert lows == sorted(lows), "난이도가 올라갈수록 길어져야 한다"
 
 
 def test_the_example_rule_offers_no_way_out():
-    """생략할 길을 적어 두면 작은 모델은 그 길로 간다 (H-021).
-
-    규칙 덩이를 직접 본다. 과제 전문에서 잘라 내려다 **빈 문자열을 검사하는**
-    통과만 하는 테스트를 한 번 만들었다.
-    """
+    """생략할 길을 적어 두면 작은 모델은 그 길로 간다 (H-021)."""
     from app.prompts.analysis import _EXAMPLE_RULE
 
-    assert "[example]" in _EXAMPLE_RULE, "규칙 덩이를 잘못 집었다"
-    assert "모든 표현에 반드시 넣는다" in _EXAMPLE_RULE
-    # "생략" 은 `생략하지 말고` 한 군데에만 나와야 한다. 생략해도 된다는 말이 끼면 늘어난다.
+    assert "세 개 모두 반드시 넣는다" in _EXAMPLE_RULE
+    # "생략" 은 `생략하지 말고` 한 군데에만 나와야 한다.
     assert _EXAMPLE_RULE.count("생략") == _EXAMPLE_RULE.count("생략하지 말고"), (
         "예문 규칙에 생략 조항이 다시 들어왔다"
     )
 
 
-def test_beginner_prompt_never_mentions_nuance():
-    """설명 자리를 알려 주면 모델이 meaning 에 섞어 쓴다."""
-    assert "nuance" not in expressions_spec().task_for("beginner")
+def test_the_korean_gloss_rule_pins_the_subject():
+    """`H-046` — 대역이 주어를 바꿔 옮겼다 (`She acted…` → "그는…")."""
+    from app.prompts.analysis import _EXAMPLE_RULE
+
+    assert "주어와 인물을 바꾸지 않는다" in _EXAMPLE_RULE
 
 
-def test_only_advanced_prompt_prefers_multiword():
-    spec = expressions_spec()
-
-    assert "다어절 표현을 우선" in spec.task_for("advanced")
-    assert "다어절 표현을 우선" not in spec.task_for("intermediate")
-    assert "다어절 표현을 우선" not in spec.task_for("beginner")
+def test_the_expressions_task_is_a_plain_string_now():
+    """난이도마다 조립하던 함수가 사라졌다 — 조립할 것이 없다."""
+    assert isinstance(expressions_spec().task, str)
 
 
 async def test_nuance_is_rendered_below_the_table():

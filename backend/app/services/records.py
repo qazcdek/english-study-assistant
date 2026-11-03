@@ -10,7 +10,7 @@ Pydantic 모델을 느슨하게 만들면 옛 기록은 읽히지만 **LLM 응�
 
 from typing import Any
 
-RESULT_VERSION = 3
+RESULT_VERSION = 4
 
 
 def stamp(result: dict[str, Any]) -> dict[str, Any]:
@@ -67,5 +67,24 @@ def _upgrade_overview(item: dict[str, Any]) -> dict[str, Any]:
 
 
 def _upgrade_expression(item: dict[str, Any]) -> dict[str, Any]:
-    """nuance 가 없던 시절의 기록. 기본값이 있어 그대로 두어도 되지만 명시해 둔다."""
-    return {**item, "nuance": item.get("nuance", "")}
+    """nuance 가 없던 시절과, 예문이 **하나뿐이던** 시절의 기록.
+
+    예문이 난이도별 셋으로 바뀌었다 (`M16`). 낡은 기록의 `example`/`example_ko` 는
+    **중급 자리로 옮긴다** — 그때는 난이도가 분석에 붙어 있었고 공용 글감도 회원
+    기본값도 중급이었으므로, 그 한 문장이 가리키는 난이도는 중급이다.
+
+    초급·고급은 **빈 쌍으로 둔다.** 없는 것을 꾸며 내지 않는다 — 화면이 "이 기록에는
+    없습니다" 로 적는다.
+    """
+    item = {**item, "nuance": item.get("nuance", "")}
+    if isinstance(item.get("examples"), dict):
+        return item
+
+    old_en = item.pop("example", None) or ""
+    old_ko = item.pop("example_ko", None) or ""
+    item["examples"] = {
+        "beginner": {"en": "", "ko": ""},
+        "intermediate": {"en": old_en, "ko": old_ko},
+        "advanced": {"en": "", "ko": ""},
+    }
+    return item

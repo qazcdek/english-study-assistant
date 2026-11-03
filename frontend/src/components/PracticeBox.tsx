@@ -1,7 +1,7 @@
 import { useState } from 'react'
 
 import { ApiError, gradePractice } from '../lib/api'
-import type { Expression, Level, PracticeResult } from '../lib/types'
+import { exampleAt, type Expression, type Level, type PracticeResult } from '../lib/types'
 import { PracticeFeedback, VerdictBadge } from './PracticeFeedback'
 
 interface Props {
@@ -20,8 +20,11 @@ export function PracticeBox({ expression, level, sourceText, onGraded, onClose }
   const [result, setResult] = useState<PracticeResult | null>(null)
   const [error, setError] = useState<string | null>(null)
 
-  const promptKo = expression.example_ko ?? ''
-  const modelAnswer = expression.example ?? ''
+  // **고른 난이도의 예문으로 연습한다** (M16). `level` 은 채점 톤에도 함께 쓰인다 —
+  // 초급 문장을 쓴 사람에게 고급 기준으로 따지면 안 된다.
+  const pair = exampleAt(expression, level)
+  const promptKo = pair.ko
+  const modelAnswer = pair.en
   const canSubmit = answer.trim().length > 0 && !grading
 
   async function submit() {

@@ -78,7 +78,6 @@ def current_article(
             section=row.section,
             published_at=row.published_at.isoformat() if row.published_at else "",
             picked_for=row.picked_for.isoformat() if row.picked_for else "",
-            level=shown.level,
             paragraphs=[
                 ParagraphOut(
                     ordinal=p.ordinal, text=p.text, prepared=p.ordinal in shown.prepared
@@ -105,7 +104,6 @@ def paragraph_analysis(
         raise NotFoundError("아직 준비되지 않은 문단입니다.")
     return ParagraphAnalysisOut(
         ordinal=ordinal,
-        level=row.level,
         # 프롬프트가 바뀌면 저장된 모양도 낡는다. 회원 기록과 **같은 자리에서** 올린다
         # (14 §3.5 는 공용 표에도 그대로 적용된다).
         result=records.upgrade(row.result),

@@ -130,7 +130,6 @@ def _save_analysis(db, user, request: AnalyzeRequest, response: AnalyzeResponse)
         AnalysisRecord(
             user_id=user.id,
             source_text=request.text,
-            level=request.level,
             result=records.stamp(response.result.model_dump()),
             markdown=response.markdown.model_dump(),
             failed_parts=response.meta.failed_parts,

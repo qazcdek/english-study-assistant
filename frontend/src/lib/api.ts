@@ -7,7 +7,6 @@ import type {
   HealthResponse,
   HistoryDetail,
   HistoryItem,
-  Level,
   ParagraphAnalysis,
   PracticeHistoryItem,
   PracticeRequest,
@@ -72,7 +71,6 @@ async function parseError(response: Response): Promise<ApiError> {
  */
 export async function analyzeStream(
   text: string,
-  level: Level,
   onEvent: (event: StreamEvent) => void,
   signal?: AbortSignal,
 ): Promise<void> {
@@ -81,7 +79,8 @@ export async function analyzeStream(
     response = await fetch(`${BASE}/api/analyze/stream`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Accept: 'text/event-stream' },
-      body: JSON.stringify({ text, level }),
+      // **난이도를 안 보낸다** (M16). 분석은 한 가지로 돈다.
+      body: JSON.stringify({ text }),
       credentials: CREDENTIALS,
       signal,
     })

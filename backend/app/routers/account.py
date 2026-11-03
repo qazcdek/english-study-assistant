@@ -60,7 +60,6 @@ def list_history(user: SessionUser, db: DbDep, limit: int = Query(30, ge=1, le=1
         HistoryItem(
             id=r.id,
             source_text=r.source_text,
-            level=r.level,
             created_at=_iso(r.created_at),
             failed_parts=r.failed_parts or [],
         )
@@ -96,7 +95,6 @@ def get_history(record_id: int, user: SessionUser, db: DbDep) -> HistoryDetail:
     return HistoryDetail(
         id=row.id,
         source_text=row.source_text,
-        level=row.level,
         created_at=_iso(row.created_at),
         failed_parts=row.failed_parts or [],
         # 프롬프트를 손볼 때마다 결과 스키마가 바뀐다. 옛 형식으로 저장된 기록을 올려서 넘긴다.

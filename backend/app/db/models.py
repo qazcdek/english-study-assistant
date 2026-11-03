@@ -86,7 +86,6 @@ class AnalysisRecord(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
     source_text: Mapped[str] = mapped_column(Text)
-    level: Mapped[str] = mapped_column(String(20), default="intermediate")
     result: Mapped[dict] = mapped_column(JSON)
     markdown: Mapped[dict] = mapped_column(JSON)
     failed_parts: Mapped[list] = mapped_column(JSON, default=list)
@@ -257,14 +256,15 @@ class ParagraphAnalysis(Base):
 
     __tablename__ = "paragraph_analyses"
     __table_args__ = (
-        UniqueConstraint("paragraph_id", "level", name="uq_analysis_paragraph_level"),
+        # **문단마다 한 행이다** (M16). 전에는 `(문단, 난이도)` 였는데 난이도가
+        # 사라졌으므로 문단 하나에 분석 하나다.
+        UniqueConstraint("paragraph_id", name="uq_analysis_paragraph"),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
     paragraph_id: Mapped[int] = mapped_column(
         ForeignKey("article_paragraphs.id", ondelete="CASCADE"), index=True
     )
-    level: Mapped[str] = mapped_column(String(20), default="intermediate")
     result: Mapped[dict] = mapped_column(JSON)
     markdown: Mapped[dict] = mapped_column(JSON)
     failed_parts: Mapped[list] = mapped_column(JSON, default=list)

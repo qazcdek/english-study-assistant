@@ -48,11 +48,19 @@ def test_old_format_records_still_open(both_modes):
         row = AnalysisRecord(
             user_id=api.user_id,
             source_text="Had she known what awaited her.",
-            level="intermediate",
             result={
                 "source_text": "Had she known what awaited her.",
                 "translation": "번역",
-                "expressions": [{"expression": "set foot in", "type": "관용구", "meaning": "발을 들이다"}],
+                "expressions": [
+                    {
+                        "expression": "set foot in",
+                        "type": "관용구",
+                        "meaning": "발을 들이다",
+                        # 예문이 **하나뿐이던** 시절의 모양 (M16 전).
+                        "example": "She never set foot in that house again.",
+                        "example_ko": "그녀는 다시는 그 집에 발을 들이지 않았다.",
+                    }
+                ],
                 "structures": [{"fragment": "Had she known", "explanation": "도치 가정법이다."}],
                 "overview": {
                     "frequency": "자주",
@@ -75,7 +83,16 @@ def test_old_format_records_still_open(both_modes):
     body = resp.json()
     assert body["result"]["structures"][0]["role"] == "도치 가정법이다."
     assert body["result"]["overview"]["tone"] == ""
-    assert body["result"]["expressions"][0]["nuance"] == ""
+    expression = body["result"]["expressions"][0]
+    assert expression["nuance"] == ""
+    # **낡은 예문 하나는 중급 자리로 올라간다** (M16) — 그때 유일했던 난이도다.
+    assert expression["examples"]["intermediate"]["en"].startswith("She never set foot")
+    assert expression["examples"]["intermediate"]["ko"].startswith("그녀는 다시는")
+    # 초급·고급은 **빈 쌍으로 둔다.** 없는 것을 꾸며 내지 않는다.
+    assert expression["examples"]["beginner"] == {"en": "", "ko": ""}
+    assert expression["examples"]["advanced"] == {"en": "", "ko": ""}
+    # 옛 칸은 응답에서 사라진다.
+    assert "example" not in expression
 
 
 def test_vocabulary_add_list_delete(both_modes):
@@ -402,3 +419,46 @@ def test_storing_a_key_locally_needs_an_encryption_key(both_modes, monkeypatch):
 
     assert response.status_code == 400
     assert "ENCRYPTION_KEY" in response.json()["error"]["message"]
+
+
+def test_a_record_with_no_examples_at_all_still_opens(both_modes):
+    """예문 칸이 **아예 없던** 기록도 열린다 (M16 전의 더 낡은 모양).
+
+    `records.upgrade` 가 `examples` 를 만들어 주지 않으면 응답 모델이 빈 쌍을
+    채워 주더라도 **낡은 예문이 소리 없이 사라진다** — 올리는 쪽이 일을 하는지
+    여기서 묻는다.
+    """
+    api = both_modes
+    with session_scope() as db:
+        row = AnalysisRecord(
+            user_id=api.user_id,
+            source_text="She summed it up.",
+            result={
+                "source_text": "She summed it up.",
+                "translation": "번역",
+                "expressions": [
+                    {
+                        "expression": "sum up",
+                        "type": "Phrasal Verb",
+                        "meaning": "요약하다",
+                        "example": "He summed up the report.",
+                        "example_ko": "그가 보고서를 요약했다.",
+                    }
+                ],
+                "structures": [],
+                "overview": None,
+            },
+            markdown=EMPTY_MD,
+            failed_parts=[],
+        )
+        db.add(row)
+        db.flush()
+        record_id = row.id
+
+    body = api.client.get(f"/api/history/{record_id}").json()
+    pairs = body["result"]["expressions"][0]["examples"]
+
+    assert pairs["intermediate"] == {
+        "en": "He summed up the report.",
+        "ko": "그가 보고서를 요약했다.",
+    }

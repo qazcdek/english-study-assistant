@@ -1,19 +1,33 @@
 import { fireEvent, render, screen } from '@testing-library/react'
 import { beforeEach, describe, expect, test } from 'vitest'
 
+import { useState } from 'react'
+
 import { ExpressionTable, REMOVE_WARNING } from '../components/ExpressionTable'
+import { exampleAt, type Level } from '../lib/types'
 import { EXPRESSIONS, SOURCE, fakeStore, item, setViewport } from './fixtures'
 
-function draw(store = fakeStore(), keyExpressions: string[] = []) {
-  render(
-    <ExpressionTable
-      expressions={EXPRESSIONS}
-      keyExpressions={keyExpressions}
-      level="intermediate"
-      sourceText={SOURCE}
-      vocab={store}
-    />,
-  )
+/** 첫 표현의 그 난이도 예문. */
+function example(level: Level): string {
+  return exampleAt(EXPRESSIONS[0], level).en
+}
+
+function draw(store = fakeStore(), keyExpressions: string[] = [], level: Level = 'intermediate') {
+  // **난이도를 위에서 쥐고 있다** — 표 안의 버튼이 그것을 바꾸는지를 검사가 본다.
+  function Harness() {
+    const [picked, setPicked] = useState<Level>(level)
+    return (
+      <ExpressionTable
+        expressions={EXPRESSIONS}
+        keyExpressions={keyExpressions}
+        level={picked}
+        onLevelChange={setPicked}
+        sourceText={SOURCE}
+        vocab={store}
+      />
+    )
+  }
+  render(<Harness />)
   return store
 }
 
@@ -102,7 +116,66 @@ describe.each(['wide', 'narrow'] as const)('%s 에서', (kind) => {
 
     fireEvent.click(screen.getByRole('checkbox'))
 
-    expect(screen.getByText(`“${EXPRESSIONS[0].example}”`)).toBeTruthy()
+    expect(screen.getByText(`“${example('intermediate')}”`)).toBeTruthy()
+  })
+})
+
+describe('예문 난이도 (M16)', () => {
+  test('난이도 셋을 고를 수 있다', () => {
+    // **선택 자리가 사라지면 난이도 기능이 없는 것이 된다.** 예문이 셋 다 들어
+    // 있는데 중급만 보이게 되는 쪽이 가장 조용한 실패다.
+    draw()
+
+    const picker = screen.getByRole('group', { name: '예문 난이도' })
+    expect(
+      ['초급', '중급', '고급'].map((label) =>
+        Boolean(screen.getByRole('button', { name: label })),
+      ),
+    ).toEqual([true, true, true])
+    expect(picker.textContent).toContain('초급')
+  })
+
+  test('고른 난이도의 예문이 보인다', () => {
+    draw()
+    fireEvent.click(screen.getByRole('checkbox')) // 가림 해제
+
+    expect(screen.getByText(`“${example('intermediate')}”`)).toBeTruthy()
+
+    fireEvent.click(screen.getByRole('button', { name: '초급' }))
+
+    expect(screen.getByText(`“${example('beginner')}”`)).toBeTruthy()
+    expect(screen.queryByText(`“${example('intermediate')}”`)).toBeNull()
+  })
+
+  test('난이도가 올라가면 써 볼 문장이 길어진다', () => {
+    // **이것이 난이도의 정의다** (M16) — "깊게" 같은 정도부사가 아니라 단어 수다.
+    const lengths = (['beginner', 'intermediate', 'advanced'] as const).map(
+      (l) => example(l).split(' ').length,
+    )
+
+    expect(lengths).toEqual([...lengths].sort((a, b) => a - b))
+  })
+
+  test('그 난이도에 예문이 없으면 비었다고 적는다', () => {
+    // `refer to` 는 중급만 있다 — 낡은 기록이 올라온 모양이다.
+    draw()
+
+    fireEvent.click(screen.getByRole('button', { name: '고급' }))
+
+    // 고급 예문이 있는 표현은 그대로 연습할 수 있고, 없는 표현은 — 로 비었다.
+    expect(screen.getAllByTitle('이 난이도의 예문이 없습니다').length).toBe(1)
+  })
+
+  test('고른 난이도를 위로 알려 준다', () => {
+    // 표 안에서 고르지만 **상태는 밖에 있다** — 탭을 옮겨도 고른 것이 남아야 한다.
+    draw()
+
+    const advanced = screen.getByRole('button', { name: '고급' })
+    expect(advanced.getAttribute('aria-pressed')).toBe('false')
+
+    fireEvent.click(advanced)
+
+    expect(advanced.getAttribute('aria-pressed')).toBe('true')
   })
 })
 

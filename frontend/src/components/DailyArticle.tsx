@@ -6,17 +6,12 @@ import type { DailyArticle as Article, DailyParagraph, Level } from '../lib/type
 import type { VocabularyStore } from '../lib/useVocabulary'
 import { ResultView } from './ResultView'
 
-/** 펼쳐 본 문단 하나. **응답이 준 난이도와 모델을 함께 들고 있는다** — 머리줄이 적는다. */
+/** 펼쳐 본 문단 하나. **응답이 준 모델 이름을 함께 들고 있는다** — 머리줄이 적는다.
+ *
+ *  전에는 난이도도 들고 있었는데 `M16` 이 분석에서 난이도를 걷어냈다. */
 interface Prepared {
   state: AnalysisState
   model: string
-  level: Level
-}
-
-const LEVEL_LABELS: Record<Level, string> = {
-  beginner: '초급',
-  intermediate: '중급',
-  advanced: '상급',
 }
 
 /**
@@ -33,12 +28,21 @@ const LEVEL_LABELS: Record<Level, string> = {
  * 오늘 것이 아직 없으면 어제 것이 온다 (09 §3.8). 그러니 "오늘의 글감" 이라고
  * 적고 **적힌 날짜를 함께** 보여준다 — 언제 것인지 모르고 읽는 쪽이 나쁘다.
  *
- * ### 난이도를 바꿔 치지 않는다
+ * ### 난이도는 예문에만 있다
  *
- * 미리 분석은 중급 하나만 돌아 있다. 회원이 고른 난이도로 조용히 바꾸면 없는
- * 것을 찾아 빈 화면이 되므로, **준비된 난이도를 적는다.**
+ * 분석에 난이도가 없다 (M16). 머리줄이 "중급으로 미리 분석" 을 적던 자리가
+ * 사라졌고, 회원이 고르는 예문 난이도는 **표현 풀이 표 안에서** 고른다.
  */
-export function DailyArticle({ vocab, level }: { vocab: VocabularyStore; level: Level }) {
+export function DailyArticle({
+  vocab,
+  level,
+  onLevelChange,
+}: {
+  vocab: VocabularyStore
+  /** 예문 난이도. 표에서 고른 것을 그대로 흘려보낸다 (M16). */
+  level: Level
+  onLevelChange: (level: Level) => void
+}) {
   const [article, setArticle] = useState<Article | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<ApiError | null>(null)
@@ -87,7 +91,6 @@ export function DailyArticle({ vocab, level }: { vocab: VocabularyStore; level: 
           [paragraph.ordinal]: {
             state: finishedState(detail.result, detail.markdown, detail.failed_parts),
             model: detail.model,
-            level: detail.level,
           },
         }))
       } catch (e) {
@@ -153,8 +156,7 @@ export function DailyArticle({ vocab, level }: { vocab: VocabularyStore; level: 
         </p>
 
         <p className="text-xs text-stone-400">
-          문단 {article.paragraphs.length}개 · 분석 {ready}개 준비됨 ·{' '}
-          <b className="font-medium">{LEVEL_LABELS[article.level]}</b>으로 미리 분석
+          문단 {article.paragraphs.length}개 · 분석 {ready}개 준비됨
         </p>
       </header>
 
@@ -198,6 +200,7 @@ export function DailyArticle({ vocab, level }: { vocab: VocabularyStore; level: 
                     <ResultView
                       state={analysis.state}
                       level={level}
+                      onLevelChange={onLevelChange}
                       vocab={vocab}
                       // **난이도와 모델을 적는다.** 미리 분석에는 소요 시간이 없어
                       // (`meta` 를 들지 않는다) 비워 두면 `ResultView` 가 끝난 분석을
@@ -260,8 +263,10 @@ export function dayLabel(picked: string): string {
   return `${Number(match[2])}월 ${Number(match[3])}일`
 }
 
-/** 머리줄 — 난이도와 모델. **모델 이름이 비어 있으면 적지 않는다.** */
+/** 머리줄 — 미리 분석임과 그 모델. **모델 이름이 비어 있으면 적지 않는다.**
+ *
+ *  전에는 난이도를 적었는데 분석에 난이도가 없어졌다 (M16). 그래도 비워 두면
+ *  `ResultView` 가 **끝난 분석을 "진행 중" 으로 읽는다** — 그래서 말은 남긴다. */
 function caption(prepared: Prepared): string {
-  const label = `${LEVEL_LABELS[prepared.level]} 분석`
-  return prepared.model ? `${label} · ${prepared.model}` : label
+  return prepared.model ? `미리 분석 · ${prepared.model}` : '미리 분석'
 }

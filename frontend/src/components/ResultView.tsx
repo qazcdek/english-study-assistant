@@ -10,11 +10,14 @@ import { Section } from './Section'
 export function ResultView({
   state,
   level,
+  onLevelChange,
   vocab,
   caption,
 }: {
   state: AnalysisState
+  /** 예문 난이도. **표 안에서 고른다** (M16) — 여기서는 흘려보내기만 한다. */
   level: Level
+  onLevelChange: (level: Level) => void
   vocab: VocabularyStore
   /**
    * 머리줄에 적을 말. **`meta` 가 없는 분석**에만 쓴다.
@@ -84,6 +87,7 @@ export function ResultView({
           expressions={result.expressions}
           keyExpressions={result.overview?.key_expressions ?? []}
           level={level}
+          onLevelChange={onLevelChange}
           sourceText={result.source_text}
           vocab={vocab}
         />

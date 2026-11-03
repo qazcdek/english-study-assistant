@@ -1,11 +1,3 @@
-import type { Level } from '../lib/types'
-
-const LEVELS: { value: Level; label: string }[] = [
-  { value: 'beginner', label: '초급' },
-  { value: 'intermediate', label: '중급' },
-  { value: 'advanced', label: '상급' },
-]
-
 /** 서버가 /api/config 로 알려주기 전에 잠깐 쓰는 값. 서버 값이 단일 출처다. */
 const FALLBACK_MAX_CHARS = 1200
 
@@ -19,22 +11,18 @@ export const MIN_CHARS = 20
 
 interface Props {
   text: string
-  level: Level
   maxChars?: number
   loading: boolean
   onTextChange: (text: string) => void
-  onLevelChange: (level: Level) => void
   onSubmit: () => void
   onTooShort: () => void
 }
 
 export function InputPanel({
   text,
-  level,
   loading,
   maxChars = FALLBACK_MAX_CHARS,
   onTextChange,
-  onLevelChange,
   onSubmit,
   onTooShort,
 }: Props) {
@@ -72,24 +60,10 @@ export function InputPanel({
         className="w-full resize-y rounded-xl border border-stone-200 bg-stone-50 p-3 font-mono text-[15px] leading-relaxed outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-200 dark:border-stone-700 dark:bg-stone-950 dark:focus:ring-indigo-900"
       />
 
+      {/* **난이도 고르는 자리가 여기 있었다.** 분석에서 걷어내고 작문 연습의 예문으로
+          옮겼다 (M16) — 바꾸는 것이 설명의 깊이뿐이었고 "깊게" 가 무엇인지 모델도
+          우리도 몰랐다 (`08 §1`). 지금 난이도는 표현 풀이 표 안에서 고른다. */}
       <div className="mt-3 flex flex-wrap items-center gap-3">
-        <div className="flex items-center gap-1 rounded-lg bg-stone-100 p-1 dark:bg-stone-800">
-          {LEVELS.map((l) => (
-            <button
-              key={l.value}
-              type="button"
-              onClick={() => onLevelChange(l.value)}
-              className={`rounded-md px-3 py-1 text-sm transition ${
-                level === l.value
-                  ? 'bg-white font-medium text-indigo-600 shadow-sm dark:bg-stone-700 dark:text-indigo-300'
-                  : 'text-stone-500 hover:text-stone-800 dark:hover:text-stone-200'
-              }`}
-            >
-              {l.label}
-            </button>
-          ))}
-        </div>
-
         <span className={`text-xs ${tooLong ? 'text-red-500' : 'text-stone-400'}`}>
           {text.length.toLocaleString()} / {maxChars.toLocaleString()}자
           {tooLong && ' — 너무 깁니다'}

@@ -56,35 +56,79 @@ def test_unrelated_expressions_are_kept():
 # --------------------------------------------------------------- 따옴표·공백
 
 
+def examples(**pairs) -> dict:
+    """난이도별 예문 셋. 안 준 난이도는 빈 쌍이다."""
+    return {
+        name: {"en": pairs.get(name, ("", ""))[0], "ko": pairs.get(name, ("", ""))[1]}
+        for name in ("beginner", "intermediate", "advanced")
+    }
+
+
 def test_wrapping_quotes_are_stripped():
-    """모델이 예문을 따옴표로 감싸 보내는데, UI 가 따로 따옴표를 붙여 겹쳐 보였다."""
+    """모델이 예문을 따옴표로 감싸 보내는데, UI 가 따로 따옴표를 붙여 겹쳐 보였다.
+
+    **난이도 셋을 각각 다듬는다** (`M16`) — 하나만 다듬으면 나머지 둘에 따옴표가 남는다.
+    """
     kept = refine.clean_expressions(
-        [expr("  sum up  ", example='"He summed it up."', example_ko="“그가 요약했다.”")]
+        [
+            expr(
+                "  sum up  ",
+                examples=examples(
+                    beginner=('"He summed it up."', "“그가 요약했다.”"),
+                    intermediate=('"She summed up the report."', "“그녀가 보고서를 요약했다.”"),
+                    advanced=('"They summed up the year."', "“그들이 그 해를 요약했다.”"),
+                ),
+            )
+        ]
     )
 
     assert kept[0].expression == "sum up"
-    assert kept[0].example == "He summed it up."
-    assert kept[0].example_ko == "그가 요약했다."
+    for name in ("beginner", "intermediate", "advanced"):
+        pair = getattr(kept[0].examples, name)
+        assert not pair.en.startswith('"'), name
+        assert not pair.ko.startswith("“"), name
 
 
 def test_an_example_without_a_korean_prompt_is_kept():
-    """한국어 제시문이 없으면 **연습만** 못 한다. 예문 자체는 멀쩡하므로 남긴다.
+    """한국어 제시문이 없으면 **그 난이도로 연습만** 못 한다. 예문 자체는 멀쩡하므로 남긴다.
 
     전에는 짝을 맞추려고 둘 다 버렸는데, 모든 표현이 그렇게 되면 화면에서
     예문 칸과 연습 입구가 통째로 사라졌다 (H-019).
     """
-    kept = refine.clean_expressions([expr("sum up", example="He summed it up.")])
+    kept = refine.clean_expressions(
+        [expr("sum up", examples=examples(intermediate=("He summed it up.", "")))]
+    )
 
-    assert kept[0].example == "He summed it up."
-    assert kept[0].example_ko is None
+    assert kept[0].examples.intermediate.en == "He summed it up."
+    assert kept[0].examples.intermediate.ko == ""
 
 
 def test_a_korean_prompt_without_an_example_is_dropped():
-    """제시문만 있고 영어 문장이 없으면 쓸 데가 없다."""
-    kept = refine.clean_expressions([expr("sum up", example_ko="그가 요약했다.")])
+    """제시문만 있고 영어 문장이 없으면 가려 둘 모범 답안이 없다 — 연습이 성립하지 않는다."""
+    kept = refine.clean_expressions(
+        [expr("sum up", examples=examples(advanced=("", "그가 요약했다.")))]
+    )
 
-    assert kept[0].example is None
-    assert kept[0].example_ko is None
+    assert kept[0].examples.advanced.en == ""
+    assert kept[0].examples.advanced.ko == ""
+
+
+def test_one_difficulty_being_empty_does_not_touch_the_others():
+    """**난이도마다 따로 판단한다.** 하나가 비었다고 나머지를 버리면 H-019 가 되돌아온다."""
+    kept = refine.clean_expressions(
+        [
+            expr(
+                "sum up",
+                examples=examples(
+                    beginner=("He summed it up.", "그가 요약했다."),
+                    advanced=("", "제시문만 있다."),
+                ),
+            )
+        ]
+    )
+
+    assert kept[0].examples.beginner.en == "He summed it up."
+    assert kept[0].examples.advanced.en == ""
 
 
 # --------------------------------------------------------------- 구문 해설
