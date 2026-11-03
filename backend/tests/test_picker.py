@@ -3,7 +3,7 @@
 규약은 `app/services/daily.py` 와 `app/services/guardian.py` 머리말.
 여기서 지키는 것은 여섯이다.
 
-- **"오늘" 은 한국 날짜다** — UTC 로 세면 글감이 매일 오전 9시에 바뀐다
+- **"오늘" 은 한국 날짜다** — UTC 로 세면 뉴스가 매일 오전 9시에 바뀐다
 - **운영자가 없으면 가디언을 치지도 않는다** — local 에서 이 기능을 끄는 장치
 - **부분 실패는 "안 된 것"** — 세 파트만 성공한 행이 "됐음" 으로 읽히면 안 된다
 - **쿨다운은 시간으로 풀린다** — 하루 시도 상한이 아니다
@@ -84,7 +84,7 @@ def settings_with_key():
 
 
 def test_today_is_the_korean_date_not_utc():
-    """UTC 로 세면 **글감이 매일 오전 9시에 바뀐다.** 읽는 사람은 한국에 있다.
+    """UTC 로 세면 **뉴스가 매일 오전 9시에 바뀐다.** 읽는 사람은 한국에 있다.
 
     식을 옮겨 적지 않고 **그 함수를 부른다.** 처음에는 `(now + KST).date()` 를
     검사에 베껴 썼는데, 함수를 UTC 로 되돌려도 검사가 통과했다 — 깨뜨려 보고 알았다.
@@ -117,7 +117,7 @@ def test_the_boundary_is_a_separate_decision_from_the_timezone():
 
 
 def test_an_article_with_zero_paragraphs_never_counts_as_done(cloud):
-    """**빈 기사를 "됐음" 으로 읽으면 그날 글감이 영영 안 생긴다** — 돌 문단이
+    """**빈 기사를 "됐음" 으로 읽으면 그날 뉴스가 영영 안 생긴다** — 돌 문단이
     없으므로 분석도 0개이고, `0 < 0` 이 거짓이라 온전해 보인다."""
     with session_scope() as db:
         article = make_article(db, _cipher(), picked_for=TODAY)
@@ -133,7 +133,7 @@ def test_an_article_with_zero_paragraphs_never_counts_as_done(cloud):
 
 
 def test_without_a_source_key_nothing_runs(cloud):
-    """키가 비면 글감 고르기만 꺼진다. **앱은 정상으로 뜬다.**
+    """키가 비면 뉴스 고르기만 꺼진다. **앱은 정상으로 뜬다.**
 
     키를 **일부러 비운 설정**으로 묻는다. 개발 `.env` 에는 가디언 키가 실제로
     들어 있어서 `get_settings()` 를 그대로 쓰면 이 전제가 서지 않는다.
@@ -153,7 +153,7 @@ def test_without_an_operator_the_source_is_never_called(cloud):
 
 
 async def test_a_complete_article_for_today_stops_the_run(cloud, monkeypatch):
-    """온전한 글감이 있으면 **다시 돌리지 않는다.** 44 호출이 공짜가 아니다."""
+    """온전한 뉴스가 있으면 **다시 돌리지 않는다.** 44 호출이 공짜가 아니다."""
     from tests.helpers_prepare import run_prepare
 
     with session_scope() as db:
@@ -219,7 +219,7 @@ def test_a_fresh_failure_puts_the_run_to_sleep(cloud):
 
 
 def test_the_cooldown_releases_itself_when_the_time_passes(cloud):
-    """**하루 시도 상한이 아니다.** 상한은 다 쓰면 문제가 풀려도 내일까지 글감이 없다."""
+    """**하루 시도 상한이 아니다.** 상한은 다 쓰면 문제가 풀려도 내일까지 뉴스가 없다."""
     with session_scope() as db:
         operator_with_key(db, _cipher())
         daily._note(db, TODAY, "테스트")
@@ -275,7 +275,7 @@ async def test_a_liveblog_is_not_a_candidate():
 
 
 async def test_an_empty_popular_list_is_an_error_not_a_quiet_success():
-    """조용히 성공으로 두면 **왜 글감이 없는지 아무도 모른다.**"""
+    """조용히 성공으로 두면 **왜 뉴스가 없는지 아무도 모른다.**"""
     async with client_for({"response": {"mostViewed": []}}) as http:
         with pytest.raises(ArticleSourceError):
             await guardian.candidates(settings_with_key(), client=http)
@@ -294,7 +294,7 @@ async def test_the_source_key_never_reaches_the_error_message():
 
 
 async def test_a_row_missing_what_we_need_is_dropped_not_crashed():
-    """출처가 칸을 빼먹을 수 있다. **한 줄 때문에 전체가 실패하면** 그날 글감이 없다."""
+    """출처가 칸을 빼먹을 수 있다. **한 줄 때문에 전체가 실패하면** 그날 뉴스가 없다."""
     payload = {
         "response": {
             "mostViewed": [
@@ -340,9 +340,9 @@ def draft(**over) -> articles.Draft:
     return articles.Draft(**{**base, **over})
 
 
-def test_the_top_candidate_is_used_when_it_passes(cloud):
+async def test_the_top_candidate_is_used_when_it_passes(cloud):
     with session_scope() as db:
-        article_id = daily._pick(db, [draft(), draft(source_id="second")], TODAY)
+        article_id = await daily._pick(db, [draft(), draft(source_id="second")], TODAY)
 
         row = db.get(Article, article_id)
         assert row.source_id == "world/2026/nov/04/example"
@@ -358,11 +358,11 @@ def test_the_top_candidate_is_used_when_it_passes(cloud):
     ],
     ids=["쪼개지지-않는다", "500단어-토막이-없다", "크레딧이-없다"],
 )
-def test_a_candidate_that_fails_a_gate_is_skipped_for_the_next(cloud, broken):
+async def test_a_candidate_that_fails_a_gate_is_skipped_for_the_next(cloud, broken):
     """**관문은 `store()` 하나다.** 셋 다 `ArticleBodyError` 의 자손이므로
     `except ArticleBodyError` 하나로 빼먹을 수 없다 (`M13-T9` · `M13-T10`)."""
     with session_scope() as db:
-        article_id = daily._pick(
+        article_id = await daily._pick(
             db,
             [draft(source_id="bad", **broken), draft(source_id="good")],
             TODAY,
@@ -371,33 +371,33 @@ def test_a_candidate_that_fails_a_gate_is_skipped_for_the_next(cloud, broken):
         assert db.get(Article, article_id).source_id == "good"
 
 
-def test_an_article_already_used_as_a_pick_is_skipped(cloud):
+async def test_an_article_already_used_as_a_pick_is_skipped(cloud):
     """**어제 1위가 오늘도 1위다.** `store()` 는 `picked_for` 를 덮어쓰므로
     걸러 주지 않으면 같은 글이 또 온다."""
     with session_scope() as db:
         make_article(db, _cipher(), source_id="yesterday", picked_for=TODAY - timedelta(days=1))
 
-        article_id = daily._pick(
+        article_id = await daily._pick(
             db, [draft(source_id="yesterday"), draft(source_id="fresh")], TODAY
         )
 
         assert db.get(Article, article_id).source_id == "fresh"
 
 
-def test_a_stored_candidate_that_was_never_picked_can_still_be_used(cloud):
+async def test_a_stored_candidate_that_was_never_picked_can_still_be_used(cloud):
     """`picked_for` 가 빈 행은 **후보**다. 쓴 적이 없으므로 넘기지 않는다."""
     with session_scope() as db:
         make_article(db, _cipher(), source_id="candidate", picked_for=None)
 
-        article_id = daily._pick(db, [draft(source_id="candidate")], TODAY)
+        article_id = await daily._pick(db, [draft(source_id="candidate")], TODAY)
 
         assert db.get(Article, article_id).source_id == "candidate"
 
 
-def test_when_every_candidate_fails_the_picker_says_so(cloud):
+async def test_when_every_candidate_fails_the_picker_says_so(cloud):
     """쿨다운이 적히고 5분 뒤 다시 본다. **조용히 성공으로 두지 않는다.**"""
     with session_scope() as db, pytest.raises(ArticleBodyError):
-        daily._pick(db, [draft(body="<p>Short.</p>")], TODAY)
+        await daily._pick(db, [draft(body="<p>Short.</p>")], TODAY)
 
 
 # --------------------------------------------- 뒤에서 도는 한 바퀴
@@ -426,7 +426,9 @@ async def test_a_full_run_stands_up_todays_article_with_its_analyses(cloud, monk
         assert db.query(PickAttempt).count() == 0
         shown = articles.current(db)
         assert shown.article.picked_for == TODAY
-        assert len(shown.prepared) == len(PARAGRAPHS)
+        # **문단이 묶였다** (M13-T11) — 세 토막이 120낱말 안이라 한 문단이다.
+        assert len(shown.paragraphs) == 1
+        assert len(shown.prepared) == len(shown.paragraphs)
 
 
 async def test_a_failing_source_leaves_a_cooldown_and_throws_nothing(cloud, monkeypatch):
@@ -493,7 +495,7 @@ async def test_a_run_that_stops_mid_analysis_keeps_what_it_got(cloud, monkeypatc
 # --------------------------------------------- 방아쇠는 읽는 요청이다
 
 
-def test_the_read_request_throws_the_pick_behind_it(cloud, monkeypatch):
+async def test_the_read_request_throws_the_pick_behind_it(cloud, monkeypatch):
     """**요청을 막지 않는다.** 고르기+분석은 수십 초다 — 응답 경로에서 돌리면
     첫 방문자가 그 시간을 전부 기다린다 (`09 §3.8`)."""
     from fastapi.testclient import TestClient
@@ -516,7 +518,7 @@ def test_the_read_request_throws_the_pick_behind_it(cloud, monkeypatch):
 
 
 def test_a_read_request_throws_nothing_when_there_is_no_reason_to(cloud, monkeypatch):
-    """온전한 글감이 있는 날 **모든 요청마다 작업을 던지면** 안 된다."""
+    """온전한 뉴스가 있는 날 **모든 요청마다 작업을 던지면** 안 된다."""
     from fastapi.testclient import TestClient
 
     from app.main import create_app

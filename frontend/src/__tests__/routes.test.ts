@@ -34,8 +34,8 @@ describe('주소와 화면은 서로 되돌아간다', () => {
 })
 
 describe('머리의 탭', () => {
-  test('글감은 cloud 에만 있다', () => {
-    // 공용 글감은 cloud 전용이다 (09 §3.8). local 은 표가 늘 비어 있으므로
+  test('뉴스는 cloud 에만 있다', () => {
+    // 공용 뉴스는 cloud 전용이다 (09 §3.8). local 은 표가 늘 비어 있으므로
     // 아무것도 없는 화면으로 가는 문을 달지 않는다.
     expect(tabsFor(true).map(([view]) => view)).toContain('article')
     expect(tabsFor(false).map(([view]) => view)).not.toContain('article')

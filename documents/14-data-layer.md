@@ -53,7 +53,7 @@ article_pick_attempts       공용.  고르기 실패 기록 (쿨다운). 어디
 | `articles` | **공용.** 서버가 골라 온 기사 한 편 |
 | `article_paragraphs` | **공용.** 기사의 문단. 분석이 붙는 단위 |
 | `paragraph_analyses` | **공용.** 문단 하나의 미리 분석 결과. 난이도마다 한 행 |
-| `article_pick_attempts` | **공용.** 글감 고르기가 **실패한** 기록. 쿨다운의 근거 (`M13-T4`) |
+| `article_pick_attempts` | **공용.** 뉴스 고르기가 **실패한** 기록. 쿨다운의 근거 (`M13-T4`) |
 
 **매달린 표의 목록은 코드에도 있다** — `app/services/account.py`.
 목록이 불완전하면 **탈퇴한 회원의 데이터가 남는다.**

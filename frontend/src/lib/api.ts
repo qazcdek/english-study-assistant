@@ -2,6 +2,7 @@ import type {
   Account,
   AccountSettings,
   AppConfig,
+  ArticleListResponse,
   DailyArticleResponse,
   DeletionSummary,
   HealthResponse,
@@ -200,11 +201,15 @@ export const getHistoryDetail = (id: number) => request<HistoryDetail>(`/api/his
 export const deleteHistory = (id: number) =>
   request<{ ok: boolean }>(`/api/history/${id}`, { method: 'DELETE' })
 
-// --- 공용 글감 (M13) ---
+// --- 공용 뉴스 (M13) ---
 //
 // **키가 필요 없다.** 미리 분석이 끝나 있어 LLM 을 부르지 않는다 — 키 없는 회원도
 // 읽는다 (H-041 과 같은 이유). 한 편을 통째로 받지 않는 이유는 값이다: 전체가
 // 128KB 라 본문만 먼저 받고 분석은 펼칠 때 하나씩 가져온다.
+
+/** 그동안 고른 뉴스. **운영자만 쓸 수 있다** — 회원이 치면 403 이다 (M13-T13). */
+export const getPickedArticles = () =>
+  request<ArticleListResponse>('/api/articles/picked')
 
 export const getDailyArticle = () => request<DailyArticleResponse>('/api/articles/current')
 

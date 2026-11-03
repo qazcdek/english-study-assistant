@@ -7,7 +7,7 @@
 
 ```
 요청이 들어온다
-  오늘 글감이 온전한가?
+  오늘 뉴스가 온전한가?
     그렇다  →  그걸 보여준다
     아니다  →  고르기+분석을 뒤로 던지고, **그동안 어제 것을 보여준다**
 ```
@@ -19,10 +19,10 @@ cron 도 상주 프로세스도 쓸 수 없다. local 은 내 PC 라 꺼져 있�
 
 ### "오늘" 은 한국 날짜이고, 새벽 6시에 넘어간다
 
-`picked_for` 는 시점이 아니라 **"며칠의 글감인가" 라는 이름표**다. 읽는 사람이
-한국에 있으므로 화면의 "11월 4일 글감" 이 그 사람의 오늘과 맞아야 한다. UTC 로
-세면 **매일 오전 9시에 글감이 바뀐다** — 실제로 `M13-T8` 의 도구가 UTC 기본값을
-써서 한국 시간 11월 2일에 넣은 기사가 11월 1일 글감으로 찍혔다.
+`picked_for` 는 시점이 아니라 **"며칠의 뉴스인가" 라는 이름표**다. 읽는 사람이
+한국에 있으므로 화면의 "11월 4일 뉴스" 이 그 사람의 오늘과 맞아야 한다. UTC 로
+세면 **매일 오전 9시에 뉴스가 바뀐다** — 실제로 `M13-T8` 의 도구가 UTC 기본값을
+써서 한국 시간 11월 2일에 넣은 기사가 11월 1일 뉴스로 찍혔다.
 
 그리고 **자정이 아니라 새벽 6시에 끊는다.** 자정에 바꾸면 밤늦게 읽던 사람이
 글을 잃는다 — 23시 50분에 읽던 글이 10분 뒤에 어제 것이 된다. 6시로 밀면 밤
@@ -71,7 +71,8 @@ from app.db import (
     session_scope,
 )
 from app.errors import AppError, ArticleBodyError
-from app.services import articles, guardian, operator, prepare
+from app.providers.base import LLMProvider
+from app.services import articles, grouping, guardian, operator, prepare
 
 #: 읽는 사람의 시간대. `picked_for` 가 이 날짜로 찍힌다 — 이유는 머리말.
 KST = timedelta(hours=9)
@@ -92,7 +93,7 @@ COOLDOWN = timedelta(minutes=5)
 
 
 def today(now: datetime | None = None) -> date:
-    """"며칠의 글감인가" 의 오늘. **한국 날짜이고 새벽 6시에 넘어간다.**
+    """"며칠의 뉴스인가" 의 오늘. **한국 날짜이고 새벽 6시에 넘어간다.**
 
     한국 시간 새벽 5시 59분은 아직 **어제**다 — `DAY_STARTS_AT` 가 그 이유를 든다.
 
@@ -104,7 +105,7 @@ def today(now: datetime | None = None) -> date:
 
 
 def incomplete(db: Session, day: date) -> bool:
-    """그날 글감이 **없거나 온전하지 않은가.** 돌릴 이유가 있는지를 이것으로 본다."""
+    """그날 뉴스가 **없거나 온전하지 않은가.** 돌릴 이유가 있는지를 이것으로 본다."""
     article = (
         db.query(Article)
         .filter(Article.picked_for == day)
@@ -197,14 +198,23 @@ async def run(settings: Settings, *, day: date | None = None) -> None:
             return
 
         with session_scope() as db:
+            # 문단 묶기가 쓸 프로바이더. **없으면 단어 예산으로 묶인다** — 주제
+            # 경계는 더 나은 것이고 없어도 되는 것이다 (`services/grouping.py`).
             try:
-                target = _pick(db, drafts, day)
+                provider = prepare.provider_for(db, cipher, settings)
+            except AppError:
+                provider = None
+            try:
+                target = await _pick(db, drafts, day, provider)
             except AppError as exc:
                 _note(db, day, f"{exc.code}: {exc.detail or exc.message}")
                 return
+            finally:
+                if provider is not None:
+                    await provider.aclose()
 
     # **분석은 세션을 따로 쓴다.** 문단마다 커밋하며 몇 분을 돌므로(`prepare`)
-    # 고르기와 한 트랜잭션에 묶으면 그 사이 다른 요청이 오늘 글감을 못 읽는다.
+    # 고르기와 한 트랜잭션에 묶으면 그 사이 다른 요청이 오늘 뉴스를 못 읽는다.
     with session_scope() as db:
         row = db.get(Article, target)
         if row is None:  # 그 사이 지워졌다 — 다음 요청이 다시 고른다
@@ -233,7 +243,12 @@ def _todays(db: Session, day: date) -> int | None:
     )
 
 
-def _pick(db: Session, drafts: list[articles.Draft], day: date) -> int:
+async def _pick(
+    db: Session,
+    drafts: list[articles.Draft],
+    day: date,
+    provider: LLMProvider | None = None,
+) -> int:
     """후보를 인기 순서대로 앉혀 본다. 성공한 기사의 id.
 
     **관문을 `store()` 가 든다.** 분량(`M13-T9`)과 크레딧(`M13-T10`)과 쪼개기
@@ -242,7 +257,7 @@ def _pick(db: Session, drafts: list[articles.Draft], day: date) -> int:
     자손이므로 **하나만 잡아도 빼먹을 수 없다.**
     """
     for draft in drafts:
-        # **이미 글감으로 쓴 기사는 넘긴다.** `store()` 는 `picked_for` 를 덮어쓰므로
+        # **이미 뉴스로 쓴 기사는 넘긴다.** `store()` 는 `picked_for` 를 덮어쓰므로
         # (그 자리에서는 맞는 동작이다 — 비싼 것은 분석이고 문단에 붙어 있다) 걸러
         # 주지 않으면 어제 보여준 기사가 오늘 다시 1위일 때 **같은 글이 또 온다.**
         used = (
@@ -256,10 +271,16 @@ def _pick(db: Session, drafts: list[articles.Draft], day: date) -> int:
         )
         if used is not None:
             continue
+        # **관문을 먼저 지나고 나서 묶는다** (M13-T11). 묶기가 LLM 을 부르므로
+        # 못 쓸 기사에까지 호출을 쓰면 낭비다 — `gates()` 가 DB 를 안 타는 이유다.
         try:
-            stored = articles.store(db, draft, picked_for=day)
+            texts, cut = articles.gates(draft)
         except ArticleBodyError:
             continue  # 쪼개지지 않거나 · 500단어 토막이 없거나 · 크레딧이 없다
+
+        groups = await grouping.by_topic(texts[cut.start : cut.stop], provider)
+        try:
+            stored = articles.store(db, draft, picked_for=day, groups=groups)
         except IntegrityError:
             # `uq_article_day_source` 다 — **다른 요청이 먼저 앉혔다.** 제약이 그대로
             # 잠금 역할을 한다(동시 요청을 막는 장치가 따로 없는 이유다). 실패가

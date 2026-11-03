@@ -43,22 +43,28 @@ def draft(**over) -> articles.Draft:
 
 
 def test_the_body_becomes_numbered_paragraphs_in_order(cloud):
-    """**쪼개기 규칙을 그대로 탄다** — 추천 블록과 짧은 줄은 문단이 아니다."""
+    """**쪼개기 규칙을 그대로 탄다** — 추천 블록과 짧은 줄은 문단이 아니다.
+
+    그리고 **묶인다** (`M13-T11`). 이 본문은 두 토막이 합쳐 120낱말 안이므로 한
+    문단이 된다 — 가디언 `<p>` 는 절반 이상이 한 문장이라 그대로 앉히지 않는다.
+    """
     with session_scope() as db:
         stored = articles.store(db, draft())
 
         assert stored.created is True
-        assert stored.paragraphs == 2  # aside 하나 · 50자 미만 하나가 빠진다
+        assert stored.pieces == 2  # aside 하나 · 50자 미만 하나가 빠진다
+        assert stored.paragraphs == 1  # 둘이 한 묶음이 됐다
 
         rows = (
             db.query(ArticleParagraph)
             .order_by(ArticleParagraph.ordinal)
             .all()
         )
-        assert [r.ordinal for r in rows] == [1, 2]
+        assert [r.ordinal for r in rows] == [1]
+        # **본문은 원문 그대로 이어 붙는다.** 한 글자도 바뀌지 않는다.
         assert rows[0].text.startswith("Ukraine has resumed")
-        assert rows[1].text.startswith("The committee stopped short")
-        assert "Related:" not in " ".join(r.text for r in rows)
+        assert "The committee stopped short" in rows[0].text
+        assert "Related:" not in rows[0].text
 
 
 def test_storing_the_same_article_twice_does_not_double_anything(cloud):
@@ -70,7 +76,7 @@ def test_storing_the_same_article_twice_does_not_double_anything(cloud):
         assert second.created is False
         assert second.article.id == first.article.id
         assert db.query(Article).count() == 1
-        assert db.query(ArticleParagraph).count() == 2
+        assert db.query(ArticleParagraph).count() == 1
 
 
 def test_an_already_stored_article_keeps_its_paragraphs_even_if_the_body_changed(cloud):
@@ -147,7 +153,21 @@ def test_the_body_is_cut_to_the_terms_limit_when_it_is_first_stored(cloud):
 
         rows = db.query(ArticleParagraph).order_by(ArticleParagraph.ordinal).all()
         assert [r.ordinal for r in rows] == [1, 2]
+        # **`…` 는 낱말로 세지 않는다.** 공백 없이 붙이기 때문이다 — 띄우면 상한에
+        # 딱 걸린 기사를 다시 앉힐 때 한 낱말 초과로 읽혀 문단이 지워진다.
+        # **`…` 는 낱말로 세지 않는다.** 공백 없이 붙이기 때문이다 — 띄우면 상한에
+        # 딱 걸린 기사를 다시 앉힐 때 한 낱말 초과로 읽혀 문단이 지워진다.
+        # **`…` 는 낱말로 세지 않는다.** 공백 없이 붙이기 때문이다 — 띄우면 상한에
+        # 딱 걸린 기사를 다시 앉힐 때 한 낱말 초과로 읽혀 문단이 지워진다.
         assert sum(len(r.text.split()) for r in rows) == 450
+        # 뒤쪽 토막을 버렸으므로 꼬리에 `…` 가 붙는다 — `<p>` 가 문단이 아니라
+        # 문장이라 **마지막 묶음은 문단 중간에서 잘렸을 수 있다** (M13-T11).
+        assert rows[-1].text.endswith("…")
+        # 뒤쪽 토막을 버렸으므로 꼬리에 `…` 가 붙는다 — `<p>` 가 문단이 아니라
+        # 문장이라 **마지막 묶음은 문단 중간에서 잘렸을 수 있다** (M13-T11).
+        assert rows[-1].text.endswith("…")
+        # 뒤에 안 쓴 문단이 있으므로 꼬리에 `…` 가 붙는다 (M13-T11).
+        assert rows[-1].text.endswith("…")
         # 버린 문단의 본문이 **한 글자도 남지 않는다.**
         assert "p3w0" not in " ".join(r.text for r in rows)
 

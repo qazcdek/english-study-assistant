@@ -63,6 +63,7 @@
 고르는 쪽(`M13-T4`)이 **앉히기 전에** 후보를 재야 하기 때문이다 — 쓸 수 있는 토막이
 안 나오는 기사는 넣지 않고 다음 후보로 넘어간다.
 
+[문서] plan/DONE.md M13-T11
 [문서] plan/DONE.md M13-T3
 [문서] plan/DONE.md M13-T9
 """
@@ -167,3 +168,53 @@ def excerpt(texts: list[str]) -> Excerpt:
             stop += 1
         return Excerpt(start=start, stop=stop, words=total)
     return Excerpt(start=0, stop=0, words=0)
+
+
+#: 한 묶음에 담을 낱말 수. **호출 수와 입력 상한 사이에서 고른 값이다** (M13-T11).
+#:
+#: 실측(기사 13편)에서 120단어는 기사당 호출을 49 → 21 로 줄이고(58%) 묶인 글이
+#: 최대 761자였다. 150은 68% 절약이지만 975자이고, 200은 1,249자로 **cloud 입력
+#: 상한(1200자)을 넘는다** — 넘으면 회원 경로의 제한과 같은 벽에 부딪힌다.
+GROUP_WORDS = 120
+
+
+def group(texts: list[str], *, budget: int = GROUP_WORDS) -> list[list[int]]:
+    """문단들을 단어 예산까지 이어 붙일 **묶음**으로 가른다. 각 묶음은 자리 번호 목록.
+
+    **글이 아니라 번호를 돌려준다.** 번호를 돌려주면 부르는 쪽이 원문에서 직접
+    이어 붙이므로 **본문이 한 글자도 바뀌지 않는다.** LLM 이 경계를 고르는 길
+    (`services/grouping.py`)과 **같은 모양**이어서, 그쪽이 실패하면 이것으로
+    그대로 떨어질 수 있다.
+
+    한 문단이 혼자 예산을 넘으면 **쪼개지 않고** 그대로 한 묶음이 된다 —
+    쪼개면 문장이 끊긴다. 실측 최댓값이 1,021자라 입력 상한 안이다.
+    """
+    out: list[list[int]] = []
+    current: list[int] = []
+    total = 0
+    for index, text in enumerate(texts):
+        count = words(text)
+        if current and total + count > budget:
+            out.append(current)
+            current, total = [], 0
+        current.append(index)
+        total += count
+    if current:
+        out.append(current)
+    return out
+
+
+def joined(texts: list[str], groups: list[list[int]], *, more: bool = False) -> list[str]:
+    """묶음 번호를 **원문에서** 이어 붙인다. 본문은 바뀌지 않는다.
+
+    `more` 가 참이면 마지막 묶음 끝에 `…` 를 붙인다 — **뒤에 안 쓴 문단이 있다는
+    뜻이다** (분량 상한에 걸려 버린 것). 추측이 아니라 `excerpt()` 가 알려 준 사실이다.
+    끝이 잘렸다는 표시 없이 내보내면 읽는 쪽이 기사가 거기서 끝난 줄 안다.
+    """
+    out = [" ".join(texts[i] for i in g) for g in groups]
+    if more and out:
+        # **공백 없이 붙인다.** 띄우면 `words()` 가 낱말 하나로 세고, 상한에 딱 걸린
+        # 기사를 다시 앉힐 때 `excerpt()` 가 501낱말로 읽어 **문단을 지운다**
+        # (그 분석까지 사라진다). 검사가 451 vs 450 으로 그걸 잡았다.
+        out[-1] = f"{out[-1]}…"
+    return out

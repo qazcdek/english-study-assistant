@@ -303,6 +303,9 @@ class AccountResponse(BaseModel):
     # 회원 전역 설정. 바꿔 저장하면 그 뒤의 모든 작업이 이것으로 간다.
     active_provider: str = ""
     active_model: str = ""
+    #: 운영자인가. **화면이 지난 뉴스 목록을 띄울지 가린다** (M13-T13).
+    #: 권한 자체는 서버가 본다 — 이 값은 **보여줄지 말지**에만 쓴다.
+    is_operator: bool = False
 
 
 class ConsentRequest(BaseModel):
@@ -436,11 +439,11 @@ class PracticeHistoryItem(BaseModel):
     created_at: str
 
 
-# --------------------------------------------------------------------------- 공용 글감
+# --------------------------------------------------------------------------- 공용 뉴스
 
 
 class ParagraphOut(BaseModel):
-    """글감의 문단 하나. **본문만** 담는다 — 분석은 펼칠 때 따로 가져온다."""
+    """뉴스의 문단 하나. **본문만** 담는다 — 분석은 펼칠 때 따로 가져온다."""
 
     ordinal: int
     text: str
@@ -449,10 +452,10 @@ class ParagraphOut(BaseModel):
 
 
 class ArticleOut(BaseModel):
-    """지금 보여줄 글감 한 편.
+    """지금 보여줄 뉴스 한 편.
 
     **`picked_for` 를 숨기지 않는다.** 오늘 것이 아직 없으면 어제 것을 보여주는
-    것이 규정이므로(09 §3.8), 며칠 글감인지는 회원이 보고 알아야 한다.
+    것이 규정이므로(09 §3.8), 며칠 뉴스인지는 회원이 보고 알아야 한다.
 
     **`byline` 과 `url` 은 선택이 아니다.** 출처 약관이 기자 크레딧과 원문 백링크를
     요구하므로(M13-T10) 화면이 둘 다 적는다.
@@ -472,8 +475,19 @@ class ArticleOut(BaseModel):
     paragraphs: list[ParagraphOut]
 
 
+class ArticleListResponse(BaseModel):
+    """지난 뉴스 목록 — **운영자만 본다** (M13-T13).
+
+    `ArticleOut` 을 그대로 담는다. 목록용으로 줄인 모양을 따로 두면 화면이 두 가지를
+    그려야 하고, 하나를 고쳐 열 때 또 받아 와야 한다. 문단 본문까지 들어 있지만
+    분석은 빠져 있어(`M13-T6` 이 가른 자리) 한 편이 수 KB 다.
+    """
+
+    articles: list[ArticleOut] = []
+
+
 class DailyArticleResponse(BaseModel):
-    """글감이 없을 수 있다. **그것은 오류가 아니라 정상 상태다** — 첫 배포 직후와
+    """뉴스가 없을 수 있다. **그것은 오류가 아니라 정상 상태다** — 첫 배포 직후와
     고르기가 실패하고 있는 동안이 그렇다. 404 로 두면 화면이 정상 상태에 오류 옷을
     입힌다.
     """

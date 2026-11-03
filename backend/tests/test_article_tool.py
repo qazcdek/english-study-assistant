@@ -1,4 +1,4 @@
-"""손으로 글감을 넣는 도구 (M13-T8) — `./dev.sh article`.
+"""손으로 뉴스를 넣는 도구 (M13-T8) — `./dev.sh article`.
 
 표에 앉히는 규약은 `test_articles.py` 가 든다. 여기서 보는 것은 **도구 자신의 셋**이다.
 
@@ -137,7 +137,7 @@ def test_both_can_happen_at_once():
 
 def test_today_comes_from_the_shared_clock_not_from_here():
     """**두 곳에 적으면 갈린다.** 전에 이 자리가 UTC 로 셌고, 그래서 한국 시간
-    11월 2일에 넣은 기사가 11월 1일 글감으로 찍혔다."""
+    11월 2일에 넣은 기사가 11월 1일 뉴스로 찍혔다."""
     called = []
 
     def clock():

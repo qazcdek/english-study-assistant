@@ -86,9 +86,9 @@ export interface AnalysisResult {
   overview: Overview | null
 }
 
-// --- 공용 글감 (M13) ---
+// --- 공용 뉴스 (M13) ---
 
-/** 글감의 문단 하나. **본문만** 담긴다 — 분석은 펼칠 때 따로 가져온다. */
+/** 뉴스의 문단 하나. **본문만** 담긴다 — 분석은 펼칠 때 따로 가져온다. */
 export interface DailyParagraph {
   ordinal: number
   text: string
@@ -105,12 +105,17 @@ export interface DailyArticle {
   byline: string
   section: string
   published_at: string
-  /** **며칠의 글감인가.** 오늘 것이 아직 없으면 어제 것이 온다 (09 §3.8). */
+  /** **며칠의 뉴스인가.** 오늘 것이 아직 없으면 어제 것이 온다 (09 §3.8). */
   picked_for: string
   paragraphs: DailyParagraph[]
 }
 
-/** 글감이 없을 수 있다. **오류가 아니라 정상 상태다** (첫 배포 직후·고르기 실패 중). */
+/** 그동안 고른 뉴스 목록 — **운영자만 받는다** (M13-T13). */
+export interface ArticleListResponse {
+  articles: DailyArticle[]
+}
+
+/** 뉴스가 없을 수 있다. **오류가 아니라 정상 상태다** (첫 배포 직후·고르기 실패 중). */
 export interface DailyArticleResponse {
   article: DailyArticle | null
 }
@@ -276,6 +281,8 @@ export interface Account {
   has_consented: boolean
   has_api_key: boolean
   api_key_hint: string
+  /** 운영자인가. **보여줄지 말지에만 쓴다** — 권한은 서버가 본다 (M13-T13). */
+  is_operator?: boolean
 }
 
 export interface Usage {

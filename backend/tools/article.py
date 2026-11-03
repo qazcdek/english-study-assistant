@@ -1,4 +1,4 @@
-"""손으로 글감 한 편을 넣고, 그 자리에서 미리 분석을 돌린다 — `./dev.sh article`.
+"""손으로 뉴스 한 편을 넣고, 그 자리에서 미리 분석을 돌린다 — `./dev.sh article`.
 
 **자동 선정이 아니다.** 가디언에서 고르고 쿨다운을 다루는 쪽은 `M13-T4` 이고,
 이 도구는 그 전에 **눈으로 볼 것을 먼저 만드는 자리**다. `M13` 은 넣기(T4) ·
@@ -114,7 +114,7 @@ def pick_date(arg: str, today: Callable[[], date]) -> date | None:
 
     **"오늘" 을 여기서 세지 않고 받는다** (`daily.today` — 한국 날짜다). 전에는
     이 자리에서 UTC 로 셌고, 그래서 **한국 시간 11월 2일에 넣은 기사가 11월 1일
-    글감으로 찍혔다.** 자동 선정과 같은 답이 나와야 하므로 두 곳에 적지 않는다.
+    뉴스로 찍혔다.** 자동 선정과 같은 답이 나와야 하므로 두 곳에 적지 않는다.
 
     `main()` 안에 두면 검사가 **환경 파일과 DB 를 세워야만** 물을 수 있어서 밖으로
     꺼냈다.
@@ -147,14 +147,14 @@ def where(database_url: str) -> str:
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="글감 한 편을 손으로 넣는다 (M13-T8)")
+    parser = argparse.ArgumentParser(description="뉴스 한 편을 손으로 넣는다 (M13-T8)")
     parser.add_argument("path", type=Path, help="기사 JSON")
     parser.add_argument("--env-file", type=Path, required=True, help="읽을 환경 파일")
     parser.add_argument(
         "--pick",
         metavar="YYYY-MM-DD",
         default="today",
-        help="어느 날의 글감으로 둘지. 기본은 오늘. `none` 이면 후보로만 둔다",
+        help="어느 날의 뉴스로 둘지. 기본은 오늘. `none` 이면 후보로만 둔다",
     )
     parser.add_argument(
         "--prepare",
@@ -173,7 +173,7 @@ def main(argv: list[str] | None = None) -> int:
     from app.config import get_settings
     from app.db.session import init_engine, session_scope
     from app.errors import AppError
-    from app.services import articles, daily, paragraphs, prepare
+    from app.services import articles, daily, grouping, paragraphs, prepare
 
     picked = pick_date(args.pick, daily.today)
 
@@ -184,8 +184,29 @@ def main(argv: list[str] | None = None) -> int:
     init_engine(settings.database_url, create_all=False)
 
     with session_scope() as db:
+        # **묶기도 자동 경로와 같은 것을 탄다** (M13-T11). 주제 경계는 운영자 키로
+        # 묻고, 키가 없거나 못 믿을 답이 오면 단어 예산으로 떨어진다 — 손으로 넣어
+        # 확인한 문단이 자동 경로의 문단과 달라지면 확인한 뜻이 없다.
         try:
-            stored = articles.store(db, draft, picked_for=picked)
+            texts, cut = articles.gates(draft)
+        except AppError as exc:
+            print(f"{exc.message} ({exc.detail})", file=sys.stderr)
+            return 1
+
+        try:
+            provider = prepare.provider_for(db, KeyCipher(settings.encryption_key), settings)
+        except AppError:
+            provider = None
+        try:
+            groups = asyncio.run(
+                grouping.by_topic(texts[cut.start : cut.stop], provider)
+            )
+        finally:
+            if provider is not None:
+                asyncio.run(provider.aclose())
+
+        try:
+            stored = articles.store(db, draft, picked_for=picked, groups=groups)
         except AppError as exc:
             print(f"{exc.message} ({exc.detail})", file=sys.stderr)
             return 1
@@ -194,8 +215,10 @@ def main(argv: list[str] | None = None) -> int:
             f"{'넣었다' if stored.created else '이미 있다'} "
             f"#{stored.article.id} {stored.article.title}"
         )
-        print(f"문단 {stored.paragraphs} · 글감 날짜 {stored.article.picked_for or '(후보)'}")
+        print(f"문단 {stored.paragraphs} · 뉴스 날짜 {stored.article.picked_for or '(후보)'}")
 
+        if stored.pieces != stored.paragraphs:
+            print(f"토막 {stored.pieces}개를 {stored.paragraphs}문단으로 묶었다")
         for note in cut_notes(stored.skipped, stored.trimmed, paragraphs.WORD_LIMIT):
             print(note)
 

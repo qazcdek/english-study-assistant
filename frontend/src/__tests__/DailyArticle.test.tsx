@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, test, vi } from 'vitest'
 import type { AnalysisResult, DailyArticle as Article, MarkdownSections } from '../lib/types'
 
 const getDailyArticle = vi.fn()
+const getPickedArticles = vi.fn()
 const getParagraphAnalysis = vi.fn()
 
 // 서버를 안 띄우고 **두 호출만** 바꿔 꽂는다. 이 화면이 보는 것은
@@ -11,6 +12,7 @@ const getParagraphAnalysis = vi.fn()
 // (`test_daily.py`).
 vi.mock('../lib/api', () => ({
   getDailyArticle: () => getDailyArticle(),
+  getPickedArticles: () => getPickedArticles(),
   getParagraphAnalysis: (id: number, ordinal: number) => getParagraphAnalysis(id, ordinal),
   gradePractice: vi.fn(),
   listPracticeHistory: vi.fn(),
@@ -91,20 +93,33 @@ function draw(level: 'beginner' | 'intermediate' | 'advanced' = 'intermediate') 
   render(<DailyArticle vocab={fakeStore()} level={level} onLevelChange={() => {}} />)
 }
 
+function drawAsOperator() {
+  render(
+    <DailyArticle vocab={fakeStore()} level="intermediate" onLevelChange={() => {}} isOperator />,
+  )
+}
+
+/** 문단 목록을 여는 버튼. 뉴스 카드마다 하나다 (M13-T12). */
+function listToggles() {
+  return screen.getAllByRole('button', { name: /문단 \d+개/ })
+}
+
 beforeEach(() => {
   getDailyArticle.mockReset()
+  getPickedArticles.mockReset()
   getParagraphAnalysis.mockReset()
   getDailyArticle.mockResolvedValue({ article: article() })
+  getPickedArticles.mockResolvedValue({ articles: [article()] })
   getParagraphAnalysis.mockResolvedValue(analysis())
 })
 
-describe('글감이 없을 때', () => {
+describe('뉴스가 없을 때', () => {
   test('오류가 아니라 기다리는 상태로 알려준다', async () => {
     // 첫 배포 직후와 고르기가 실패하는 동안의 **정상 상태**다.
     getDailyArticle.mockResolvedValue({ article: null })
     draw()
 
-    expect(await screen.findByText(/아직 준비된 글감이 없습니다/)).toBeTruthy()
+    expect(await screen.findByText(/아직 준비된 뉴스가 없습니다/)).toBeTruthy()
   })
 
   test('서버가 터진 것은 오류로 알려준다', async () => {
@@ -112,16 +127,16 @@ describe('글감이 없을 때', () => {
     draw()
 
     expect(await screen.findByText('서버에 연결할 수 없습니다.')).toBeTruthy()
-    expect(screen.queryByText(/아직 준비된 글감이 없습니다/)).toBeNull()
+    expect(screen.queryByText(/아직 준비된 뉴스가 없습니다/)).toBeNull()
   })
 })
 
-describe('글감 머리', () => {
-  test('며칠 글감인지 적는다', async () => {
+describe('뉴스 머리', () => {
+  test('며칠 뉴스인지 적는다', async () => {
     // 오늘 것이 없으면 어제 것이 온다 (09 §3.8). **언제 것인지 모르고 읽으면 안 된다.**
     draw()
 
-    expect(await screen.findByText(/11월 1일 글감/)).toBeTruthy()
+    expect(await screen.findByText(/11월 1일 뉴스/)).toBeTruthy()
   })
 
   test('원문 백링크를 위아래 둘 다 둔다', async () => {
@@ -129,13 +144,13 @@ describe('글감 머리', () => {
     // 건다. 문단 아코디언이라 번역이 화면 중간에서 펼쳐지므로 둘 다 둔다 (M13-T10).
     draw()
 
-    await screen.findByText(/11월 1일 글감/)
+    await screen.findByText(/11월 1일 뉴스/)
     const links = screen.getAllByText(/원문 보기/) as HTMLAnchorElement[]
 
     expect(links.length).toBe(2)
     for (const link of links) {
       expect(link.getAttribute('href')).toBe(article().url)
-      // 글감을 읽다가 앱을 떠나지 않게 새 탭으로 연다.
+      // 뉴스를 읽다가 앱을 떠나지 않게 새 탭으로 연다.
       expect(link.getAttribute('target')).toBe('_blank')
     }
   })
@@ -277,5 +292,127 @@ describe('날짜 표기', () => {
     // 없는 날짜를 그럴듯하게 만들지 않는다.
     expect(dayLabel('')).toBe('')
     expect(dayLabel('언젠가')).toBe('언젠가')
+  })
+})
+
+describe('문단 목록 접기/펴기 (M13-T12)', () => {
+  test('문단 수가 곧 여는 버튼이다', async () => {
+    draw()
+
+    const toggle = (await screen.findByRole('button', { name: /문단 3개/ })) as HTMLElement
+    // **가장 최근 뉴스는 펼친 채로 시작한다** — 회원에게는 그 한 편뿐이다.
+    expect(toggle.getAttribute('aria-expanded')).toBe('true')
+    expect(screen.getByText(BODY[0])).toBeTruthy()
+  })
+
+  test('누르면 문단 목록이 접힌다', async () => {
+    draw()
+
+    const toggle = await screen.findByRole('button', { name: /문단 3개/ })
+    fireEvent.click(toggle)
+
+    expect(toggle.getAttribute('aria-expanded')).toBe('false')
+    expect(screen.queryByText(BODY[0])).toBeNull()
+    // 머리(제목·크레딧)는 남는다 — 접힌 것은 문단 목록이다.
+    expect(screen.getByText(article().title)).toBeTruthy()
+  })
+
+  test('다시 누르면 펴진다', async () => {
+    draw()
+
+    const toggle = await screen.findByRole('button', { name: /문단 3개/ })
+    fireEvent.click(toggle)
+    fireEvent.click(toggle)
+
+    expect(screen.getByText(BODY[0])).toBeTruthy()
+  })
+
+  test('접으면 펼쳐 둔 분석도 닫힌다', async () => {
+    // 접은 채로 분석이 남아 있으면 다시 펼 때 **다른 문단을 누른 것처럼** 보인다.
+    draw()
+
+    fireEvent.click(await screen.findByText(BODY[0]))
+    expect(await screen.findByText(/자연스러운 번역/)).toBeTruthy()
+
+    const toggle = screen.getByRole('button', { name: /문단 3개/ })
+    fireEvent.click(toggle)
+    fireEvent.click(toggle)
+
+    expect(screen.queryByText(/자연스러운 번역/)).toBeNull()
+  })
+})
+
+describe('운영자는 지난 뉴스를 본다 (M13-T13)', () => {
+  test('회원은 오늘 것만 가져온다', async () => {
+    draw()
+
+    await screen.findByText(article().title)
+
+    expect(getDailyArticle).toHaveBeenCalledTimes(1)
+    expect(getPickedArticles).not.toHaveBeenCalled()
+  })
+
+  test('운영자는 목록을 가져온다', async () => {
+    drawAsOperator()
+
+    await screen.findByText(article().title)
+
+    expect(getPickedArticles).toHaveBeenCalledTimes(1)
+    expect(getDailyArticle).not.toHaveBeenCalled()
+  })
+
+  test('받은 순서를 그대로 그린다 — 서버가 최신순으로 준다', async () => {
+    getPickedArticles.mockResolvedValue({
+      articles: [
+        article({ id: 3, picked_for: '2026-11-03', title: '셋째' }),
+        article({ id: 2, picked_for: '2026-11-02', title: '둘째' }),
+        article({ id: 1, picked_for: '2026-11-01', title: '첫째' }),
+      ],
+    })
+    drawAsOperator()
+
+    await screen.findByText('셋째')
+    const days = screen.getAllByText(/뉴스$/).map((e) => e.textContent)
+
+    expect(days).toEqual(['11월 3일 뉴스', '11월 2일 뉴스', '11월 1일 뉴스'])
+  })
+
+  test('맨 위 한 편만 펼친 채로 시작한다', async () => {
+    // 전부 펼치면 **목록을 훑을 수 없다.** 쌓이는 쪽이 운영자 화면의 전제다.
+    getPickedArticles.mockResolvedValue({
+      articles: [
+        article({ id: 3, picked_for: '2026-11-03' }),
+        article({ id: 2, picked_for: '2026-11-02' }),
+      ],
+    })
+    drawAsOperator()
+
+    await screen.findByText(/11월 3일 뉴스/)
+    const opened = listToggles().map((b) => b.getAttribute('aria-expanded'))
+
+    expect(opened).toEqual(['true', 'false'])
+  })
+
+  test('뉴스마다 분석 캐시가 따로다', async () => {
+    // 문단 번호로 담으므로 한 곳에 모으면 **다른 기사의 같은 번호와 섞인다.**
+    getPickedArticles.mockResolvedValue({
+      articles: [
+        article({ id: 3, picked_for: '2026-11-03' }),
+        article({ id: 2, picked_for: '2026-11-02' }),
+      ],
+    })
+    drawAsOperator()
+
+    await screen.findByText(/11월 3일 뉴스/)
+    // 둘째 카드를 펴고 1번 문단을 누른다.
+    fireEvent.click(listToggles()[1])
+    fireEvent.click(screen.getAllByText(BODY[0])[1])
+
+    await waitFor(() => expect(getParagraphAnalysis).toHaveBeenCalledWith(2, 1))
+
+    // 첫째 카드의 1번 문단을 누르면 **그 기사 id 로 다시 묻는다.**
+    fireEvent.click(screen.getAllByText(BODY[0])[0])
+
+    await waitFor(() => expect(getParagraphAnalysis).toHaveBeenCalledWith(3, 1))
   })
 })

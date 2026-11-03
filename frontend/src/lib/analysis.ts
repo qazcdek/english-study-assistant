@@ -110,7 +110,7 @@ export function reduce(state: AnalysisState, event: StreamEvent): AnalysisState 
 /**
  * **이미 끝난 분석**을 화면이 읽는 상태로 바꾼다.
  *
- * 두 곳이 같은 일을 한다 — 저장된 기록 하나를 열 때와 글감 문단을 펼칠 때.
+ * 두 곳이 같은 일을 한다 — 저장된 기록 하나를 열 때와 뉴스 문단을 펼칠 때.
  * 둘 다 네 파트가 이미 다 결정된 것을 받으므로 `reduce` 를 지나지 않는다.
  * 각자 짜면 한쪽만 고친 채로 갈라진다.
  *
