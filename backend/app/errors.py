@@ -104,3 +104,20 @@ class OperatorKeyRequiredError(AppError):
     code = "operator_key_required"
     http_status = 503
     message = "읽을 글을 준비하는 중입니다. 잠시 후 다시 시도해 주세요."
+
+
+class ArticleBodyError(AppError):
+    """기사 본문이 **문단으로 쪼개지지 않았다** (M13-T8).
+
+    `<p>` 가 없거나 전부 50자 미만일 때다 — 사진 기사나 라이브블로그가 그렇다
+    (`services/paragraphs.py` 의 하한).
+
+    **그냥 넣고 넘어가면 안 된다.** 문단이 0개인 기사를 앉히면 화면에 빈 글감이
+    뜨고, 더 나쁘게는 **미리 분석이 영원히 "다 됐다" 로 읽힌다** — 돌 문단이
+    없으므로 `prepare.article()` 이 아무 일도 하지 않고 성공한다. 고르는 쪽
+    (`M13-T4`)은 이것을 보고 다음 후보로 넘어가야 한다.
+    """
+
+    code = "article_body"
+    http_status = 502
+    message = "기사 본문을 문단으로 쪼갤 수 없습니다."
