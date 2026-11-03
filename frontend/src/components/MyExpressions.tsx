@@ -10,7 +10,9 @@ import {
   type VocabularyItem,
 } from '../lib/types'
 import type { VocabularyStore } from '../lib/useVocabulary'
+import { QUIZ_MIN, canQuiz } from '../lib/quiz'
 import { ConfirmDialog } from './ConfirmDialog'
+import { VocabQuiz } from './VocabQuiz'
 import { REMOVE_WARNING } from './ExpressionTable'
 import { PracticeBox } from './PracticeBox'
 import { PracticeFeedback, VerdictBadge } from './PracticeFeedback'
@@ -333,9 +335,18 @@ function Row({
  * 여기서도 **분석 화면과 똑같이** 연습한다. 복습이 목적이므로 담아 둔 뒤에 다시
  * 꺼내 쓸 수 있어야 하고, 그 연습 역시 기록으로 쌓인다.
  */
+/** 나의 표현을 보는 두 가지 방식 (M2-T8). */
+type Mode = 'list' | 'quiz'
+
+const MODES: { value: Mode; label: string }[] = [
+  { value: 'list', label: '목록 보기' },
+  { value: 'quiz', label: '퀴즈 풀기' },
+]
+
 export function MyExpressions({ vocab, level }: { vocab: VocabularyStore; level: Level }) {
   const [confirming, setConfirming] = useState<VocabularyItem | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [mode, setMode] = useState<Mode>('list')
 
   const remove = useCallback(
     async (item: VocabularyItem) => {
@@ -360,16 +371,45 @@ export function MyExpressions({ vocab, level }: { vocab: VocabularyStore; level:
         }}
       />
 
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         <h2 className="text-lg font-semibold tracking-tight">나의 표현</h2>
         <span className="rounded-full bg-stone-100 px-2 py-0.5 text-xs text-stone-500 dark:bg-stone-800">
           {vocab.items.length}
+        </span>
+
+        {/* **퀴즈는 표현이 모자라면 못 누른다** (M2-T8, 사용자 결정). 들어가서
+            "못 한다" 를 읽는 것보다 애초에 안 열리는 쪽이 낫다. */}
+        <span className="ml-auto flex items-center gap-1" role="group" aria-label="보기 방식">
+          {MODES.map((m) => {
+            const locked = m.value === 'quiz' && !canQuiz(vocab.items)
+            return (
+              <button
+                key={m.value}
+                type="button"
+                onClick={() => setMode(m.value)}
+                disabled={locked}
+                aria-pressed={mode === m.value}
+                title={locked ? `표현이 ${QUIZ_MIN}개 이상이어야 풀 수 있습니다` : undefined}
+                className={`rounded-md px-2.5 py-1 text-xs transition ${
+                  mode === m.value
+                    ? 'bg-stone-800 text-white dark:bg-stone-200 dark:text-stone-900'
+                    : locked
+                      ? 'cursor-not-allowed text-stone-300 dark:text-stone-700'
+                      : 'text-stone-500 hover:bg-stone-100 dark:text-stone-400 dark:hover:bg-stone-800'
+                }`}
+              >
+                {m.label}
+              </button>
+            )
+          })}
         </span>
       </div>
 
       {error && <p className="text-sm text-red-500">{error}</p>}
 
-      {vocab.items.length === 0 ? (
+      {mode === 'quiz' ? (
+        <VocabQuiz items={vocab.items} />
+      ) : vocab.items.length === 0 ? (
         <div className="rounded-2xl border border-dashed border-stone-300 p-10 text-center text-sm leading-relaxed text-stone-400 dark:border-stone-700">
           아직 담아 둔 표현이 없습니다.
           <br />

@@ -17,6 +17,7 @@ const { MyExpressions, stamp, asExpression, groupByPrompt } = await import(
 )
 const { REMOVE_WARNING } = await import('../components/ExpressionTable')
 const { fakeStore, item } = await import('./fixtures')
+const { QUIZ_MIN } = await import('../lib/quiz')
 
 const RECORD: PracticeHistoryItem = {
   id: 11,
@@ -302,5 +303,87 @@ describe('제외', () => {
     fireEvent.click(screen.getByText('제외'))
 
     expect(document.activeElement?.textContent).toBe('아니오')
+  })
+})
+
+describe('보기 방식 — 목록과 퀴즈 (M2-T8)', () => {
+  /** 뜻이 서로 다른 표현 여섯. 퀴즈가 설 만큼이다. */
+  function six() {
+    return ['동원하다', '참조하다', '기준을 충족하다', '의견을 내다', '요약하다', '건너'].map(
+      (meaning, i) => item({ id: i + 1, expression: `e${i}`, meaning }),
+    )
+  }
+
+  test('기본은 목록 보기다', () => {
+    draw(six())
+
+    expect(screen.getByRole('button', { name: '목록 보기' }).getAttribute('aria-pressed')).toBe(
+      'true',
+    )
+    expect(screen.getByText('e0')).toBeTruthy()
+  })
+
+  test(`표현이 ${QUIZ_MIN}개 미만이면 퀴즈 풀기를 누를 수 없다`, () => {
+    // **들어가서 "못 한다" 를 읽는 것보다 애초에 안 열리는 쪽이 낫다** (사용자 결정).
+    draw(six().slice(0, QUIZ_MIN - 1))
+
+    const quiz = screen.getByRole('button', { name: '퀴즈 풀기' }) as HTMLButtonElement
+    expect(quiz.disabled).toBe(true)
+  })
+
+  test(`${QUIZ_MIN}개가 되면 눌린다`, () => {
+    draw(six().slice(0, QUIZ_MIN))
+
+    expect((screen.getByRole('button', { name: '퀴즈 풀기' }) as HTMLButtonElement).disabled).toBe(
+      false,
+    )
+  })
+
+  test('퀴즈 풀기를 누르면 시작 버튼이 나온다', () => {
+    draw(six())
+
+    fireEvent.click(screen.getByRole('button', { name: '퀴즈 풀기' }))
+
+    expect(screen.getByRole('button', { name: '퀴즈 시작' })).toBeTruthy()
+    // 목록은 사라진다 — 두 모드는 함께 보이지 않는다.
+    expect(screen.queryByText('e0')).toBeNull()
+  })
+
+  test('시작하면 문제와 보기 넷이 나온다', () => {
+    draw(six())
+
+    fireEvent.click(screen.getByRole('button', { name: '퀴즈 풀기' }))
+    fireEvent.click(screen.getByRole('button', { name: '퀴즈 시작' }))
+
+    expect(screen.getByText(/1 \/ 5/)).toBeTruthy()
+    expect(screen.getByRole('button', { name: '퀴즈 그만두기' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: '새 퀴즈 시작' })).toBeTruthy()
+  })
+
+  test('그만두면 시작 화면으로 돌아간다', () => {
+    draw(six())
+    fireEvent.click(screen.getByRole('button', { name: '퀴즈 풀기' }))
+    fireEvent.click(screen.getByRole('button', { name: '퀴즈 시작' }))
+
+    fireEvent.click(screen.getByRole('button', { name: '퀴즈 그만두기' }))
+
+    expect(screen.getByRole('button', { name: '퀴즈 시작' })).toBeTruthy()
+    expect(screen.queryByText(/1 \/ 5/)).toBeNull()
+  })
+
+  test('고르면 정답을 보여주고 다시 고를 수 없다', () => {
+    // 답을 보고 다시 고르면 맞춘 것이 아니다 (`06 §1` 인출 연습).
+    draw(six())
+    fireEvent.click(screen.getByRole('button', { name: '퀴즈 풀기' }))
+    fireEvent.click(screen.getByRole('button', { name: '퀴즈 시작' }))
+
+    const choices = screen
+      .getAllByRole('button')
+      .filter((b) => six().some((i) => i.meaning === b.textContent))
+    expect(choices.length).toBe(4)
+    fireEvent.click(choices[0])
+
+    expect(screen.getByRole('button', { name: '다음' })).toBeTruthy()
+    for (const b of choices) expect((b as HTMLButtonElement).disabled).toBe(true)
   })
 })
