@@ -200,3 +200,68 @@ describe('동의의 대상', () => {
     expect(screen.getByText(/회원님이 직접 등록한 Google Gemini API 키/)).toBeTruthy()
   })
 })
+
+describe('약관이 데일리 뉴스를 설명한다 (M13-T7)', () => {
+  function termsText() {
+    const { container } = render(<Terms onBack={() => {}} />)
+    return container.textContent ?? ''
+  }
+
+  /** 그 조 하나의 글. **조 단위로 묻는다** — 문서 전체에서 찾으면 다른 조에 같은
+   *  낱말이 있을 때 통과한다. 실제로 깨뜨려 보니 1조와 번역 조항이 그랬다. */
+  function clauseText(title: string) {
+    render(<Terms onBack={() => {}} />)
+    const heading = screen.getByText(new RegExp(`제\\d+조 · ${title}`))
+    return heading.closest('section')?.textContent ?? ''
+  }
+
+  test('기능이 서비스 내용에 들어 있다', () => {
+    // **약관에 없는 기능을 돌리고 있으면 안 된다.** 돌고 있는데 1조가 모르는 상태였다.
+    expect(clauseText('서비스 내용')).toContain('데일리 뉴스')
+  })
+
+  test('출처와 발췌 조건을 적는다', () => {
+    const text = termsText()
+
+    // 출처가 정한 조건 셋 — 코드가 실제로 지키는 것과 같은 말이어야 한다
+    // (`M13-T9` 500단어 · `M13-T10` 크레딧과 백링크).
+    expect(text).toContain('The Guardian')
+    expect(text).toContain('500단어')
+    expect(text).toContain('기자 이름')
+    expect(text).toContain('원문 기사로 가는 링크')
+  })
+
+  test('번역이 기계가 만든 것임을 밝힌다', () => {
+    // **출처 조항 안에서** 묻는다. 7조(책임의 한계)에도 같은 말이 있어서 문서
+    // 전체로 찾으면 이 조항을 지워도 통과한다 — 깨뜨려 보고 알았다.
+    expect(clauseText('데일리 뉴스의 출처와 이용 조건')).toContain('인공지능이 생성한 것')
+  })
+
+  test('회원에게 재배포 권리를 주지 않는다', () => {
+    // **우리가 가진 것보다 넓은 권리를 넘길 수 없다.** 전에는 "생성된 분석 결과도
+    // 회원이 자유롭게 쓸 수 있습니다" 가 데일리 뉴스에도 걸려 있었다.
+    expect(termsText()).toContain('재배포하거나 상업적으로 이용할 수')
+  })
+
+  test('데일리 뉴스가 회원 키를 쓰지 않는다고 적는다', () => {
+    // 2조가 "모두 회원 키로" 로만 읽히면 **키가 없으면 아무것도 못 본다** 로 읽힌다.
+    expect(termsText()).toContain('회원 키와 한도를 쓰지 않습니다')
+  })
+
+  test('동의 화면도 같은 사실을 말한다', () => {
+    // **두 곳이 갈리면 어느 쪽이 유효한지 다투게 된다** (`Terms.tsx` 머리말).
+    const { container } = render(
+      <ConsentPanel
+        config={appConfig()}
+        onAgree={async () => {}}
+        onOpenTerms={() => {}}
+        onOpenPrivacy={() => {}}
+      />,
+    )
+    const text = container.textContent ?? ''
+
+    expect(text).toContain('데일리 뉴스')
+    expect(text).toContain('회원님 키와 한도를 쓰지 않고')
+    expect(text).toContain('The Guardian')
+  })
+})

@@ -43,8 +43,20 @@ export function ConsentPanel({ config, onAgree, onOpenTerms, onOpenPrivacy }: Pr
             넘으면 Google이 요청을 거부하며, 이 서비스가 대신 처리해 드릴 수 없습니다.
           </span>
         </li>
+        {/* **데일리 뉴스는 회원 키를 쓰지 않는다** (M13-T7). 위 1·2번을 읽고
+            "키가 없으면 아무것도 못 본다" 로 읽히면 사실과 다르다 — 읽기는 된다. */}
         <li className="flex gap-3">
           <span className="text-indigo-500">3</span>
+          <span>
+            <b>데일리 뉴스</b>(하루 한 편 미리 분석해 둔 영어 기사)는 다릅니다. 서버가 미리
+            준비하므로 <b>회원님 키와 한도를 쓰지 않고</b>, 키를 등록하지 않아도 읽을 수
+            있습니다. 원문은 <b>The Guardian</b> 기사에서 500단어 이내로 발췌하며 출처와
+            기자 이름, 원문 링크를 함께 표시합니다 — <b>개인 학습 범위에서만</b> 이용해
+            주세요.
+          </span>
+        </li>
+        <li className="flex gap-3">
+          <span className="text-indigo-500">4</span>
           <span>
             기본 모델은 <code className="font-mono text-xs">{config.default_model}</code> 이고,
             가입 후 설정에서 바꾸실 수 있습니다. 어느 모델이든 호출 횟수는 이렇게 쌓입니다.
@@ -63,14 +75,14 @@ export function ConsentPanel({ config, onAgree, onOpenTerms, onOpenPrivacy }: Pr
           </span>
         </li>
         <li className="flex gap-3">
-          <span className="text-indigo-500">4</span>
+          <span className="text-indigo-500">5</span>
           <span>
             입력하신 영어 원문은 Google에 전송됩니다. Gemini 무료 등급은 Google의 서비스 개선에
             데이터가 쓰일 수 있으니, <b>민감한 내용은 넣지 마세요.</b>
           </span>
         </li>
         <li className="flex gap-3">
-          <span className="text-indigo-500">5</span>
+          <span className="text-indigo-500">6</span>
           <span>
             실수로 한도가 한꺼번에 소진되지 않도록, 이 서비스는 하루{' '}
             <b>분석 {config.daily_analysis_limit}회 · 작문 연습 {config.daily_practice_limit}회</b>
@@ -79,7 +91,7 @@ export function ConsentPanel({ config, onAgree, onOpenTerms, onOpenPrivacy }: Pr
           </span>
         </li>
         <li className="flex gap-3">
-          <span className="text-indigo-500">6</span>
+          <span className="text-indigo-500">7</span>
           <span>
             등록한 키는 암호화해 보관하며 화면에는 끝 네 자리만 보입니다. 언제든 삭제할 수
             있습니다.
