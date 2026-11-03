@@ -14,7 +14,7 @@ from datetime import UTC, date, datetime
 import pytest
 
 from app.db import Article, ArticleParagraph, ParagraphAnalysis, session_scope
-from app.errors import ArticleBodyError, ArticleLengthError
+from app.errors import ArticleBodyError, ArticleCreditError, ArticleLengthError
 from app.services import articles
 from app.services.paragraphs import WORD_LIMIT
 
@@ -34,6 +34,7 @@ def draft(**over) -> articles.Draft:
         "source_id": "world/2026/nov/01/example",
         "url": "https://www.theguardian.com/world/2026/nov/01/example",
         "title": "An example article",
+        "byline": "Luke Harding in Kyiv",
         "section": "world",
         "published_at": datetime(2026, 11, 1, 17, 20, tzinfo=UTC),
         "body": BODY,
@@ -256,3 +257,54 @@ def test_the_paragraph_numbers_are_not_renumbered_after_a_trim(cloud):
         rows = db.query(ArticleParagraph).all()
         # 1번이 지워졌고 2번은 **2번으로 남는다.**
         assert [r.ordinal for r in rows] == [2]
+
+
+# ------------------------------------ 기자 크레딧은 약관이 요구한다 (M13-T10)
+
+
+def test_the_byline_is_stored_as_the_source_gave_it(cloud):
+    """**쪼개 담지 않는다.** `Luke Harding in Kyiv` 가 그대로 크레딧이다 —
+    이름만 뽑으려 파싱하면 크레딧이 원문과 달라진다."""
+    with session_scope() as db:
+        stored = articles.store(db, draft(byline="Jon Henley Europe correspondent"))
+
+        assert stored.article.byline == "Jon Henley Europe correspondent"
+
+
+@pytest.mark.parametrize("byline", ["", "   ", "\n"], ids=["빈-문자열", "공백만", "줄바꿈만"])
+def test_an_article_without_a_byline_is_refused(cloud, byline):
+    """**약관이 "반드시" 라고 한다.** 빈 크레딧으로 앉히면 화면이 크레딧 없이
+    번역을 내보내는 쪽으로 조용히 기운다."""
+    with session_scope() as db:
+        with pytest.raises(ArticleCreditError):
+            articles.store(db, draft(byline=byline))
+
+        assert db.query(Article).count() == 0
+
+
+def test_the_credit_refusal_is_caught_by_the_body_refusal(cloud):
+    """`ArticleLengthError` 와 같은 자리 — 원인은 셋이 달라도 할 일은 하나다."""
+    with session_scope() as db, pytest.raises(ArticleBodyError):
+        articles.store(db, draft(byline=""))
+
+
+def test_the_byline_is_overwritten_on_an_article_already_stored(cloud):
+    """크레딧 칸이 생기기 전에 앉힌 기사를 채우는 길이 **이것뿐이다.**
+    문단과 달리 아무것도 매달려 있지 않다 (`picked_for` 와 같은 사정)."""
+    with session_scope() as db:
+        articles.store(db, draft(byline="Luke Harding in Kyiv"))
+        # 크레딧 칸이 생기기 전의 상태를 손으로 만든다.
+        db.query(Article).one().byline = ""
+        db.commit()
+
+        again = articles.store(db, draft(byline="Luke Harding"))
+
+        assert again.article.byline == "Luke Harding"
+
+
+def test_a_byline_with_padding_is_trimmed(cloud):
+    """출처가 준 줄에 공백이 붙어 올 수 있다. 화면에 그대로 찍히면 어긋나 보인다."""
+    with session_scope() as db:
+        stored = articles.store(db, draft(byline="  Kat Wong \n"))
+
+        assert stored.article.byline == "Kat Wong"

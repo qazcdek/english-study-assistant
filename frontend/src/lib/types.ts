@@ -76,6 +76,8 @@ export interface DailyArticle {
   source: string
   url: string
   title: string
+  /** 기자 크레딧 한 줄. **출처 약관이 요구한다** — 화면이 반드시 적는다 (M13-T10). */
+  byline: string
   section: string
   published_at: string
   /** **며칠의 글감인가.** 오늘 것이 아직 없으면 어제 것이 온다 (09 §3.8). */

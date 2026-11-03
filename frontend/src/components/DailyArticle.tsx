@@ -133,26 +133,24 @@ export function DailyArticle({ vocab, level }: { vocab: VocabularyStore; level: 
             {dayLabel(article.picked_for)} 글감
           </span>
           <span aria-hidden>·</span>
-          <span>{article.source}</span>
+          <span>{sourceLabel(article.source)}</span>
           {article.section && (
             <>
               <span aria-hidden>·</span>
               <span>{article.section}</span>
             </>
           )}
-          <a
-            href={article.url}
-            target="_blank"
-            rel="noreferrer noopener"
-            className="ml-auto hover:text-stone-600 dark:hover:text-stone-300"
-          >
-            원문 보기 ↗
-          </a>
+          <OriginalLink url={article.url} className="ml-auto" />
         </div>
 
         <h2 className="text-lg font-semibold leading-snug text-stone-800 dark:text-stone-100">
           {article.title}
         </h2>
+
+        {/* **기자 크레딧.** 출처 약관이 이름과 출처를 명확히 적으라고 요구한다. */}
+        <p className="text-xs text-stone-500 dark:text-stone-400">
+          {article.byline} · {sourceLabel(article.source)}
+        </p>
 
         <p className="text-xs text-stone-400">
           문단 {article.paragraphs.length}개 · 분석 {ready}개 준비됨 ·{' '}
@@ -213,9 +211,47 @@ export function DailyArticle({ vocab, level }: { vocab: VocabularyStore; level: 
           )
         })}
       </ol>
+
+      {/* **바닥에도 크레딧과 링크를 둔다.** 약관은 "상단이나 하단" 이라 하나면
+          되지만, 문단 아코디언이라 **번역은 화면 중간에서 펼쳐진다** — 머리의
+          링크가 스크롤 밖으로 나간 채 번역을 읽게 되므로 아래에도 둔다. */}
+      <footer className="flex flex-col gap-1 rounded-2xl border border-stone-200 p-4 text-xs text-stone-500 dark:border-stone-800 dark:text-stone-400">
+        <p>
+          {article.byline} · {sourceLabel(article.source)}
+        </p>
+        <p className="text-stone-400">
+          원문에서 {EXCERPT_WORDS}단어 이내로 발췌해 번역했습니다.{' '}
+          <OriginalLink url={article.url} />
+        </p>
+      </footer>
     </div>
   )
 }
+
+/** 원문으로 가는 백링크. **약관이 요구하므로 머리와 바닥에 같은 것을 둔다.** */
+function OriginalLink({ url, className = '' }: { url: string; className?: string }) {
+  return (
+    <a
+      href={url}
+      target="_blank"
+      rel="noreferrer noopener"
+      className={`underline hover:text-stone-700 dark:hover:text-stone-200 ${className}`}
+    >
+      원문 보기 ↗
+    </a>
+  )
+}
+
+/** 출처를 **약관이 쓰는 이름으로** 적는다. 모르는 출처는 받은 값을 그대로 둔다. */
+export function sourceLabel(source: string): string {
+  return SOURCE_LABELS[source] ?? source
+}
+
+const SOURCE_LABELS: Record<string, string> = { guardian: 'The Guardian' }
+
+/** 백엔드의 `paragraphs.WORD_LIMIT` 과 같은 수. **화면은 적기만 한다** — 자르는
+ *  일은 앉힐 때 끝나 있고(`M13-T9`), 여기서 다시 세면 두 곳이 갈린다. */
+const EXCERPT_WORDS = 500
 
 /** `2026-11-01` → `11월 1일`. 비어 있으면 그대로 둔다 — 없는 날짜를 꾸미지 않는다. */
 export function dayLabel(picked: string): string {

@@ -30,6 +30,7 @@ JSON 하나다. `body` 는 **본문 HTML** 이고 쪼개기(`services/paragraphs
   "source_id": "world/2026/nov/01/...",
   "url": "https://www.theguardian.com/...",
   "title": "...",
+  "byline": "Luke Harding in Kyiv",
   "section": "world",
   "published_at": "2026-11-01T17:20:18Z",
   "body": "<p>...</p><p>...</p>"
@@ -53,7 +54,18 @@ ROOT = Path(__file__).resolve().parent.parent
 if str(ROOT) not in sys.path:  # `python tools/article.py` 로도 돌 수 있게
     sys.path.insert(0, str(ROOT))
 
-FIELDS = ("source", "source_id", "url", "title", "section", "published_at", "body")
+# **`byline` 도 필수다** — 출처 약관이 기자 크레딧을 요구하므로(M13-T10) 빈 칸으로
+# 앉히는 길을 두지 않는다. 가디언은 `show-fields=byline` 으로 준다 (열 편 중 열 편).
+FIELDS = (
+    "source",
+    "source_id",
+    "url",
+    "title",
+    "byline",
+    "section",
+    "published_at",
+    "body",
+)
 
 
 def load_env(path: Path) -> None:
@@ -89,6 +101,7 @@ def read_draft(path: Path):
         source_id=data["source_id"],
         url=data["url"],
         title=data["title"],
+        byline=data["byline"],
         section=data["section"],
         published_at=datetime.fromisoformat(data["published_at"]),
         body=data["body"],

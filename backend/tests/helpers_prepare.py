@@ -86,6 +86,7 @@ def make_article(
         source_id=source_id,
         url=f"https://www.theguardian.com/{source_id}",
         title="An example article",
+        byline="Luke Harding in Kyiv",
         section="world",
         published_at=datetime(2026, 10, 22, 6, 0, tzinfo=UTC),
         picked_for=picked_for,

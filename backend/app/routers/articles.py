@@ -49,6 +49,7 @@ def current_article(_user: SessionUser, db: DbDep) -> DailyArticleResponse:
             source=row.source,
             url=row.url,
             title=row.title,
+            byline=row.byline,
             section=row.section,
             published_at=row.published_at.isoformat() if row.published_at else "",
             picked_for=row.picked_for.isoformat() if row.picked_for else "",
