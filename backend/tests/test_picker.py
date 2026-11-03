@@ -688,3 +688,74 @@ def test_yesterdays_stale_article_is_left_alone(cloud):
         db.commit()
 
         assert daily.stale(db, TODAY) is None
+
+
+# ---------------------------- 읽는 경로마다 방아쇠가 있다 (H-050)
+
+
+def test_every_read_path_arms_the_pick():
+    """**진입 지점은 하나가 아니다** (`11 §2` 원리 ②).
+
+    방아쇠를 `current` 한 곳에만 두었더니 운영자 목록(`picked`)이 생기면서 **그
+    사람만 조용히 빠졌다** — 낡은 기사가 영원히 안 바뀌었다. 경로가 늘 때 빼먹은
+    것을 주의력이 아니라 **이 검사가** 잡는다.
+
+    글자가 아니라 **문법 나무로** 본다 — 주석이나 문자열에 `_arm` 이 적혀 있어도
+    부른 것이 아니다.
+    """
+    import ast
+    import inspect
+
+    from app.routers import articles as router
+
+    tree = ast.parse(inspect.getsource(router))
+    reads = {
+        node.name: node
+        for node in ast.walk(tree)
+        if isinstance(node, ast.FunctionDef)
+        and any(
+            isinstance(d, ast.Call)
+            and isinstance(d.func, ast.Attribute)
+            and d.func.attr == "get"
+            for d in node.decorator_list
+        )
+    }
+    assert reads, "읽는 경로를 하나도 못 찾았다 — 이 검사가 헛돈다"
+
+    missing = []
+    for name, node in reads.items():
+        calls = {
+            c.func.id
+            for c in ast.walk(node)
+            if isinstance(c, ast.Call) and isinstance(c.func, ast.Name)
+        }
+        # 문단 하나를 주는 경로는 글감을 고를 자리가 아니다 — 이미 고른 것을 읽는다.
+        if "_arm" not in calls and name != "paragraph_analysis":
+            missing.append(name)
+
+    assert not missing, f"읽는 경로인데 고르기를 던지지 않는다: {missing}"
+
+
+def test_the_operator_list_throws_the_pick_behind_it(cloud, monkeypatch):
+    """운영자 화면은 **이 경로만** 부른다 (`DailyArticle` 이 `isOperator` 면 `picked`)."""
+    from fastapi.testclient import TestClient
+
+    from app.db import User
+    from app.main import create_app
+    from app.routers import articles as router
+    from tests.modes import login, make_cloud_user
+
+    thrown: list[tuple] = []
+    monkeypatch.setattr(router.daily, "should_run", lambda *a, **k: True)
+    monkeypatch.setattr(router.daily, "run", lambda *a, **k: thrown.append(a))
+
+    with TestClient(create_app()) as client:
+        me = make_cloud_user()
+        with session_scope() as db:
+            db.get(User, me).is_operator = True
+            db.commit()
+        login(client, me)
+
+        assert client.get("/api/articles/picked").status_code == 200
+
+    assert len(thrown) == 1
